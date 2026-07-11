@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Photo Presets</title>
+
+<!-- PWA -->
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0D0D0F">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Presets">
+<meta name="mobile-web-app-capable" content="yes">
+
+<style>
+  :root{ --bg:#0D0D0F; --panel:#16161A; --accent:#F2F2F2; --secondary:#8A8A90; --line:#26262B; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; height:100%;}
+  body{background:var(--bg); color:var(--accent);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden;
+    padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);}
+  header{display:flex; align-items:center; padding:14px 16px; gap:10px;}
+  .btn{display:inline-flex; align-items:center; gap:8px; background:var(--panel); color:var(--accent);
+    border:none; border-radius:10px; padding:10px 14px; font-size:14px; font-weight:500; cursor:pointer;}
+  .btn:active{opacity:.7;}
+  .btn svg{width:18px; height:18px;}
+  .btn.accent{background:#2b6cb0;}
+  .spacer{flex:1;}
+  main{flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:8px 16px; position:relative;}
+  #stage{max-width:100%; max-height:100%; border-radius:12px; display:none;}
+  #empty{display:flex; flex-direction:column; align-items:center; gap:12px; color:var(--secondary); text-align:center;}
+  #empty svg{width:46px; height:46px; opacity:.7;}
+  .slider-row{display:none; align-items:center; gap:12px; padding:6px 20px 2px;}
+  .slider-row .lbl{width:96px; font-size:12px; color:var(--secondary);}
+  .slider-row .val{width:44px; font-size:13px; color:var(--secondary); text-align:right;}
+  input[type=range]{-webkit-appearance:none; appearance:none; flex:1; height:3px; background:var(--line); border-radius:3px; outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:20px; height:20px; border-radius:50%; background:var(--accent); cursor:pointer;}
+  footer{display:flex; gap:14px; padding:16px; overflow-x:auto;}
+  .chip{display:flex; flex-direction:column; align-items:center; gap:6px; cursor:pointer; flex:0 0 auto;}
+  .chip canvas{width:66px; height:66px; border-radius:10px; background:var(--panel); border:2px solid transparent;}
+  .chip.active canvas{border-color:var(--accent);}
+  .chip span{font-size:12px; color:var(--secondary); white-space:nowrap;}
+  .chip.active span{color:var(--accent); font-weight:600;}
+</style>
+</head>
+<body>
+
+<header>
+  <button class="btn" id="pick">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+    Фото
+  </button>
+  <div class="spacer"></div>
+  <button class="btn accent" id="install" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg>
+    Установить
+  </button>
+  <button class="btn" id="save" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+    Сохранить
+  </button>
+</header>
+
+<main>
+  <canvas id="stage"></canvas>
+  <div id="empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+    <div>Нажмите «Фото» — или смотрите на демо-снимке</div>
+  </div>
+</main>
+
+<div class="slider-row" id="sliderRow">
+  <span class="lbl">Интенсивность</span>
+  <input type="range" id="intensity" min="0" max="100" value="100">
+  <span class="val" id="intensityVal">100%</span>
+</div>
+
+<footer id="chips"></footer>
+<input type="file" id="file" accept="image/*" hidden>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+//  Lightroom-style look engine (tone curve + split toning +
+//  vibrance + matte blacks + grain + vignette). Pixels are 0..255.
+// ─────────────────────────────────────────────────────────────
+const LUM = [0.213, 0.715, 0.072];
+const clamp = v => v < 0 ? 0 : v > 255 ? 255 : v;
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+
+function buildToneLUT(o){
+  const lut = new Uint8ClampedArray(256);
+  for(let i=0;i<256;i++){
+    let n = i/255;
+    n = (n - 0.5) * (1 + o.contrast) + 0.5;          // S-curve contrast
+    n = o.fade + (1 - o.fade) * n;                    // matte: lift blacks
+    if(o.shadowsLift) n = Math.pow(clamp01(n), 1 - o.shadowsLift*0.6);
+    if(o.highlightsRoll) n = n - o.highlightsRoll * n * n * 0.18;
+    lut[i] = clamp(n*255);
+  }
+  return lut;
+}
+
+function applyLook(img, look){
+  const d = img.data, W = img.width;
+  const lut = look._lut || (look._lut = buildToneLUT(look));
+  const temp = look.temp||0, tint = look.tint||0;
+  const sh = look.shSplit||[0,0,0], hi = look.hiSplit||[0,0,0];
+  const sat = look.saturation==null?1:look.saturation;
+  const vib = look.vibrance||0;
+  const H = img.height, cx = W/2, cy = H/2, maxD = Math.hypot(cx,cy);
+  const vig = look.vignette||0, grain = look.grain||0;
+
+  for(let p=0, px=0; p<d.length; p+=4, px++){
+    let R = d[p], G = d[p+1], B = d[p+2];
+    R += temp;  B -= temp;  G += tint;                        // white balance
+    R = lut[clamp(R)|0]; G = lut[clamp(G)|0]; B = lut[clamp(B)|0]; // tone curve
+    const L = (LUM[0]*R + LUM[1]*G + LUM[2]*B) / 255;         // split toning
+    const sw = 1 - L, hw = L;
+    R += sh[0]*sw + hi[0]*hw;  G += sh[1]*sw + hi[1]*hw;  B += sh[2]*sw + hi[2]*hw;
+    const avg = (R + G + B) / 3;                              // vibrance/saturation
+    const cur = Math.max(R,G,B) - Math.min(R,G,B);
+    const s = sat + vib * (1 - clamp01(cur/160));
+    R = avg + (R-avg)*s;  G = avg + (G-avg)*s;  B = avg + (B-avg)*s;
+    if(vig){
+      const x = px % W, y = (px / W)|0;
+      const dd = Math.hypot(x-cx, y-cy)/maxD;
+      const f = 1 - vig * dd * dd;
+      R*=f; G*=f; B*=f;
+    }
+    if(grain){
+      const g = (Math.random()-0.5) * grain * 90;
+      R+=g; G+=g; B+=g;
+    }
+    d[p]=clamp(R); d[p+1]=clamp(G); d[p+2]=clamp(B);
+  }
+  return img;
+}
+
+const LOOKS = [
+  { name:"Плёнка",   temp:10, tint:2,  contrast:0.12, fade:0.06, shadowsLift:0.18, highlightsRoll:0.15,
+    shSplit:[-4,2,6],   hiSplit:[10,4,-6],  vibrance:0.22, saturation:1.02, vignette:0.05, grain:0.05 },
+  { name:"Кино",     temp:4,  tint:0,  contrast:0.22, fade:0.05, shadowsLift:0.05, highlightsRoll:0.10,
+    shSplit:[-18,4,20], hiSplit:[22,6,-16], vibrance:0.10, saturation:1.05, vignette:0.28, grain:0.04 },
+  { name:"Винтаж",   temp:12, tint:4,  contrast:0.05, fade:0.20, shadowsLift:0.22, highlightsRoll:0.22,
+    shSplit:[8,4,-4],   hiSplit:[14,6,-10], vibrance:0.0,  saturation:0.8,  vignette:0.22, grain:0.09 },
+  { name:"Ч/Б",      temp:0,  tint:0,  contrast:0.26, fade:0.04, shadowsLift:0.06, highlightsRoll:0.08,
+    shSplit:[0,0,0],    hiSplit:[0,0,0],    vibrance:0.0,  saturation:0.0,  vignette:0.20, grain:0.11 },
+  { name:"Портрет",  temp:6,  tint:-2, contrast:0.08, fade:0.03, shadowsLift:0.14, highlightsRoll:0.20,
+    shSplit:[2,0,2],    hiSplit:[8,4,-2],   vibrance:0.16, saturation:1.0,  vignette:0.06, grain:0.03 },
+  { name:"Муди",     temp:-4, tint:2,  contrast:0.20, fade:0.08, shadowsLift:-0.06, highlightsRoll:0.20,
+    shSplit:[-10,2,10], hiSplit:[6,2,-6],   vibrance:0.05, saturation:0.82, vignette:0.32, grain:0.05 },
+];
+
+let selected = 0, intensity = 100, sourceCanvas = null;
+const stage = document.getElementById('stage');
+const sctx = stage.getContext('2d', { willReadFrequently:true });
+
+function setSource(img){
+  const max = 1400; let w = img.width, h = img.height;
+  const scale = Math.min(1, max/Math.max(w,h));
+  w = Math.round(w*scale); h = Math.round(h*scale);
+  sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = w; sourceCanvas.height = h;
+  sourceCanvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  stage.width = w; stage.height = h;
+  document.getElementById('empty').style.display = 'none';
+  stage.style.display = 'block';
+  document.getElementById('save').style.display = 'inline-flex';
+  document.getElementById('sliderRow').style.display = 'flex';
+  buildChips(); render();
+}
+
+let raf = 0;
+function render(){ if(!sourceCanvas) return; cancelAnimationFrame(raf); raf = requestAnimationFrame(renderNow); }
+function renderNow(){
+  const w = sourceCanvas.width, h = sourceCanvas.height;
+  const orig = sourceCanvas.getContext('2d').getImageData(0,0,w,h);
+  const proc = new ImageData(new Uint8ClampedArray(orig.data), w, h);
+  applyLook(proc, LOOKS[selected]);
+  const t = intensity/100, od = orig.data, pd = proc.data;
+  for(let i=0;i<pd.length;i+=4){
+    pd[i]   = od[i]  *(1-t) + pd[i]  *t;
+    pd[i+1] = od[i+1]*(1-t) + pd[i+1]*t;
+    pd[i+2] = od[i+2]*(1-t) + pd[i+2]*t;
+  }
+  sctx.putImageData(proc, 0, 0);
+}
+
+function buildChips(){
+  const chips = document.getElementById('chips'); chips.innerHTML = '';
+  const ts = 66, ar = sourceCanvas.width/sourceCanvas.height;
+  const t = document.createElement('canvas'); t.width = ts; t.height = ts;
+  const tctx = t.getContext('2d');
+  let sw=sourceCanvas.width, sh=sourceCanvas.height, sx=0, sy=0;
+  if(ar>1){ sw=sh; sx=(sourceCanvas.width-sw)/2; } else { sh=sw; sy=(sourceCanvas.height-sh)/2; }
+  tctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, ts, ts);
+  const thumb = tctx.getImageData(0,0,ts,ts);
+  LOOKS.forEach((look, i)=>{
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (i===selected?' active':'');
+    const c = document.createElement('canvas'); c.width=ts; c.height=ts;
+    const id = new ImageData(new Uint8ClampedArray(thumb.data), ts, ts);
+    applyLook(id, look);
+    c.getContext('2d').putImageData(id, 0, 0);
+    const label = document.createElement('span'); label.textContent = look.name;
+    chip.appendChild(c); chip.appendChild(label);
+    chip.onclick = ()=>{
+      selected = i; intensity = 100;
+      document.getElementById('intensity').value = 100;
+      document.getElementById('intensityVal').textContent = '100%';
+      [...chips.children].forEach((el,idx)=> el.classList.toggle('active', idx===i));
+      render();
+    };
+    chips.appendChild(chip);
+  });
+}
+
+document.getElementById('pick').onclick = ()=> document.getElementById('file').click();
+document.getElementById('file').onchange = e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const img = new Image(); img.onload = ()=> setSource(img); img.src = URL.createObjectURL(f);
+};
+document.getElementById('intensity').oninput = e=>{
+  intensity = +e.target.value;
+  document.getElementById('intensityVal').textContent = intensity + '%';
+  render();
+};
+document.getElementById('save').onclick = ()=>{
+  const w = sourceCanvas.width, h = sourceCanvas.height;
+  const out = document.createElement('canvas'); out.width=w; out.height=h;
+  const data = sourceCanvas.getContext('2d').getImageData(0,0,w,h);
+  applyLook(data, LOOKS[selected]);
+  out.getContext('2d').putImageData(data, 0, 0);
+  out.toBlob(b=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(b);
+    a.download='edit_'+Date.now()+'.jpg'; a.click(); }, 'image/jpeg', 0.95);
+};
+
+function makeDemoPhoto(){
+  const c = document.createElement('canvas'); c.width=900; c.height=600; const x=c.getContext('2d');
+  let g = x.createLinearGradient(0,0,0,600);
+  g.addColorStop(0,'#2a5a8c'); g.addColorStop(.45,'#8fb8d8'); g.addColorStop(.55,'#f0c987'); g.addColorStop(1,'#c9722f');
+  x.fillStyle=g; x.fillRect(0,0,900,600);
+  x.fillStyle='#ffe6b0'; x.beginPath(); x.arc(680,300,70,0,7); x.fill();
+  let g2 = x.createLinearGradient(0,430,0,600); g2.addColorStop(0,'#3f7d3a'); g2.addColorStop(1,'#1e3d1c');
+  x.fillStyle=g2; x.fillRect(0,430,900,170);
+  x.fillStyle='#e0a878'; x.fillRect(60,90,150,150);
+  x.fillStyle='#c98a5e'; x.fillRect(60,240,150,40);
+  ['#eee','#bbb','#888','#555','#222'].forEach((col,i)=>{ x.fillStyle=col; x.fillRect(720,60+i*26,120,24); });
+  const img = new Image(); img.onload = ()=> setSource(img); img.src = c.toDataURL();
+}
+makeDemoPhoto();
+
+// ── PWA: service worker + install prompt ──
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+let deferredPrompt = null;
+const installBtn = document.getElementById('install');
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault(); deferredPrompt = e; installBtn.style.display = 'inline-flex';
+});
+installBtn.onclick = async ()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null; installBtn.style.display = 'none';
+};
+window.addEventListener('appinstalled', ()=> { installBtn.style.display = 'none'; });
+</script>
+</body>
+</html>
