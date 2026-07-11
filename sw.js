@@ -1,5 +1,5 @@
 // Service worker — offline cache for the Photo Presets PWA
-const CACHE = 'photo-presets-v1';
+const CACHE = 'photo-presets-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -23,16 +23,32 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Cache-first, with runtime caching of same-origin GET requests
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request).then(cached =>
-      cached || fetch(e.request).then(resp => {
+  const req = e.request;
+  const url = new URL(req.url);
+  const isHTML = req.mode === 'navigate' || req.destination === 'document' ||
+                 url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
+
+  if (isHTML) {
+    // Network-first: always get fresh HTML/JS, fall back to cache when offline
+    e.respondWith(
+      fetch(req).then(resp => {
         const copy = resp.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
         return resp;
-      }).catch(() => caches.match('./index.html'))
-    )
-  );
+      }).catch(() => caches.match(req).then(r => r || caches.match('./index.html')))
+    );
+  } else {
+    // Cache-first for static assets (icons, manifest)
+    e.respondWith(
+      caches.match(req).then(cached =>
+        cached || fetch(req).then(resp => {
+          const copy = resp.clone();
+          caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+          return resp;
+        })
+      )
+    );
+  }
 });
