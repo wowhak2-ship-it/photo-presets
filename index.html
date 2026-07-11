@@ -47,7 +47,7 @@
   .pill:active{transform:scale(.97);}
 
   main{position:relative; z-index:1; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:6px 16px;}
-  #stageWrap{position:relative; display:inline-block; max-width:100%; max-height:100%; line-height:0;}
+  #stageWrap{position:relative; display:inline-block; max-width:100%; max-height:100%; line-height:0; touch-action:none;}
   #stage{max-width:100%; max-height:100%; border-radius:16px; display:none;}
   /* before/after compare overlay */
   #cmp{position:absolute; inset:0; display:none; pointer-events:none;}
@@ -353,15 +353,26 @@ compareBtn.onclick = ()=>{
   cmpOverlay.classList.toggle('on', compareMode);
   render();
 };
+let dragging = false;
 function dragCompare(e){
-  if(!compareMode) return;
   const r = stage.getBoundingClientRect();
-  const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
-  comparePos = clamp01(x / r.width);
+  comparePos = clamp01((e.clientX - r.left) / r.width);
   renderCompare();
 }
-stageWrap.addEventListener('pointerdown', e=>{ if(compareMode){ e.preventDefault(); dragCompare(e); } });
-stageWrap.addEventListener('pointermove', e=>{ if(compareMode && (e.buttons||e.pressure)) dragCompare(e); });
+stageWrap.addEventListener('pointerdown', e=>{
+  if(!compareMode) return;
+  e.preventDefault();
+  dragging = true;
+  try { stageWrap.setPointerCapture(e.pointerId); } catch(_){}
+  dragCompare(e);
+});
+stageWrap.addEventListener('pointermove', e=>{
+  if(!compareMode || !dragging) return;
+  e.preventDefault();
+  dragCompare(e);
+});
+stageWrap.addEventListener('pointerup', ()=>{ dragging = false; });
+stageWrap.addEventListener('pointercancel', ()=>{ dragging = false; });
 
 function makeDemoPhoto(){
   const c = document.createElement('canvas'); c.width=900; c.height=600; const x=c.getContext('2d');
