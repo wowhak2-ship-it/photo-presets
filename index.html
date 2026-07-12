@@ -240,15 +240,23 @@ function applyLook(img, look){
   }
   return img;
 }
-function applyBloom(canvas, amount){
+function applyBloom(canvas, amount, warm){
   if(!amount || amount <= 0) return;
   const w = canvas.width, h = canvas.height;
   const tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h;
   const tc = tmp.getContext('2d');
-  tc.filter = 'blur(' + Math.max(2, Math.round(Math.max(w,h)*0.02)) + 'px) brightness(1.18) saturate(1.05)';
+  tc.filter = 'blur(' + Math.max(2, Math.round(Math.max(w,h)*0.022)) + 'px) brightness(1.20) saturate(1.05)';
   tc.drawImage(canvas, 0, 0);
+  if(warm){
+    // tint the glow golden so backlight haze reads warm (like a Lightroom golden-hour edit), not white
+    tc.filter = 'none';
+    tc.globalCompositeOperation = 'multiply';
+    tc.fillStyle = 'rgb(255,206,138)';
+    tc.fillRect(0, 0, w, h);
+    tc.globalCompositeOperation = 'source-over';
+  }
   const ctx = canvas.getContext('2d');
-  ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = Math.min(0.7, amount);
+  ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = Math.min(0.72, amount);
   ctx.drawImage(tmp, 0, 0); ctx.restore();
 }
 
@@ -273,8 +281,8 @@ function applyAdjust(img, a){
 }
 
 const LOOKS = [
-  { name:"Золотой час", temp:10, tint:0, contrast:0.14, fade:0.05, shadowsLift:0.20, highlightsRoll:0.18,
-    shSplit:[5,2,-2], hiSplit:[14,4,-3], vibrance:0.18, saturation:1.06, vignette:0.08, grain:0.03, bloom:0.38 },
+  { name:"Золотой час", temp:12, tint:1, contrast:0.10, fade:0.08, shadowsLift:0.24, highlightsRoll:0.14,
+    shSplit:[8,4,-2], hiSplit:[18,10,-6], vibrance:0.14, saturation:1.04, vignette:0.06, grain:0.03, bloom:0.50, bloomWarm:true },
   { name:"Плёнка",   temp:10, tint:2,  contrast:0.12, fade:0.06, shadowsLift:0.18, highlightsRoll:0.15,
     shSplit:[-4,2,6],   hiSplit:[10,4,-6],  vibrance:0.22, saturation:1.02, vignette:0.05, grain:0.05 },
   { name:"Кино",     temp:4,  tint:0,  contrast:0.22, fade:0.05, shadowsLift:0.05, highlightsRoll:0.10,
@@ -340,7 +348,7 @@ function buildEdited(){
   editedCanvas.width = w; editedCanvas.height = h;
   editedCanvas.getContext('2d').putImageData(processedData(), 0, 0);
   const bl = LOOKS[selected].bloom;
-  if(bl) applyBloom(editedCanvas, bl * (intensity/100));
+  if(bl) applyBloom(editedCanvas, bl * (intensity/100), LOOKS[selected].bloomWarm);
 }
 // Lightweight compositing of original (left) + cached edited (right) — runs on every drag frame
 function drawCompare(){
@@ -362,7 +370,7 @@ function renderNow(){
   if(compareMode){ buildEdited(); drawCompare(); return; }
   sctx.putImageData(processedData(), 0, 0);
   const bl = LOOKS[selected].bloom;
-  if(bl) applyBloom(stage, bl * (intensity/100));
+  if(bl) applyBloom(stage, bl * (intensity/100), LOOKS[selected].bloomWarm);
 }
 
 function buildChips(){
@@ -437,7 +445,7 @@ document.getElementById('save').onclick = ()=>{
   const w = sourceCanvas.width, h = sourceCanvas.height;
   const out = document.createElement('canvas'); out.width=w; out.height=h;
   out.getContext('2d').putImageData(processedData(), 0, 0);
-  const bl = LOOKS[selected].bloom; if(bl) applyBloom(out, bl * (intensity/100));
+  const bl = LOOKS[selected].bloom; if(bl) applyBloom(out, bl * (intensity/100), LOOKS[selected].bloomWarm);
   out.toBlob(b=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(b);
     a.download='edit_'+Date.now()+'.jpg'; a.click(); }, 'image/jpeg', 0.95);
 };
