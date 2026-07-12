@@ -16,27 +16,46 @@
 
 <style>
   :root{
-    --bg:#0A0A0B; --panel:#17171B; --panel2:#202027; --line:rgba(255,255,255,.09);
-    --text:#F4F4F5; --dim:#8A8A93;
-    --gold:#F6C04E; --gold-dim:rgba(246,192,78,.16);
+    --bg:#0C0D10; --bg-deep:#070809; --panel:#16171C; --panel2:#20222A;
+    --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+    --text:#F4F4F6; --dim:#9A9AA6; --faint:#65656F;
+    --gold:#F5C36B; --gold-ink:#1a1305; --gold-dim:rgba(245,195,107,.14);
+    --mono:ui-monospace,'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; height:100%;}
-  body{background:var(--bg); color:var(--text);
+  body{background:var(--bg-deep); color:var(--text);
+    background-image:radial-gradient(120% 72% at 50% -8%, #16181F 0%, var(--bg) 46%, var(--bg-deep) 100%);
     font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden;
     padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);}
 
-  .glow{position:fixed; left:50%; bottom:-90px; transform:translateX(-50%);
-    width:150%; height:280px; pointer-events:none; z-index:0; filter:blur(60px); opacity:.55;
-    background:radial-gradient(50% 100% at 50% 100%, #FF6B2C 0%, #E23B2E 42%, rgba(226,59,46,0) 72%);}
+  .glow{position:fixed; left:50%; bottom:-130px; transform:translateX(-50%);
+    width:135%; height:320px; pointer-events:none; z-index:0; filter:blur(85px); opacity:.30;
+    background:radial-gradient(50% 100% at 50% 100%, #E8913C 0%, #C6531E 46%, rgba(198,83,30,0) 72%);}
 
-  header{position:relative; z-index:2; display:flex; align-items:center; gap:8px; padding:14px 16px;}
-  .title{position:absolute; left:0; right:0; text-align:center; font-size:12px; letter-spacing:.22em;
-    color:var(--dim); font-weight:600; pointer-events:none;}
-  .icon-btn{width:42px; height:42px; border-radius:12px; background:var(--panel); border:1px solid var(--line);
-    color:var(--text); display:flex; align-items:center; justify-content:center; cursor:pointer;}
-  .icon-btn svg{width:20px; height:20px;}
+  /* bottom dock: raised tool panel with depth */
+  .dock{position:relative; z-index:2; display:none;
+    background:linear-gradient(180deg, #191A1F 0%, #101116 100%);
+    border-top:1px solid var(--line-2); border-radius:20px 20px 0 0;
+    box-shadow:0 -0.5px 0 rgba(255,255,255,.06) inset, 0 -16px 44px rgba(0,0,0,.5); padding-top:6px;}
+  .dock.on{display:block;}
+
+  header{position:relative; z-index:3; display:flex; align-items:center; gap:8px; padding:12px 16px 10px;}
+  .brand{display:flex; align-items:center; gap:10px; margin-right:auto; min-width:0;}
+  .avatar{width:40px; height:40px; border-radius:50%; padding:0; overflow:hidden; cursor:pointer; flex:0 0 auto;
+    background:var(--panel); border:1.5px solid var(--line-2); box-shadow:0 2px 12px rgba(0,0,0,.4);
+    transition:transform .15s, border-color .15s;}
+  .avatar:active{transform:scale(.94);}
+  .avatar img{width:100%; height:100%; object-fit:cover; display:block;}
+  .brand-name{display:flex; flex-direction:column; line-height:1.2; min-width:0;}
+  .brand-name b{font-size:15px; font-weight:700; letter-spacing:.01em; color:var(--text); white-space:nowrap;}
+  .brand-name small{font-size:9.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); font-weight:600; white-space:nowrap;}
+  .title{display:none;}
+  .icon-btn{width:40px; height:40px; border-radius:12px; background:var(--panel); border:1px solid var(--line);
+    color:var(--text); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .15s, background .15s;}
+  .icon-btn:active{transform:scale(.93); background:var(--panel2);}
+  .icon-btn svg{width:19px; height:19px;}
   .spacer{flex:1;}
   .pill{display:inline-flex; align-items:center; gap:7px; border-radius:22px; padding:10px 16px;
     font-size:13px; font-weight:600; cursor:pointer; border:1px solid var(--line); background:var(--panel); color:var(--text);}
@@ -47,7 +66,7 @@
 
   main{position:relative; z-index:1; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:6px 16px; overflow:hidden;}
   #stageWrap{position:relative; display:inline-block; max-width:100%; max-height:100%; line-height:0; touch-action:none;}
-  #stage{max-width:100%; max-height:100%; border-radius:16px; display:none;}
+  #stage{max-width:100%; max-height:100%; border-radius:18px; display:none; box-shadow:0 12px 38px rgba(0,0,0,.5);}
   #cmp{position:absolute; inset:0; display:none; pointer-events:none;}
   #cmp.on{display:block;}
   .cmp-lab{position:absolute; top:12px; font-size:11px; letter-spacing:.14em; font-weight:700;
@@ -64,14 +83,16 @@
   .slider-row{position:relative; z-index:2; display:none; flex-direction:column; gap:6px; padding:10px 20px 2px;}
   .slider-head{display:flex; align-items:center; justify-content:space-between;}
   .slider-head .lbl{font-size:11px; letter-spacing:.16em; color:var(--dim); font-weight:600;}
-  .slider-head .val{font-size:15px; font-weight:700; color:var(--gold); font-variant-numeric:tabular-nums;}
+  .slider-head .val{font-family:var(--mono); font-size:14px; font-weight:600; color:var(--gold); font-variant-numeric:tabular-nums; letter-spacing:.02em;}
   .track-wrap{position:relative; height:34px; display:flex; align-items:center;}
   .ticks{position:absolute; inset:0 2px; pointer-events:none; opacity:.5;
     background:repeating-linear-gradient(90deg, var(--dim) 0 1px, transparent 1px 11px);
     -webkit-mask:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent); mask:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);}
   input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:34px; background:transparent; outline:none; position:relative; z-index:1;}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:6px; height:34px; border-radius:3px; background:var(--gold); cursor:pointer; box-shadow:0 0 10px rgba(246,192,78,.6);}
-  input[type=range]::-moz-range-thumb{width:6px; height:34px; border:none; border-radius:3px; background:var(--gold);}
+  input[type=range]::-webkit-slider-runnable-track{height:3px; border-radius:3px; background:var(--line-2);}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:6px; height:26px; margin-top:-11.5px; border-radius:3px; background:var(--gold); cursor:pointer; box-shadow:0 0 12px rgba(245,195,107,.75);}
+  input[type=range]::-moz-range-track{height:3px; border-radius:3px; background:var(--line-2);}
+  input[type=range]::-moz-range-thumb{width:6px; height:26px; border:none; border-radius:3px; background:var(--gold);}
 
   .toolbar{position:relative; z-index:2; display:none; align-items:center; justify-content:center; padding:2px 16px 6px;}
   .tool{display:inline-flex; align-items:center; gap:7px; background:transparent; border:none; color:var(--dim);
@@ -82,8 +103,10 @@
   footer{position:relative; z-index:2; display:flex; gap:16px; padding:14px 16px calc(16px + env(safe-area-inset-bottom)); overflow-x:auto; scrollbar-width:none;}
   footer::-webkit-scrollbar{display:none;}
   .chip{display:flex; flex-direction:column; align-items:center; gap:7px; cursor:pointer; flex:0 0 auto;}
-  .chip canvas{width:74px; height:74px; border-radius:14px; background:var(--panel); border:2px solid transparent; transition:border-color .15s;}
-  .chip.active canvas{border-color:var(--gold); box-shadow:0 0 0 2px rgba(246,192,78,.25);}
+  .chip canvas{width:72px; height:72px; border-radius:15px; background:var(--panel); border:2px solid transparent;
+    box-shadow:0 4px 12px rgba(0,0,0,.4); transition:border-color .15s, transform .15s;}
+  .chip:active canvas{transform:scale(.95);}
+  .chip.active canvas{border-color:var(--gold); box-shadow:0 0 0 2px rgba(245,195,107,.3), 0 4px 16px rgba(245,195,107,.15);}
   .chip span{font-size:11px; letter-spacing:.08em; font-weight:600; color:var(--dim); white-space:nowrap; text-transform:uppercase;}
   .chip.active span{color:var(--gold);}
 
@@ -114,7 +137,7 @@
   .adj-row .albl{flex:0 0 104px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     font-size:11px; letter-spacing:.04em; color:var(--dim); font-weight:600; text-transform:uppercase;}
   .adj-row input[type=range]{flex:1; height:38px;}
-  .adj-row .aval{flex:0 0 42px; text-align:right; font-size:14px; font-weight:700; color:var(--gold); font-variant-numeric:tabular-nums;}
+  .adj-row .aval{flex:0 0 44px; text-align:right; font-family:var(--mono); font-size:13px; font-weight:600; color:var(--gold); font-variant-numeric:tabular-nums;}
   .adj-reset{align-self:center; margin-top:5px; background:transparent; border:1px solid var(--line); color:var(--dim);
     font-size:11px; font-weight:600; letter-spacing:.08em; padding:8px 18px; border-radius:20px; cursor:pointer; text-transform:uppercase;}
   .adj-reset:active{transform:scale(.97);}
@@ -160,6 +183,15 @@
 <div class="glow"></div>
 
 <header>
+  <div class="brand">
+    <button class="avatar" id="avatarBtn" aria-label="Сменить фото">
+      <img id="avatarImg" src="./demo.jpg" alt="">
+    </button>
+    <div class="brand-name hide-sm">
+      <b>Пресеты</b>
+      <small>Фоторедактор</small>
+    </div>
+  </div>
   <button class="icon-btn" id="pick" aria-label="Галерея">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
   </button>
@@ -169,8 +201,6 @@
   <button class="icon-btn" id="cropBtn" aria-label="Кадрировать" style="display:none">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>
   </button>
-  <div class="title">PRESETS</div>
-  <div class="spacer"></div>
   <button class="pill ghost" id="install" style="display:none">Установить</button>
   <button class="pill gold" id="save" style="display:none">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
@@ -193,6 +223,7 @@
   </div>
 </main>
 
+<div class="dock" id="dock">
 <div class="tabs" id="tabs">
   <button class="tab active" data-tab="presets">Пресеты</button>
   <button class="tab" data-tab="adjust">Настройки<span class="dot"></span></button>
@@ -223,6 +254,7 @@
   <div class="adj-row"><span class="albl">Зерно</span><input type="range" id="adj-grain" min="0" max="100" value="0"><span class="aval" id="val-grain">0</span></div>
   <button class="adj-reset" id="adjReset">Сбросить</button>
 </div>
+</div><!-- /dock -->
 
 <div class="cam" id="cam">
   <button class="cam-x" id="camX">✕</button>
@@ -395,6 +427,7 @@ function setSource(img){
   stage.style.display = 'block';
   document.getElementById('save').style.display = 'inline-flex';
   document.getElementById('cropBtn').style.display = 'flex';
+  document.getElementById('dock').classList.add('on');
   document.getElementById('toolbar').style.display = 'flex';
   document.getElementById('tabs').style.display = 'flex';
   setTab('presets');
@@ -503,6 +536,7 @@ function buildChips(){
 }
 
 document.getElementById('pick').onclick = ()=> document.getElementById('file').click();
+document.getElementById('avatarBtn').onclick = ()=> document.getElementById('file').click();
 document.getElementById('file').onchange = e=>{
   const f = e.target.files[0]; if(!f) return;
   const img = new Image(); img.onload = ()=> setSource(img); img.src = URL.createObjectURL(f);
