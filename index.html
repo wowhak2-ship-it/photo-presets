@@ -27,7 +27,6 @@
     display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden;
     padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);}
 
-  /* signature warm glow behind the preset strip */
   .glow{position:fixed; left:50%; bottom:-90px; transform:translateX(-50%);
     width:150%; height:280px; pointer-events:none; z-index:0; filter:blur(60px); opacity:.55;
     background:radial-gradient(50% 100% at 50% 100%, #FF6B2C 0%, #E23B2E 42%, rgba(226,59,46,0) 72%);}
@@ -49,7 +48,6 @@
   main{position:relative; z-index:1; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:6px 16px;}
   #stageWrap{position:relative; display:inline-block; max-width:100%; max-height:100%; line-height:0; touch-action:none;}
   #stage{max-width:100%; max-height:100%; border-radius:16px; display:none;}
-  /* before/after compare overlay */
   #cmp{position:absolute; inset:0; display:none; pointer-events:none;}
   #cmp.on{display:block;}
   .cmp-lab{position:absolute; top:12px; font-size:11px; letter-spacing:.14em; font-weight:700;
@@ -63,7 +61,6 @@
   #empty{display:flex; flex-direction:column; align-items:center; gap:12px; color:var(--dim); text-align:center;}
   #empty svg{width:46px; height:46px; opacity:.7;}
 
-  /* intensity ruler */
   .slider-row{position:relative; z-index:2; display:none; flex-direction:column; gap:6px; padding:10px 20px 2px;}
   .slider-head{display:flex; align-items:center; justify-content:space-between;}
   .slider-head .lbl{font-size:11px; letter-spacing:.16em; color:var(--dim); font-weight:600;}
@@ -76,14 +73,12 @@
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:6px; height:34px; border-radius:3px; background:var(--gold); cursor:pointer; box-shadow:0 0 10px rgba(246,192,78,.6);}
   input[type=range]::-moz-range-thumb{width:6px; height:34px; border:none; border-radius:3px; background:var(--gold);}
 
-  /* toolbar: compare toggle */
   .toolbar{position:relative; z-index:2; display:none; align-items:center; justify-content:center; padding:2px 16px 6px;}
   .tool{display:inline-flex; align-items:center; gap:7px; background:transparent; border:none; color:var(--dim);
     font-size:12px; font-weight:600; letter-spacing:.06em; cursor:pointer; padding:6px 12px; border-radius:20px; user-select:none; -webkit-user-select:none;}
   .tool svg{width:16px; height:16px;}
   .tool.active{color:var(--gold); background:var(--gold-dim);}
 
-  /* preset strip */
   footer{position:relative; z-index:2; display:flex; gap:16px; padding:14px 16px calc(16px + env(safe-area-inset-bottom)); overflow-x:auto; scrollbar-width:none;}
   footer::-webkit-scrollbar{display:none;}
   .chip{display:flex; flex-direction:column; align-items:center; gap:7px; cursor:pointer; flex:0 0 auto;}
@@ -92,7 +87,6 @@
   .chip span{font-size:11px; letter-spacing:.08em; font-weight:600; color:var(--dim); white-space:nowrap; text-transform:uppercase;}
   .chip.active span{color:var(--gold);}
 
-  /* camera overlay */
   .cam{position:fixed; inset:0; z-index:50; background:#000; display:none; flex-direction:column;}
   .cam.open{display:flex;}
   .cam video{flex:1; width:100%; object-fit:cover; min-height:0; background:#000;}
@@ -173,7 +167,7 @@
 <input type="file" id="file" accept="image/*" hidden>
 
 <script>
-// ─── Lightroom-style look engine (tone curve + split toning + vibrance + matte + grain + vignette) ───
+// ─── Look engine (tone curve + split toning + vibrance + matte + grain + vignette) ───
 const LUM = [0.213, 0.715, 0.072];
 const clamp = v => v < 0 ? 0 : v > 255 ? 255 : v;
 const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
@@ -212,8 +206,6 @@ function applyLook(img, look){
   }
   return img;
 }
-
-// Soft diffused glow: blur a brightened copy and screen it back — light "spreads" (natural golden-hour haze)
 function applyBloom(canvas, amount){
   if(!amount || amount <= 0) return;
   const w = canvas.width, h = canvas.height;
@@ -222,11 +214,8 @@ function applyBloom(canvas, amount){
   tc.filter = 'blur(' + Math.max(2, Math.round(Math.max(w,h)*0.02)) + 'px) brightness(1.18) saturate(1.05)';
   tc.drawImage(canvas, 0, 0);
   const ctx = canvas.getContext('2d');
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = Math.min(0.7, amount);
-  ctx.drawImage(tmp, 0, 0);
-  ctx.restore();
+  ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = Math.min(0.7, amount);
+  ctx.drawImage(tmp, 0, 0); ctx.restore();
 }
 
 const LOOKS = [
@@ -246,7 +235,7 @@ const LOOKS = [
     shSplit:[0,0,0],    hiSplit:[0,0,0],    vibrance:0.0,  saturation:0.0,  vignette:0.20, grain:0.11 },
 ];
 
-let selected = 0, intensity = 100, sourceCanvas = null, compareMode = false, comparePos = 0.5;
+let selected = 0, intensity = 100, sourceCanvas = null, compareMode = false, comparePos = 0.5, editedCanvas = null;
 const stage = document.getElementById('stage');
 const sctx = stage.getContext('2d', { willReadFrequently:true });
 
@@ -266,8 +255,6 @@ function setSource(img){
   buildChips(); render();
 }
 
-let raf = 0;
-function render(){ if(!sourceCanvas) return; cancelAnimationFrame(raf); raf = requestAnimationFrame(renderNow); }
 function processedData(){
   const w = sourceCanvas.width, h = sourceCanvas.height;
   const orig = sourceCanvas.getContext('2d').getImageData(0,0,w,h);
@@ -279,21 +266,36 @@ function processedData(){
   }
   return proc;
 }
+// Cache the processed image so the compare slider never recomputes the filter while dragging
+function buildEdited(){
+  const w = sourceCanvas.width, h = sourceCanvas.height;
+  if(!editedCanvas) editedCanvas = document.createElement('canvas');
+  editedCanvas.width = w; editedCanvas.height = h;
+  editedCanvas.getContext('2d').putImageData(processedData(), 0, 0);
+  const bl = LOOKS[selected].bloom;
+  if(bl) applyBloom(editedCanvas, bl * (intensity/100));
+}
+// Lightweight compositing of original (left) + cached edited (right) — runs on every drag frame
+function drawCompare(){
+  const w = stage.width, h = stage.height;
+  const splitX = Math.round(clamp01(comparePos) * w);
+  sctx.drawImage(sourceCanvas, 0, 0);
+  if(splitX < w && editedCanvas){
+    sctx.save();
+    sctx.beginPath(); sctx.rect(splitX, 0, w - splitX, h); sctx.clip();
+    sctx.drawImage(editedCanvas, 0, 0);
+    sctx.restore();
+  }
+  document.getElementById('cmpDiv').style.left = (comparePos*100)+'%';
+}
+
+let raf = 0;
+function render(){ if(!sourceCanvas) return; cancelAnimationFrame(raf); raf = requestAnimationFrame(renderNow); }
 function renderNow(){
-  if(compareMode) return renderCompare();
+  if(compareMode){ buildEdited(); drawCompare(); return; }
   sctx.putImageData(processedData(), 0, 0);
   const bl = LOOKS[selected].bloom;
   if(bl) applyBloom(stage, bl * (intensity/100));
-}
-function renderCompare(){
-  const w = sourceCanvas.width, h = sourceCanvas.height;
-  sctx.putImageData(processedData(), 0, 0);                       // right = edited
-  const bl = LOOKS[selected].bloom;
-  if(bl) applyBloom(stage, bl * (intensity/100));
-  const splitX = Math.max(0, Math.min(w, Math.round(comparePos*w)));
-  const orig = sourceCanvas.getContext('2d').getImageData(0,0,w,h);
-  if(splitX>0) sctx.putImageData(orig, 0,0, 0,0, splitX, h);      // left = original
-  document.getElementById('cmpDiv').style.left = (comparePos*100)+'%';
 }
 
 function buildChips(){
@@ -338,13 +340,13 @@ document.getElementById('intensity').oninput = e=>{
 document.getElementById('save').onclick = ()=>{
   const w = sourceCanvas.width, h = sourceCanvas.height;
   const out = document.createElement('canvas'); out.width=w; out.height=h;
-  out.getContext('2d').putImageData(processedData(), 0, 0);   // respects intensity slider
+  out.getContext('2d').putImageData(processedData(), 0, 0);
   const bl = LOOKS[selected].bloom; if(bl) applyBloom(out, bl * (intensity/100));
   out.toBlob(b=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(b);
     a.download='edit_'+Date.now()+'.jpg'; a.click(); }, 'image/jpeg', 0.95);
 };
 
-// ─── Before / after compare (drag the divider) ───
+// ─── Before / after: toggle + smooth drag (composites cached layers, throttled to animation frames) ───
 const compareBtn = document.getElementById('compare');
 const cmpOverlay = document.getElementById('cmp'), stageWrap = document.getElementById('stageWrap');
 compareBtn.onclick = ()=>{
@@ -353,24 +355,20 @@ compareBtn.onclick = ()=>{
   cmpOverlay.classList.toggle('on', compareMode);
   render();
 };
-let dragging = false;
-function dragCompare(e){
+let dragging = false, dragRaf = 0, pendingPos = 0.5;
+function queueDraw(e){
   const r = stage.getBoundingClientRect();
-  comparePos = clamp01((e.clientX - r.left) / r.width);
-  renderCompare();
+  pendingPos = clamp01((e.clientX - r.left) / r.width);
+  if(dragRaf) return;
+  dragRaf = requestAnimationFrame(()=>{ dragRaf = 0; comparePos = pendingPos; drawCompare(); });
 }
 stageWrap.addEventListener('pointerdown', e=>{
   if(!compareMode) return;
-  e.preventDefault();
-  dragging = true;
+  e.preventDefault(); dragging = true;
   try { stageWrap.setPointerCapture(e.pointerId); } catch(_){}
-  dragCompare(e);
+  queueDraw(e);
 });
-stageWrap.addEventListener('pointermove', e=>{
-  if(!compareMode || !dragging) return;
-  e.preventDefault();
-  dragCompare(e);
-});
+stageWrap.addEventListener('pointermove', e=>{ if(compareMode && dragging){ e.preventDefault(); queueDraw(e); } });
 stageWrap.addEventListener('pointerup', ()=>{ dragging = false; });
 stageWrap.addEventListener('pointercancel', ()=>{ dragging = false; });
 
@@ -389,7 +387,7 @@ function makeDemoPhoto(){
 }
 makeDemoPhoto();
 
-// ─── Camera (live viewfinder via getUserMedia) ───
+// ─── Camera ───
 let camStream = null, facing = 'environment';
 const cam = document.getElementById('cam'), camVideo = document.getElementById('camVideo');
 async function startStream(){
@@ -419,7 +417,7 @@ document.getElementById('camX').onclick = closeCamera;
 document.getElementById('shutter').onclick = shoot;
 document.getElementById('camFlip').onclick = flipCamera;
 
-// ─── PWA: service worker + install prompt ───
+// ─── PWA ───
 if('serviceWorker' in navigator){ window.addEventListener('load', ()=> navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
 let deferredPrompt = null;
 const installBtn = document.getElementById('install');
