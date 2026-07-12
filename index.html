@@ -92,7 +92,7 @@
   input[type=range]::-moz-range-track{height:3px; border-radius:3px; background:var(--line-2);}
   input[type=range]::-moz-range-thumb{width:6px; height:26px; border:none; border-radius:3px; background:var(--gold);}
 
-  .toolbar{position:relative; z-index:2; display:none; align-items:center; justify-content:center; padding:2px 16px 6px;}
+  .toolbar{position:relative; z-index:2; display:none; align-items:center; justify-content:center; padding:10px 16px 4px;}
   .tool{display:inline-flex; align-items:center; gap:7px; background:transparent; border:none; color:var(--dim);
     font-size:12px; font-weight:600; letter-spacing:.06em; cursor:pointer; padding:6px 12px; border-radius:20px; user-select:none; -webkit-user-select:none;}
   .tool svg{width:16px; height:16px;}
@@ -220,16 +220,16 @@
 </main>
 
 <div class="dock" id="dock">
-<div class="tabs" id="tabs">
-  <button class="tab active" data-tab="presets">Пресеты</button>
-  <button class="tab" data-tab="adjust">Настройки<span class="dot"></span></button>
-</div>
-
 <div class="toolbar" id="toolbar">
   <button class="tool" id="compare">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
     ДО / ПОСЛЕ
   </button>
+</div>
+
+<div class="tabs" id="tabs">
+  <button class="tab active" data-tab="presets">Пресеты</button>
+  <button class="tab" data-tab="adjust">Настройки<span class="dot"></span></button>
 </div>
 
 <div class="slider-row" id="sliderRow">
