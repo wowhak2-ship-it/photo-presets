@@ -119,6 +119,38 @@
     font-size:11px; font-weight:600; letter-spacing:.08em; padding:8px 18px; border-radius:20px; cursor:pointer; text-transform:uppercase;}
   .adj-reset:active{transform:scale(.97);}
 
+  /* crop overlay */
+  .crop{position:fixed; inset:0; z-index:60; background:#000; display:none; flex-direction:column;}
+  .crop.open{display:flex;}
+  .crop-top{text-align:center; padding:calc(14px + env(safe-area-inset-top)) 16px 8px; font-size:12px; letter-spacing:.18em; color:var(--dim); font-weight:600; text-transform:uppercase;}
+  .crop-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:8px 16px; overflow:hidden;}
+  .crop-holder{position:relative; line-height:0; touch-action:none;}
+  #cropCanvas{display:block;}
+  .crop-frame{position:absolute; border:1.5px solid rgba(255,255,255,.95); box-shadow:0 0 0 9999px rgba(0,0,0,.55);
+    box-sizing:border-box; cursor:move; touch-action:none;}
+  .crop-grid{position:absolute; inset:0; pointer-events:none;
+    background:
+      linear-gradient(rgba(255,255,255,.35) 0 0) 33.33% 0/1px 100% no-repeat,
+      linear-gradient(rgba(255,255,255,.35) 0 0) 66.66% 0/1px 100% no-repeat,
+      linear-gradient(rgba(255,255,255,.35) 0 0) 0 33.33%/100% 1px no-repeat,
+      linear-gradient(rgba(255,255,255,.35) 0 0) 0 66.66%/100% 1px no-repeat;}
+  .crop-hand{position:absolute; width:26px; height:26px; z-index:2; touch-action:none;}
+  .crop-hand::before{content:''; position:absolute; width:16px; height:16px; border:3px solid var(--gold);}
+  .crop-hand.tl{top:-13px; left:-13px; cursor:nwse-resize;} .crop-hand.tl::before{top:10px; left:10px; border-right:none; border-bottom:none;}
+  .crop-hand.tr{top:-13px; right:-13px; cursor:nesw-resize;} .crop-hand.tr::before{top:10px; right:10px; border-left:none; border-bottom:none;}
+  .crop-hand.bl{bottom:-13px; left:-13px; cursor:nesw-resize;} .crop-hand.bl::before{bottom:10px; left:10px; border-right:none; border-top:none;}
+  .crop-hand.br{bottom:-13px; right:-13px; cursor:nwse-resize;} .crop-hand.br::before{bottom:10px; right:10px; border-left:none; border-top:none;}
+  .crop-ratios{display:flex; gap:8px; justify-content:center; flex-wrap:wrap; padding:6px 16px;}
+  .crop-ratios button{background:var(--panel); border:1px solid var(--line); color:var(--dim); font-size:12px; font-weight:600; padding:8px 14px; border-radius:18px; cursor:pointer;}
+  .crop-ratios button.active{background:var(--gold-dim); border-color:var(--gold); color:var(--gold);}
+  .crop-bar{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 20px calc(16px + env(safe-area-inset-bottom));}
+  .crop-btn{display:inline-flex; align-items:center; gap:7px; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    font-size:14px; font-weight:600; padding:12px 20px; border-radius:24px; cursor:pointer;}
+  .crop-btn svg{width:17px; height:17px;}
+  .crop-btn.gold{background:var(--gold); color:#1a1205; border-color:transparent;}
+  .crop-btn.ghost{background:transparent; color:var(--dim);}
+  .crop-btn:active{transform:scale(.97);}
+
   @media (max-width:520px){ .hide-sm{display:none;} }
 </style>
 </head>
@@ -131,6 +163,9 @@
   </button>
   <button class="icon-btn" id="camBtn" aria-label="Камера">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+  </button>
+  <button class="icon-btn" id="cropBtn" aria-label="Кадрировать" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>
   </button>
   <div class="title">PRESETS</div>
   <div class="spacer"></div>
@@ -196,6 +231,38 @@
     <button class="cam-flip" id="camFlip" aria-label="Сменить камеру">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0 0 20.5 15"/></svg>
     </button>
+  </div>
+</div>
+
+<div class="crop" id="crop">
+  <div class="crop-top">Кадрирование</div>
+  <div class="crop-area" id="cropArea">
+    <div class="crop-holder" id="cropHolder">
+      <canvas id="cropCanvas"></canvas>
+      <div class="crop-frame" id="cropFrame">
+        <div class="crop-grid"></div>
+        <span class="crop-hand tl" data-h="tl"></span>
+        <span class="crop-hand tr" data-h="tr"></span>
+        <span class="crop-hand bl" data-h="bl"></span>
+        <span class="crop-hand br" data-h="br"></span>
+      </div>
+    </div>
+  </div>
+  <div class="crop-ratios" id="cropRatios">
+    <button data-ar="free" class="active">Свободно</button>
+    <button data-ar="1">1:1</button>
+    <button data-ar="0.8">4:5</button>
+    <button data-ar="1.25">5:4</button>
+    <button data-ar="1.7778">16:9</button>
+    <button data-ar="0.5625">9:16</button>
+  </div>
+  <div class="crop-bar">
+    <button class="crop-btn ghost" id="cropCancel">Отмена</button>
+    <button class="crop-btn" id="cropRotate" aria-label="Повернуть">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 10"/></svg>
+      90°
+    </button>
+    <button class="crop-btn gold" id="cropApply">Применить</button>
   </div>
 </div>
 
@@ -324,6 +391,7 @@ function setSource(img){
   document.getElementById('empty').style.display = 'none';
   stage.style.display = 'block';
   document.getElementById('save').style.display = 'inline-flex';
+  document.getElementById('cropBtn').style.display = 'flex';
   document.getElementById('toolbar').style.display = 'flex';
   document.getElementById('tabs').style.display = 'flex';
   setTab('presets');
@@ -517,7 +585,7 @@ function loadDemo(){
 loadDemo();
 
 // re-fit the photo on rotate / viewport change
-window.addEventListener('resize', ()=>{ fitStage(); if(compareMode) drawCompare(); });
+window.addEventListener('resize', ()=>{ fitStage(); if(compareMode) drawCompare(); if(cropEl.classList.contains('open')) refreshCrop(); });
 
 // ─── Camera ───
 let camStream = null, facing = 'environment';
@@ -548,6 +616,118 @@ document.getElementById('camBtn').onclick = openCamera;
 document.getElementById('camX').onclick = closeCamera;
 document.getElementById('shutter').onclick = shoot;
 document.getElementById('camFlip').onclick = flipCamera;
+
+// ─── Crop (frame + aspect ratios + rotate; applied to sourceCanvas before the look) ───
+let cropRotate = 0, cropAR = null, cropBase = null, cf = {x:0,y:0,w:0,h:0};
+const cropEl = document.getElementById('crop'), cropCanvas = document.getElementById('cropCanvas'),
+      cropFrameEl = document.getElementById('cropFrame');
+
+function buildRotated(){
+  const s = sourceCanvas, r = cropRotate, c = document.createElement('canvas');
+  if(r===90 || r===270){ c.width = s.height; c.height = s.width; } else { c.width = s.width; c.height = s.height; }
+  const x = c.getContext('2d');
+  x.translate(c.width/2, c.height/2); x.rotate(r*Math.PI/180); x.drawImage(s, -s.width/2, -s.height/2);
+  return c;
+}
+function layoutCrop(){
+  const area = document.getElementById('cropArea'), cs = getComputedStyle(area);
+  const availW = area.clientWidth  - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const availH = area.clientHeight - parseFloat(cs.paddingTop)  - parseFloat(cs.paddingBottom);
+  const ar = cropBase.width / cropBase.height;
+  let w = availW, h = w/ar; if(h > availH){ h = availH; w = h*ar; }
+  w = Math.floor(w); h = Math.floor(h);
+  cropCanvas.width = cropBase.width; cropCanvas.height = cropBase.height;
+  cropCanvas.getContext('2d').drawImage(cropBase, 0, 0);
+  cropCanvas.style.width = w+'px'; cropCanvas.style.height = h+'px';
+  return {w, h};
+}
+function frameForAR(dw, dh, ar){
+  if(!ar) return {x:0, y:0, w:dw, h:dh};
+  let w = dw, h = w/ar; if(h > dh){ h = dh; w = h*ar; }
+  return { x:(dw-w)/2, y:(dh-h)/2, w, h };
+}
+function positionFrame(){
+  cropFrameEl.style.left = cf.x+'px'; cropFrameEl.style.top = cf.y+'px';
+  cropFrameEl.style.width = cf.w+'px'; cropFrameEl.style.height = cf.h+'px';
+}
+function refreshCrop(){ const d = layoutCrop(); cf = frameForAR(d.w, d.h, cropAR); positionFrame(); }
+
+function openCrop(){
+  if(!sourceCanvas) return;
+  cropRotate = 0; cropAR = null;
+  document.querySelectorAll('#cropRatios button').forEach(b=> b.classList.toggle('active', b.dataset.ar==='free'));
+  cropEl.classList.add('open');
+  cropBase = buildRotated();
+  refreshCrop();
+}
+function closeCrop(){ cropEl.classList.remove('open'); }
+function rotateCrop(){ cropRotate = (cropRotate+90)%360; cropBase = buildRotated(); refreshCrop(); }
+function setCropAR(ar){
+  cropAR = ar;
+  cf = frameForAR(parseFloat(cropCanvas.style.width), parseFloat(cropCanvas.style.height), cropAR);
+  positionFrame();
+}
+function applyCrop(){
+  const scale = cropBase.width / parseFloat(cropCanvas.style.width);
+  const rx = Math.max(0, Math.round(cf.x*scale)), ry = Math.max(0, Math.round(cf.y*scale));
+  const rw = Math.min(cropBase.width - rx,  Math.round(cf.w*scale));
+  const rh = Math.min(cropBase.height - ry, Math.round(cf.h*scale));
+  const out = document.createElement('canvas'); out.width = rw; out.height = rh;
+  out.getContext('2d').drawImage(cropBase, rx, ry, rw, rh, 0, 0, rw, rh);
+  sourceCanvas = out; editedCanvas = null;
+  stage.width = rw; stage.height = rh;
+  buildChips(); fitStage(); render();
+  closeCrop();
+}
+
+// drag: move the frame or resize from a corner (opposite corner stays fixed)
+let cropDrag = null;
+function cropMove(e){
+  if(!cropDrag) return;
+  const rect = cropCanvas.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top, dw = rect.width, dh = rect.height, MIN = 40;
+  const o = cropDrag.orig;
+  if(cropDrag.mode === 'move'){
+    let nx = Math.max(0, Math.min(dw - o.w, o.x + (px - cropDrag.sx)));
+    let ny = Math.max(0, Math.min(dh - o.h, o.y + (py - cropDrag.sy)));
+    cf = {x:nx, y:ny, w:o.w, h:o.h};
+  } else {
+    const c = cropDrag.mode;
+    const dirX = (c==='br'||c==='tr') ? 1 : -1, dirY = (c==='br'||c==='bl') ? 1 : -1;
+    const fx = (dirX>0) ? o.x : o.x+o.w, fy = (dirY>0) ? o.y : o.y+o.h;   // fixed corner
+    let wantW = Math.max(0, (px - fx)*dirX), wantH = Math.max(0, (py - fy)*dirY);
+    const maxW = dirX>0 ? dw - fx : fx, maxH = dirY>0 ? dh - fy : fy;
+    let w, h;
+    if(cropAR){
+      w = Math.min(wantW, maxW, maxH*cropAR); w = Math.max(w, MIN, MIN*cropAR); w = Math.min(w, maxW, maxH*cropAR); h = w/cropAR;
+    } else {
+      w = Math.max(MIN, Math.min(wantW, maxW)); h = Math.max(MIN, Math.min(wantH, maxH));
+    }
+    cf = { x: dirX>0 ? fx : fx-w, y: dirY>0 ? fy : fy-h, w, h };
+  }
+  positionFrame();
+}
+function cropStart(e, mode){
+  e.preventDefault(); e.stopPropagation();
+  const rect = cropCanvas.getBoundingClientRect();
+  cropDrag = { mode, orig:{...cf}, sx:e.clientX-rect.left, sy:e.clientY-rect.top };
+  try { cropFrameEl.setPointerCapture(e.pointerId); } catch(_){}
+}
+cropFrameEl.addEventListener('pointerdown', e=> cropStart(e, 'move'));
+document.querySelectorAll('.crop-hand').forEach(hand =>
+  hand.addEventListener('pointerdown', e=> cropStart(e, hand.dataset.h)));
+cropFrameEl.addEventListener('pointermove', cropMove);
+window.addEventListener('pointerup', ()=>{ cropDrag = null; });
+
+document.getElementById('cropBtn').onclick = openCrop;
+document.getElementById('cropCancel').onclick = closeCrop;
+document.getElementById('cropRotate').onclick = rotateCrop;
+document.getElementById('cropApply').onclick = applyCrop;
+document.querySelectorAll('#cropRatios button').forEach(b => b.onclick = ()=>{
+  document.querySelectorAll('#cropRatios button').forEach(x=> x.classList.remove('active'));
+  b.classList.add('active');
+  setCropAR(b.dataset.ar==='free' ? null : parseFloat(b.dataset.ar));
+});
 
 // ─── PWA ───
 if('serviceWorker' in navigator){ window.addEventListener('load', ()=> navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
