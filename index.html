@@ -45,7 +45,7 @@
   .pill.ghost{background:transparent; color:var(--gold); border-color:rgba(246,192,78,.4);}
   .pill:active{transform:scale(.97);}
 
-  main{position:relative; z-index:1; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:6px 16px;}
+  main{position:relative; z-index:1; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:6px 16px; overflow:hidden;}
   #stageWrap{position:relative; display:inline-block; max-width:100%; max-height:100%; line-height:0; touch-action:none;}
   #stage{max-width:100%; max-height:100%; border-radius:16px; display:none;}
   #cmp{position:absolute; inset:0; display:none; pointer-events:none;}
@@ -111,7 +111,8 @@
   .adjust-panel{position:relative; z-index:2; display:none; flex-direction:column; gap:3px;
     padding:8px 20px calc(10px + env(safe-area-inset-bottom));}
   .adj-row{display:flex; align-items:center; gap:12px; height:38px;}
-  .adj-row .albl{flex:0 0 86px; font-size:11px; letter-spacing:.06em; color:var(--dim); font-weight:600; text-transform:uppercase;}
+  .adj-row .albl{flex:0 0 104px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    font-size:11px; letter-spacing:.04em; color:var(--dim); font-weight:600; text-transform:uppercase;}
   .adj-row input[type=range]{flex:1; height:38px;}
   .adj-row .aval{flex:0 0 42px; text-align:right; font-size:14px; font-weight:700; color:var(--gold); font-variant-numeric:tabular-nums;}
   .adj-reset{align-self:center; margin-top:5px; background:transparent; border:1px solid var(--line); color:var(--dim);
@@ -364,6 +365,21 @@ function drawCompare(){
   document.getElementById('cmpDiv').style.left = (comparePos*100)+'%';
 }
 
+// Size the canvas via CSS to CONTAIN it in main's box (max-height:100% can't resolve
+// through the auto-height wrapper, so portrait photos overflowed onto the panel — fix it in JS)
+function fitStage(){
+  if(!sourceCanvas) return;
+  const main = document.querySelector('main'), cs = getComputedStyle(main);
+  const availW = main.clientWidth  - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const availH = main.clientHeight - parseFloat(cs.paddingTop)  - parseFloat(cs.paddingBottom);
+  if(availW <= 0 || availH <= 0) return;
+  const ar = stage.width / stage.height;
+  let w = availW, h = w/ar;
+  if(h > availH){ h = availH; w = h*ar; }
+  stage.style.width = Math.floor(w)+'px';
+  stage.style.height = Math.floor(h)+'px';
+}
+
 let raf = 0;
 function render(){ if(!sourceCanvas) return; cancelAnimationFrame(raf); raf = requestAnimationFrame(renderNow); }
 function renderNow(){
@@ -420,6 +436,8 @@ function setTab(name){
   document.getElementById('sliderRow').style.display = pres?'flex':'none';
   document.getElementById('chips').style.display = pres?'flex':'none';
   document.getElementById('panelAdjust').style.display = pres?'none':'flex';
+  fitStage();   // panel height differs per tab → re-fit the photo
+  if(compareMode) drawCompare();
 }
 document.querySelectorAll('.tab').forEach(t=> t.onclick = ()=> setTab(t.dataset.tab));
 
@@ -490,6 +508,9 @@ function makeDemoPhoto(){
   const img = new Image(); img.onload = ()=> setSource(img); img.src = c.toDataURL();
 }
 makeDemoPhoto();
+
+// re-fit the photo on rotate / viewport change
+window.addEventListener('resize', ()=>{ fitStage(); if(compareMode) drawCompare(); });
 
 // ─── Camera ───
 let camStream = null, facing = 'environment';
