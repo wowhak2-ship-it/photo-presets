@@ -233,6 +233,15 @@ const LOOKS = [
     shSplit:[-10,2,10], hiSplit:[6,2,-6],   vibrance:0.05, saturation:0.82, vignette:0.32, grain:0.05 },
   { name:"Ч/Б",      temp:0,  tint:0,  contrast:0.26, fade:0.04, shadowsLift:0.06, highlightsRoll:0.08,
     shSplit:[0,0,0],    hiSplit:[0,0,0],    vibrance:0.0,  saturation:0.0,  vignette:0.20, grain:0.11 },
+  // ── new looks (added 12.07) ──
+  { name:"Блокбастер", temp:6, tint:0,  contrast:0.20, fade:0.03, shadowsLift:0.08, highlightsRoll:0.14,
+    shSplit:[-20,3,16], hiSplit:[20,5,-14], vibrance:0.12, saturation:1.06, vignette:0.16, grain:0.03 },
+  { name:"Пастель",  temp:4,  tint:-2, contrast:-0.06, fade:0.16, shadowsLift:0.22, highlightsRoll:0.10,
+    shSplit:[4,2,6],    hiSplit:[10,4,2],   vibrance:0.04, saturation:0.86, vignette:0.0,  grain:0.02, bloom:0.16 },
+  { name:"Kodak",    temp:8,  tint:-2, contrast:0.10, fade:0.08, shadowsLift:0.16, highlightsRoll:0.18,
+    shSplit:[2,0,4],    hiSplit:[12,6,-4],  vibrance:0.14, saturation:0.98, vignette:0.06, grain:0.06 },
+  { name:"Матовый Ч/Б", temp:0, tint:0, contrast:0.05, fade:0.18, shadowsLift:0.12, highlightsRoll:0.12,
+    shSplit:[0,0,0],    hiSplit:[0,0,0],    vibrance:0.0,  saturation:0.0,  vignette:0.14, grain:0.10 },
 ];
 
 let selected = 0, intensity = 100, sourceCanvas = null, compareMode = false, comparePos = 0.5, editedCanvas = null;
