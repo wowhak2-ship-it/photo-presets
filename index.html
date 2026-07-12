@@ -151,7 +151,9 @@
   .crop-btn.ghost{background:transparent; color:var(--dim);}
   .crop-btn:active{transform:scale(.97);}
 
-  @media (max-width:520px){ .hide-sm{display:none;} }
+  /* on phones the header has 3 left buttons + Save — the centred "PRESETS" title
+     collides with the crop button, and the bottom "ПРЕСЕТЫ" tab already covers it */
+  @media (max-width:520px){ .hide-sm{display:none;} .title{display:none;} }
 </style>
 </head>
 <body>
