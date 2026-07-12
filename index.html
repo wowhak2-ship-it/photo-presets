@@ -387,6 +387,7 @@ function setSource(img){
   sourceCanvas = document.createElement('canvas');
   sourceCanvas.width = w; sourceCanvas.height = h;
   sourceCanvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  makePreview();
   stage.width = w; stage.height = h;
   document.getElementById('empty').style.display = 'none';
   stage.style.display = 'block';
@@ -398,9 +399,10 @@ function setSource(img){
   buildChips(); render();
 }
 
-function processedData(){
-  const w = sourceCanvas.width, h = sourceCanvas.height;
-  const orig = sourceCanvas.getContext('2d').getImageData(0,0,w,h);
+function processedData(src){
+  src = src || sourceCanvas;
+  const w = src.width, h = src.height;
+  const orig = src.getContext('2d').getImageData(0,0,w,h);
   const proc = new ImageData(new Uint8ClampedArray(orig.data), w, h);
   applyLook(proc, LOOKS[selected]);
   const t = intensity/100, od = orig.data, pd = proc.data;
@@ -448,11 +450,23 @@ function fitStage(){
   stage.style.height = Math.floor(h)+'px';
 }
 
+// downscaled copy of the source for lag-free live scrubbing (full res only on release)
+let previewSrc = null, scrubbing = false;
+function makePreview(){
+  const max = 480, s = Math.min(1, max/Math.max(sourceCanvas.width, sourceCanvas.height));
+  if(s >= 1){ previewSrc = sourceCanvas; return; }
+  previewSrc = document.createElement('canvas');
+  previewSrc.width = Math.round(sourceCanvas.width*s);
+  previewSrc.height = Math.round(sourceCanvas.height*s);
+  previewSrc.getContext('2d').drawImage(sourceCanvas, 0, 0, previewSrc.width, previewSrc.height);
+}
 let raf = 0;
 function render(){ if(!sourceCanvas) return; cancelAnimationFrame(raf); raf = requestAnimationFrame(renderNow); }
 function renderNow(){
   if(compareMode){ buildEdited(); drawCompare(); return; }
-  sctx.putImageData(processedData(), 0, 0);
+  const src = (scrubbing && previewSrc) ? previewSrc : sourceCanvas;
+  if(stage.width !== src.width || stage.height !== src.height){ stage.width = src.width; stage.height = src.height; }
+  sctx.putImageData(processedData(src), 0, 0);
   const bl = LOOKS[selected].bloom;
   if(bl) applyBloom(stage, bl * (intensity/100), LOOKS[selected].bloomWarm);
 }
@@ -494,8 +508,9 @@ document.getElementById('file').onchange = e=>{
 document.getElementById('intensity').oninput = e=>{
   intensity = +e.target.value;
   document.getElementById('intensityVal').textContent = intensity;
-  render();
+  scrubbing = true; render();
 };
+document.getElementById('intensity').onchange = ()=>{ scrubbing = false; render(); };
 
 // ─── Tabs (presets / adjust) + manual adjustment sliders ───
 function setTab(name){
@@ -518,8 +533,9 @@ ADJ_KEYS.forEach(k=>{
   el.oninput = ()=>{
     adjust[k] = +el.value;
     out.textContent = (k!=='grain' && adjust[k]>0 ? '+' : '') + adjust[k];
-    updateAdjDot(); render();
+    updateAdjDot(); scrubbing = true; render();
   };
+  el.onchange = ()=>{ scrubbing = false; render(); };
 });
 document.getElementById('adjReset').onclick = ()=>{
   ADJ_KEYS.forEach(k=>{ adjust[k]=0;
@@ -674,7 +690,7 @@ function applyCrop(){
   const rh = Math.min(cropBase.height - ry, Math.round(cf.h*scale));
   const out = document.createElement('canvas'); out.width = rw; out.height = rh;
   out.getContext('2d').drawImage(cropBase, rx, ry, rw, rh, 0, 0, rw, rh);
-  sourceCanvas = out; editedCanvas = null;
+  sourceCanvas = out; editedCanvas = null; makePreview();
   stage.width = rw; stage.height = rh;
   buildChips(); fitStage(); render();
   closeCrop();
