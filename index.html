@@ -507,7 +507,14 @@ function makeDemoPhoto(){
   ['#eee','#bbb','#888','#555','#222'].forEach((col,i)=>{ x.fillStyle=col; x.fillRect(720,60+i*26,120,24); });
   const img = new Image(); img.onload = ()=> setSource(img); img.src = c.toDataURL();
 }
-makeDemoPhoto();
+// start on the real demo photo; fall back to the synthetic gradient if it can't load
+function loadDemo(){
+  const img = new Image();
+  img.onload = ()=> setSource(img);
+  img.onerror = ()=> makeDemoPhoto();
+  img.src = './demo.jpg';
+}
+loadDemo();
 
 // re-fit the photo on rotate / viewport change
 window.addEventListener('resize', ()=>{ fitStage(); if(compareMode) drawCompare(); });

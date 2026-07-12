@@ -1,9 +1,10 @@
 // Service worker — offline cache for the Photo Presets PWA
-const CACHE = 'photo-presets-v2';
+const CACHE = 'photo-presets-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './demo.jpg',
   './icon-192.png',
   './icon-512.png',
   './apple-touch-icon.png'
