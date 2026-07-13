@@ -423,27 +423,61 @@ function applyAdjust(img, a){
 }
 
 // Spot heal: cover a blemish with blurred surrounding skin, feathered edges (works on a target canvas)
-function healSpot(canvas, cx, cy, r){
-  const R = Math.max(4, Math.round(r)), box = Math.round(R*1.5);
-  // sample CLEAN skin offset from the blemish (keeps real texture → invisible patch)
-  let sx = cx, sy = cy + R*2.6;
-  if(sy + box > canvas.height) sy = cy - R*2.6;    // flip if near bottom
-  sx = Math.max(box, Math.min(canvas.width - box, sx));
-  sy = Math.max(box, Math.min(canvas.height - box, sy));
+// mean colour + variance of a small square patch (clamped to bounds)
+function patchStats(ctx, cx, cy, s){
+  s = Math.max(2, Math.round(s));
+  cx = Math.max(s, Math.min(ctx.canvas.width  - s, Math.round(cx)));
+  cy = Math.max(s, Math.min(ctx.canvas.height - s, Math.round(cy)));
+  const d = ctx.getImageData(cx-s, cy-s, s*2, s*2).data;
+  let r=0,g=0,b=0,r2=0,n=0;
+  for(let i=0;i<d.length;i+=4){ r+=d[i]; g+=d[i+1]; b+=d[i+2]; r2+=d[i]*d[i]; n++; }
+  r/=n; g/=n; b/=n;
+  return { mean:[r,g,b], variance: r2/n - r*r, x:cx, y:cy };
+}
+// Smart Healing Brush: auto-pick the cleanest nearby skin, colour-match to local skin, feather.
+// srcOverride={x,y} → clone-stamp mode (manual source).
+function healSpot(canvas, cx, cy, r, srcOverride){
+  const R = Math.max(4, Math.round(r)), box = Math.round(R*1.4);
+  const ctx = canvas.getContext('2d');
+  cx = Math.round(cx); cy = Math.round(cy);
+  // reference skin tone: 4 small patches around the blemish (clean skin, excludes the spot)
+  let rr=0,rg=0,rb=0,rn=0;
+  for(const [dx,dy] of [[R*1.7,0],[-R*1.7,0],[0,R*1.7],[0,-R*1.7]]){
+    const st = patchStats(ctx, cx+dx, cy+dy, R*0.5); rr+=st.mean[0]; rg+=st.mean[1]; rb+=st.mean[2]; rn++;
+  }
+  const ring = [rr/rn, rg/rn, rb/rn];
+  // source: manual (clone stamp) or auto-picked cleanest candidate on a ring
+  let best;
+  if(srcOverride){ best = patchStats(ctx, srcOverride.x, srcOverride.y, R); }
+  else {
+    const dist = R*2.8; let bestScore = Infinity;
+    for(let i=0;i<8;i++){
+      const a = i/8*Math.PI*2;
+      const st = patchStats(ctx, cx+Math.cos(a)*dist, cy+Math.sin(a)*dist, R);
+      const tone = Math.abs(st.mean[0]-ring[0]) + Math.abs(st.mean[1]-ring[1]) + Math.abs(st.mean[2]-ring[2]);
+      const score = tone + Math.max(0, st.variance-350)*0.02;   // penalise noisy (blemish/edge) patches
+      if(score < bestScore){ bestScore = score; best = st; }
+    }
+  }
+  // clone the chosen patch
   const tmp = document.createElement('canvas'); tmp.width = box*2; tmp.height = box*2;
   const t = tmp.getContext('2d');
-  const bl = Math.round(R*0.12);
-  if(bl >= 2) t.filter = 'blur(' + bl + 'px)';                       // barely any (large brush only) — keep skin texture
-  t.drawImage(canvas, sx-box, sy-box, box*2, box*2, 0, 0, box*2, box*2);
+  const bl = Math.round(R*0.12); if(bl >= 2) t.filter = 'blur(' + bl + 'px)';
+  t.drawImage(canvas, best.x-box, best.y-box, box*2, box*2, 0, 0, box*2, box*2);
   t.filter = 'none';
-  t.globalCompositeOperation = 'destination-in';                     // very soft feather so edges blend away
+  // colour-match the patch to local clean skin (preserve lighting)
+  const dR = ring[0]-best.mean[0], dG = ring[1]-best.mean[1], dB = ring[2]-best.mean[2];
+  if(Math.abs(dR)+Math.abs(dG)+Math.abs(dB) > 4){
+    const pd = t.getImageData(0,0,box*2,box*2), a = pd.data;
+    for(let i=0;i<a.length;i+=4){ a[i]+=dR; a[i+1]+=dG; a[i+2]+=dB; }
+    t.putImageData(pd, 0, 0);
+  }
+  // feather edges so the patch melts into the skin
+  t.globalCompositeOperation = 'destination-in';
   const g = t.createRadialGradient(box, box, R*0.15, box, box, R);
-  g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(0.65,'rgba(0,0,0,0.85)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(0.6,'rgba(0,0,0,0.85)'); g.addColorStop(1,'rgba(0,0,0,0)');
   t.fillStyle = g; t.fillRect(0, 0, box*2, box*2);
-  const ctx = canvas.getContext('2d');
-  ctx.globalAlpha = 0.92;                                            // slight blend for naturalness
-  ctx.drawImage(tmp, cx-box, cy-box);
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = 0.95; ctx.drawImage(tmp, cx-box, cy-box); ctx.globalAlpha = 1;
 }
 
 const LOOKS = [
