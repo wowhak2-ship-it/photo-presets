@@ -186,7 +186,7 @@
   .retouch.open{display:flex;}
   .rt-top{text-align:center; padding:calc(14px + env(safe-area-inset-top)) 16px 8px; font-size:12px; letter-spacing:.12em; color:var(--dim); font-weight:600; text-transform:uppercase;}
   .rt-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:8px 16px; overflow:hidden;}
-  .rt-holder{position:relative; line-height:0; touch-action:none;}
+  .rt-holder{position:relative; line-height:0; touch-action:none; transform-origin:center center; will-change:transform;}
   #rtCanvas{display:block; touch-action:none; cursor:crosshair; border-radius:14px; box-shadow:0 12px 38px rgba(0,0,0,.5);}
   .rt-tools{display:flex; align-items:center; gap:14px; padding:6px 22px 2px;}
   .rt-tools .rt-lbl{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); font-weight:600; flex:0 0 auto;}
@@ -865,23 +865,61 @@ function openRetouch(){
   rtCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);   // working copy of the original
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
   retouchEl.classList.add('open');
-  layoutRetouch();
+  layoutRetouch(); rtResetZoom();
 }
 function closeRetouch(){ retouchEl.classList.remove('open'); }
 function rtBrushR(){ const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width; return rtSize * (rtCanvas.width/disp) * 0.5; }
 function rtAt(e){ const r = rtCanvas.getBoundingClientRect();
   healSpot(rtCanvas, (e.clientX-r.left)*(rtCanvas.width/r.width), (e.clientY-r.top)*(rtCanvas.height/r.height), rtBrushR()); }
+// pointers: 1 finger draws, 2 fingers pinch-zoom + pan
+let rtScale = 1, rtTx = 0, rtTy = 0, rtPinch = null; const rtPtrs = new Map();
+const rtHolder = document.getElementById('rtHolder');
+function rtApplyTransform(){ rtHolder.style.transform = `translate(${rtTx}px,${rtTy}px) scale(${rtScale})`; }
+function rtResetZoom(){ rtScale = 1; rtTx = 0; rtTy = 0; rtApplyTransform(); }
+function rtClampPan(){
+  const a = document.getElementById('rtArea').getBoundingClientRect();
+  const mx = (rtScale-1) * a.width/2 + 30, my = (rtScale-1) * a.height/2 + 30;
+  rtTx = Math.max(-mx, Math.min(mx, rtTx)); rtTy = Math.max(-my, Math.min(my, rtTy));
+}
 rtCanvas.addEventListener('pointerdown', e=>{
   e.preventDefault();
-  rtUndo.push(rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height));
-  if(rtUndo.length > 10) rtUndo.shift();
-  document.getElementById('rtUndo').disabled = false;
-  rtDrawing = true; try{ rtCanvas.setPointerCapture(e.pointerId); }catch(_){}
-  rtAt(e);
+  rtPtrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  try{ rtCanvas.setPointerCapture(e.pointerId); }catch(_){}
+  if(rtPtrs.size === 2){
+    rtDrawing = false;
+    const p = [...rtPtrs.values()];
+    rtPinch = { d0:Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y), s0:rtScale,
+                mx:(p[0].x+p[1].x)/2, my:(p[0].y+p[1].y)/2, tx0:rtTx, ty0:rtTy };
+  } else if(rtPtrs.size === 1){
+    rtUndo.push(rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height));
+    if(rtUndo.length > 10) rtUndo.shift();
+    document.getElementById('rtUndo').disabled = false;
+    rtDrawing = true; rtAt(e);
+  }
 });
-rtCanvas.addEventListener('pointermove', e=>{ if(rtDrawing){ e.preventDefault(); rtAt(e); } });
-rtCanvas.addEventListener('pointerup', ()=>{ rtDrawing = false; });
-rtCanvas.addEventListener('pointercancel', ()=>{ rtDrawing = false; });
+rtCanvas.addEventListener('pointermove', e=>{
+  if(!rtPtrs.has(e.pointerId)) return;
+  rtPtrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if(rtPinch && rtPtrs.size >= 2){
+    e.preventDefault();
+    const p = [...rtPtrs.values()];
+    const d = Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y), mx=(p[0].x+p[1].x)/2, my=(p[0].y+p[1].y)/2;
+    rtScale = Math.max(1, Math.min(4, rtPinch.s0 * d/rtPinch.d0));
+    rtTx = rtPinch.tx0 + (mx - rtPinch.mx); rtTy = rtPinch.ty0 + (my - rtPinch.my);
+    rtClampPan(); rtApplyTransform();
+  } else if(rtDrawing && rtPtrs.size === 1){
+    e.preventDefault(); rtAt(e);
+  }
+});
+function rtEnd(e){ rtPtrs.delete(e.pointerId); if(rtPtrs.size < 2) rtPinch = null; if(rtPtrs.size === 0) rtDrawing = false; }
+rtCanvas.addEventListener('pointerup', rtEnd);
+rtCanvas.addEventListener('pointercancel', rtEnd);
+// desktop: wheel to zoom
+rtCanvas.addEventListener('wheel', e=>{
+  e.preventDefault();
+  rtScale = Math.max(1, Math.min(4, rtScale * (e.deltaY < 0 ? 1.12 : 0.9)));
+  if(rtScale === 1){ rtTx = 0; rtTy = 0; } rtClampPan(); rtApplyTransform();
+}, {passive:false});
 document.getElementById('rtUndo').onclick = ()=>{
   if(!rtUndo.length) return;
   rtCanvas.getContext('2d').putImageData(rtUndo.pop(), 0, 0);
