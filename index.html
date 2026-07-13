@@ -361,8 +361,8 @@
     <button class="rt-stamp-apply" id="rtStampApply">Применить</button>
   </div>
   <div class="rt-tools">
-    <span class="rt-lbl">Кисть</span>
     <input type="range" id="rtSize" min="10" max="70" value="28">
+    <button class="rt-undo" id="rtCompare">До / После</button>
     <button class="rt-undo" id="rtUndo" disabled>Отменить</button>
   </div>
   <div class="crop-bar">
@@ -928,6 +928,8 @@ function openRetouch(){
   if(!sourceCanvas) return;
   rtCanvas.width = sourceCanvas.width; rtCanvas.height = sourceCanvas.height;
   rtCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);   // working copy of the original
+  rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
+  rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
   retouchEl.classList.add('open');
   layoutRetouch(); rtResetZoom(); rtSetTool('heal');
@@ -1048,6 +1050,22 @@ document.getElementById('rtStampApply').onclick = ()=>{
   document.getElementById('rtUndo').disabled=false;
   healSpot(rtCanvas, t.x, t.y, rtSize*(rtCanvas.width/c.width)*0.5, {x:s.x, y:s.y});
 };
+
+// before/after: hold to see the pristine original, release for the retouched result
+let rtOrig = null, rtCmpTmp = null;
+const rtCompareBtn = document.getElementById('rtCompare');
+rtCompareBtn.addEventListener('pointerdown', e=>{
+  e.preventDefault(); if(!rtOrig) return;
+  rtCmpTmp = document.createElement('canvas'); rtCmpTmp.width = rtCanvas.width; rtCmpTmp.height = rtCanvas.height;
+  rtCmpTmp.getContext('2d').drawImage(rtCanvas, 0, 0);
+  const ctx = rtCanvas.getContext('2d'); ctx.clearRect(0,0,rtCanvas.width,rtCanvas.height); ctx.drawImage(rtOrig, 0, 0);
+  rtCompareBtn.classList.add('active');
+});
+function rtCompareRestore(){ if(rtCmpTmp){ const ctx = rtCanvas.getContext('2d');
+  ctx.clearRect(0,0,rtCanvas.width,rtCanvas.height); ctx.drawImage(rtCmpTmp, 0, 0); rtCmpTmp = null; rtCompareBtn.classList.remove('active'); } }
+rtCompareBtn.addEventListener('pointerup', rtCompareRestore);
+rtCompareBtn.addEventListener('pointercancel', rtCompareRestore);
+rtCompareBtn.addEventListener('pointerleave', rtCompareRestore);
 document.getElementById('retouchBtn').onclick = openRetouch;
 document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
