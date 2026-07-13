@@ -179,6 +179,22 @@
   .crop-btn.ghost{background:transparent; color:var(--dim);}
   .crop-btn:active{transform:scale(.97);}
 
+  /* retouch overlay */
+  .retouch{position:fixed; inset:0; z-index:60; background:var(--bg-deep);
+    background-image:radial-gradient(120% 55% at 50% 0%, #16181F 0%, var(--bg) 50%, var(--bg-deep) 100%);
+    display:none; flex-direction:column;}
+  .retouch.open{display:flex;}
+  .rt-top{text-align:center; padding:calc(14px + env(safe-area-inset-top)) 16px 8px; font-size:12px; letter-spacing:.12em; color:var(--dim); font-weight:600; text-transform:uppercase;}
+  .rt-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:8px 16px; overflow:hidden;}
+  .rt-holder{position:relative; line-height:0; touch-action:none;}
+  #rtCanvas{display:block; touch-action:none; cursor:crosshair; border-radius:14px; box-shadow:0 12px 38px rgba(0,0,0,.5);}
+  .rt-tools{display:flex; align-items:center; gap:14px; padding:6px 22px 2px;}
+  .rt-tools .rt-lbl{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); font-weight:600; flex:0 0 auto;}
+  .rt-tools input[type=range]{flex:1;}
+  .rt-undo{flex:0 0 auto; background:var(--panel); border:1px solid var(--line); color:var(--dim); font-size:12px; font-weight:600; padding:8px 14px; border-radius:18px; cursor:pointer; transition:transform .12s;}
+  .rt-undo:active{transform:scale(.94);}
+  .rt-undo:disabled{opacity:.4;}
+
   /* on phones the header has 3 left buttons + Save — the centred "PRESETS" title
      collides with the crop button, and the bottom "ПРЕСЕТЫ" tab already covers it */
   @media (max-width:520px){ .hide-sm{display:none;} .title{display:none;} }
@@ -203,6 +219,9 @@
   </button>
   <button class="icon-btn" id="cropBtn" aria-label="Кадрировать" style="display:none">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>
+  </button>
+  <button class="icon-btn" id="retouchBtn" aria-label="Ретушь" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7z"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg>
   </button>
   <button class="pill ghost" id="install" style="display:none">Установить</button>
   <button class="pill gold" id="save" style="display:none">
@@ -303,6 +322,24 @@
   </div>
 </div>
 
+<div class="retouch" id="retouch">
+  <div class="rt-top">Ретушь · коснитесь дефектов</div>
+  <div class="rt-area" id="rtArea">
+    <div class="rt-holder" id="rtHolder">
+      <canvas id="rtCanvas"></canvas>
+    </div>
+  </div>
+  <div class="rt-tools">
+    <span class="rt-lbl">Кисть</span>
+    <input type="range" id="rtSize" min="10" max="70" value="28">
+    <button class="rt-undo" id="rtUndo" disabled>Отменить</button>
+  </div>
+  <div class="crop-bar">
+    <button class="crop-btn ghost" id="rtCancel">Отмена</button>
+    <button class="crop-btn gold" id="rtApply">Применить</button>
+  </div>
+</div>
+
 <input type="file" id="file" accept="image/*" hidden>
 
 <script>
@@ -385,6 +422,22 @@ function applyAdjust(img, a){
   return img;
 }
 
+// Spot heal: cover a blemish with blurred surrounding skin, feathered edges (works on a target canvas)
+function healSpot(canvas, cx, cy, r){
+  const R = Math.max(4, Math.round(r)), box = R*4;
+  const x0 = Math.round(cx - box), y0 = Math.round(cy - box);
+  const tmp = document.createElement('canvas'); tmp.width = box*2; tmp.height = box*2;
+  const t = tmp.getContext('2d');
+  t.filter = 'blur(' + Math.max(3, Math.round(R*1.4)) + 'px)';
+  t.drawImage(canvas, x0, y0, box*2, box*2, 0, 0, box*2, box*2);   // heavily blurred surrounding skin (blemish dissolves)
+  t.filter = 'none';
+  t.globalCompositeOperation = 'destination-in';                    // feather to a soft circle
+  const g = t.createRadialGradient(box, box, R*0.25, box, box, R);
+  g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  t.fillStyle = g; t.fillRect(0, 0, box*2, box*2);
+  canvas.getContext('2d').drawImage(tmp, x0, y0);                   // paint back over the blemish
+}
+
 const LOOKS = [
   { name:"Золотой час", temp:12, tint:1, contrast:0.17, fade:0.02, shadowsLift:0.12, highlightsRoll:0.18,
     shSplit:[6,3,-2], hiSplit:[16,9,-6], vibrance:0.18, saturation:1.06, vignette:0.10, grain:0.04, bloom:0.20, bloomWarm:true },
@@ -430,6 +483,7 @@ function setSource(img){
   stage.style.display = 'block';
   document.getElementById('save').style.display = 'inline-flex';
   document.getElementById('cropBtn').style.display = 'flex';
+  document.getElementById('retouchBtn').style.display = 'flex';
   document.getElementById('dock').classList.add('on');
   document.getElementById('toolbar').style.display = 'flex';
   document.getElementById('tabs').style.display = 'flex';
@@ -639,7 +693,7 @@ function loadDemo(){
 loadDemo();
 
 // re-fit the photo on rotate / viewport change
-window.addEventListener('resize', ()=>{ fitStage(); if(compareMode) drawCompare(); if(cropEl.classList.contains('open')) refreshCrop(); });
+window.addEventListener('resize', ()=>{ fitStage(); if(compareMode) drawCompare(); if(cropEl.classList.contains('open')) refreshCrop(); if(retouchEl.classList.contains('open')) layoutRetouch(); });
 
 // ─── Camera ───
 let camStream = null, facing = 'environment';
@@ -782,6 +836,55 @@ document.querySelectorAll('#cropRatios button').forEach(b => b.onclick = ()=>{
   b.classList.add('active');
   setCropAR(b.dataset.ar==='free' ? null : parseFloat(b.dataset.ar));
 });
+
+// ─── Retouch (spot heal: tap/drag over blemishes; works on a copy, applied to sourceCanvas before the look) ───
+let rtSize = 28, rtUndo = [], rtDrawing = false;
+const retouchEl = document.getElementById('retouch'), rtCanvas = document.getElementById('rtCanvas');
+function layoutRetouch(){
+  const area = document.getElementById('rtArea'), cs = getComputedStyle(area);
+  const availW = area.clientWidth  - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const availH = area.clientHeight - parseFloat(cs.paddingTop)  - parseFloat(cs.paddingBottom);
+  if(availW <= 0 || availH <= 0) return;
+  const ar = rtCanvas.width / rtCanvas.height;
+  let w = availW, h = w/ar; if(h > availH){ h = availH; w = h*ar; }
+  rtCanvas.style.width = Math.floor(w)+'px'; rtCanvas.style.height = Math.floor(h)+'px';
+}
+function openRetouch(){
+  if(!sourceCanvas) return;
+  rtCanvas.width = sourceCanvas.width; rtCanvas.height = sourceCanvas.height;
+  rtCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);   // working copy of the original
+  rtUndo = []; document.getElementById('rtUndo').disabled = true;
+  retouchEl.classList.add('open');
+  layoutRetouch();
+}
+function closeRetouch(){ retouchEl.classList.remove('open'); }
+function rtBrushR(){ const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width; return rtSize * (rtCanvas.width/disp) * 0.5; }
+function rtAt(e){ const r = rtCanvas.getBoundingClientRect();
+  healSpot(rtCanvas, (e.clientX-r.left)*(rtCanvas.width/r.width), (e.clientY-r.top)*(rtCanvas.height/r.height), rtBrushR()); }
+rtCanvas.addEventListener('pointerdown', e=>{
+  e.preventDefault();
+  rtUndo.push(rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height));
+  if(rtUndo.length > 10) rtUndo.shift();
+  document.getElementById('rtUndo').disabled = false;
+  rtDrawing = true; try{ rtCanvas.setPointerCapture(e.pointerId); }catch(_){}
+  rtAt(e);
+});
+rtCanvas.addEventListener('pointermove', e=>{ if(rtDrawing){ e.preventDefault(); rtAt(e); } });
+rtCanvas.addEventListener('pointerup', ()=>{ rtDrawing = false; });
+rtCanvas.addEventListener('pointercancel', ()=>{ rtDrawing = false; });
+document.getElementById('rtUndo').onclick = ()=>{
+  if(!rtUndo.length) return;
+  rtCanvas.getContext('2d').putImageData(rtUndo.pop(), 0, 0);
+  document.getElementById('rtUndo').disabled = rtUndo.length === 0;
+};
+document.getElementById('rtSize').oninput = e=> rtSize = +e.target.value;
+document.getElementById('retouchBtn').onclick = openRetouch;
+document.getElementById('rtCancel').onclick = closeRetouch;
+document.getElementById('rtApply').onclick = ()=>{
+  sourceCanvas.getContext('2d').drawImage(rtCanvas, 0, 0);   // bake retouch into the source
+  editedCanvas = null; makePreview(); render();
+  closeRetouch();
+};
 
 // ─── PWA ───
 if('serviceWorker' in navigator){ window.addEventListener('load', ()=> navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
