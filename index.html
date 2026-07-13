@@ -188,6 +188,11 @@
   .rt-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:8px 16px; overflow:hidden;}
   .rt-holder{position:relative; line-height:0; touch-action:none; transform-origin:center center; will-change:transform;}
   #rtCanvas{display:block; touch-action:none; cursor:crosshair; border-radius:14px; box-shadow:0 12px 38px rgba(0,0,0,.5);}
+  .rt-cursor{position:absolute; left:0; top:0; width:0; height:0; border-radius:50%; z-index:3;
+    border:1.5px solid rgba(255,255,255,.92); background:rgba(255,255,255,.1);
+    box-shadow:0 0 0 1px rgba(0,0,0,.45), inset 0 0 6px rgba(0,0,0,.25);
+    transform:translate(-50%,-50%); pointer-events:none; opacity:0; transition:opacity .12s;}
+  .rt-cursor.on{opacity:1;}
   .rt-tools{display:flex; align-items:center; gap:14px; padding:6px 22px 2px;}
   .rt-tools .rt-lbl{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); font-weight:600; flex:0 0 auto;}
   .rt-tools input[type=range]{flex:1;}
@@ -328,6 +333,7 @@
     <div class="rt-holder" id="rtHolder">
       <canvas id="rtCanvas"></canvas>
     </div>
+    <div class="rt-cursor" id="rtCursor"></div>
   </div>
   <div class="rt-tools">
     <span class="rt-lbl">Кисть</span>
@@ -905,6 +911,15 @@ function closeRetouch(){ retouchEl.classList.remove('open'); }
 function rtBrushR(){ const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width; return rtSize * (rtCanvas.width/disp) * 0.5; }
 function rtAt(e){ const r = rtCanvas.getBoundingClientRect();
   healSpot(rtCanvas, (e.clientX-r.left)*(rtCanvas.width/r.width), (e.clientY-r.top)*(rtCanvas.height/r.height), rtBrushR()); }
+const rtCursor = document.getElementById('rtCursor');
+function rtShowCursor(e){
+  const ar = document.getElementById('rtArea').getBoundingClientRect();
+  rtCursor.style.left = (e.clientX - ar.left) + 'px';
+  rtCursor.style.top  = (e.clientY - ar.top)  + 'px';
+  rtCursor.style.width = rtSize + 'px'; rtCursor.style.height = rtSize + 'px';
+  rtCursor.classList.add('on');
+}
+function rtHideCursor(){ rtCursor.classList.remove('on'); }
 // pointers: 1 finger draws, 2 fingers pinch-zoom + pan
 let rtScale = 1, rtTx = 0, rtTy = 0, rtPinch = null; const rtPtrs = new Map();
 const rtHolder = document.getElementById('rtHolder');
@@ -920,7 +935,10 @@ rtCanvas.addEventListener('pointerdown', e=>{
   rtPtrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
   try{ rtCanvas.setPointerCapture(e.pointerId); }catch(_){}
   if(rtPtrs.size === 2){
-    rtDrawing = false;
+    rtDrawing = false; rtHideCursor();
+    // undo the accidental stroke the first finger made before the 2nd finger landed (zoom guard)
+    if(rtUndo.length){ rtCanvas.getContext('2d').putImageData(rtUndo.pop(), 0, 0);
+      document.getElementById('rtUndo').disabled = rtUndo.length === 0; }
     const p = [...rtPtrs.values()];
     rtPinch = { d0:Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y), s0:rtScale,
                 mx:(p[0].x+p[1].x)/2, my:(p[0].y+p[1].y)/2, tx0:rtTx, ty0:rtTy };
@@ -928,7 +946,7 @@ rtCanvas.addEventListener('pointerdown', e=>{
     rtUndo.push(rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height));
     if(rtUndo.length > 10) rtUndo.shift();
     document.getElementById('rtUndo').disabled = false;
-    rtDrawing = true; rtAt(e);
+    rtDrawing = true; rtAt(e); rtShowCursor(e);
   }
 });
 rtCanvas.addEventListener('pointermove', e=>{
@@ -942,10 +960,10 @@ rtCanvas.addEventListener('pointermove', e=>{
     rtTx = rtPinch.tx0 + (mx - rtPinch.mx); rtTy = rtPinch.ty0 + (my - rtPinch.my);
     rtClampPan(); rtApplyTransform();
   } else if(rtDrawing && rtPtrs.size === 1){
-    e.preventDefault(); rtAt(e);
+    e.preventDefault(); rtAt(e); rtShowCursor(e);
   }
 });
-function rtEnd(e){ rtPtrs.delete(e.pointerId); if(rtPtrs.size < 2) rtPinch = null; if(rtPtrs.size === 0) rtDrawing = false; }
+function rtEnd(e){ rtPtrs.delete(e.pointerId); if(rtPtrs.size < 2) rtPinch = null; if(rtPtrs.size === 0){ rtDrawing = false; rtHideCursor(); } }
 rtCanvas.addEventListener('pointerup', rtEnd);
 rtCanvas.addEventListener('pointercancel', rtEnd);
 // desktop: wheel to zoom
@@ -959,7 +977,11 @@ document.getElementById('rtUndo').onclick = ()=>{
   rtCanvas.getContext('2d').putImageData(rtUndo.pop(), 0, 0);
   document.getElementById('rtUndo').disabled = rtUndo.length === 0;
 };
-document.getElementById('rtSize').oninput = e=> rtSize = +e.target.value;
+document.getElementById('rtSize').oninput = e=>{
+  rtSize = +e.target.value;
+  rtCursor.style.width = rtSize+'px'; rtCursor.style.height = rtSize+'px';
+  rtCursor.classList.add('on'); clearTimeout(rtCursor._t); rtCursor._t = setTimeout(rtHideCursor, 600);  // preview size
+};
 document.getElementById('retouchBtn').onclick = openRetouch;
 document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
