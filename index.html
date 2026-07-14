@@ -204,6 +204,7 @@
   .rt-modes.stamp .rt-stamp-apply{display:inline-block;}
   .rt-marker{position:absolute; left:0; top:0; width:0; height:0; border-radius:50%; z-index:4; transform:translate(-50%,-50%);
     display:none; align-items:center; justify-content:center; touch-action:none;}
+  .rt-marker::after{content:''; position:absolute; inset:-18px; border-radius:50%;}  /* bigger finger hit-area */
   .rt-marker.on{display:flex;}
   .rt-marker b{position:absolute; top:-17px; font-size:8.5px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap;
     background:rgba(0,0,0,.55); padding:2px 6px; border-radius:8px; font-weight:700; pointer-events:none;}
@@ -477,18 +478,19 @@ function healSpot(canvas, cx, cy, r, srcOverride){
   const ctx = canvas.getContext('2d');
   cx = Math.round(cx); cy = Math.round(cy);
   // reference skin tone: 4 small patches around the blemish (clean skin, excludes the spot)
-  let rr=0,rg=0,rb=0,rn=0;
-  for(const [dx,dy] of [[R*2.2,0],[-R*2.2,0],[0,R*2.2],[0,-R*2.2],[R*1.6,R*1.6],[-R*1.6,-R*1.6]]){
-    const st = patchStats(ctx, cx+dx, cy+dy, R*0.5); rr+=st.mean[0]; rg+=st.mean[1]; rb+=st.mean[2]; rn++;
+  const rs=[],gs=[],bs=[];
+  for(const [dx,dy] of [[R*3,0],[-R*3,0],[0,R*3],[0,-R*3],[R*2.2,R*2.2],[-R*2.2,-R*2.2],[R*2.2,-R*2.2],[-R*2.2,R*2.2]]){
+    const st = patchStats(ctx, cx+dx, cy+dy, R*0.45); rs.push(st.mean[0]); gs.push(st.mean[1]); bs.push(st.mean[2]);
   }
-  const ring = [rr/rn, rg/rn, rb/rn];
+  const med = arr => { arr.sort((a,b)=>a-b); const m = arr.length>>1; return arr.length%2 ? arr[m] : (arr[m-1]+arr[m])/2; };
+  const ring = [med(rs), med(gs), med(bs)];   // median = robust to nearby rash spots
   // source: manual (clone stamp) or auto-picked cleanest candidate on a ring
   let best;
   if(srcOverride){ best = patchStats(ctx, srcOverride.x, srcOverride.y, R); }
   else {
-    const dist = R*2.8; let bestScore = Infinity;
-    for(let i=0;i<8;i++){
-      const a = i/8*Math.PI*2;
+    let bestScore = Infinity;
+    for(let i=0;i<12;i++){
+      const a = i/12*Math.PI*2, dist = R*(3.2 + (i%3)*0.7);   // two rings of candidates, farther out
       const st = patchStats(ctx, cx+Math.cos(a)*dist, cy+Math.sin(a)*dist, R);
       const tone = Math.abs(st.mean[0]-ring[0]) + Math.abs(st.mean[1]-ring[1]) + Math.abs(st.mean[2]-ring[2]);
       const score = tone + Math.max(0, st.variance-350)*0.02;   // penalise noisy (blemish/edge) patches
@@ -503,7 +505,7 @@ function healSpot(canvas, cx, cy, r, srcOverride){
   t.filter = 'none';
   // colour-match the patch toward local clean skin — PARTIAL, so a noisy reference
   // (dense rash around the spot) doesn't tint the patch pink/bright
-  const k = 0.6, dR = (ring[0]-best.mean[0])*k, dG = (ring[1]-best.mean[1])*k, dB = (ring[2]-best.mean[2])*k;
+  const k = 0.85, dR = (ring[0]-best.mean[0])*k, dG = (ring[1]-best.mean[1])*k, dB = (ring[2]-best.mean[2])*k;
   if(Math.abs(dR)+Math.abs(dG)+Math.abs(dB) > 3){
     const pd = t.getImageData(0,0,box*2,box*2), a = pd.data;
     for(let i=0;i<a.length;i+=4){ a[i]+=dR; a[i+1]+=dG; a[i+2]+=dB; }
@@ -511,11 +513,11 @@ function healSpot(canvas, cx, cy, r, srcOverride){
   }
   // soft gaussian-like feather so the circle edge never reads as a patch
   t.globalCompositeOperation = 'destination-in';
-  const g = t.createRadialGradient(box, box, R*0.08, box, box, R);
-  g.addColorStop(0,'rgba(0,0,0,0.92)'); g.addColorStop(0.4,'rgba(0,0,0,0.76)');
-  g.addColorStop(0.72,'rgba(0,0,0,0.38)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  const g = t.createRadialGradient(box, box, R*0.05, box, box, R);
+  g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(0.55,'rgba(0,0,0,0.94)');   // fully opaque centre so the blemish can't show through
+  g.addColorStop(0.82,'rgba(0,0,0,0.5)'); g.addColorStop(1,'rgba(0,0,0,0)');
   t.fillStyle = g; t.fillRect(0, 0, box*2, box*2);
-  ctx.globalAlpha = 0.9; ctx.drawImage(tmp, cx-box, cy-box); ctx.globalAlpha = 1;
+  ctx.drawImage(tmp, cx-box, cy-box);
 }
 
 const LOOKS = [
@@ -920,7 +922,7 @@ document.querySelectorAll('#cropRatios button').forEach(b => b.onclick = ()=>{
 });
 
 // ─── Retouch (spot heal: tap/drag over blemishes; works on a copy, applied to sourceCanvas before the look) ───
-let rtSize = 22, rtUndo = [], rtDrawing = false;
+let rtSize = 22, rtUndo = [], rtDrawing = false, rtLastE = null;
 const retouchEl = document.getElementById('retouch'), rtCanvas = document.getElementById('rtCanvas');
 function layoutRetouch(){
   const area = document.getElementById('rtArea'), cs = getComputedStyle(area);
@@ -961,7 +963,7 @@ function rtUpdateLoupe(e, ar){
   ar = ar || document.getElementById('rtArea').getBoundingClientRect();
   const r = rtCanvas.getBoundingClientRect();
   const bx = (e.clientX-r.left)*(rtCanvas.width/r.width), by = (e.clientY-r.top)*(rtCanvas.height/r.height);
-  const V = rtLoupeC.width, zoom = 2.3, srcSize = V/zoom;
+  const V = rtLoupeC.width, zoom = 1.7, srcSize = V/zoom;
   const lx = rtLoupeC.getContext('2d');
   lx.clearRect(0,0,V,V);
   lx.drawImage(rtCanvas, bx-srcSize/2, by-srcSize/2, srcSize, srcSize, 0,0, V,V);
@@ -974,6 +976,7 @@ function rtUpdateLoupe(e, ar){
   else { rtLoupe.style.right='10px'; rtLoupe.style.left='auto'; }
   rtLoupe.classList.add('on');
 }
+function rtHideLoupe(){ rtLoupe.classList.remove('on'); }
 // pointers: 1 finger draws, 2 fingers pinch-zoom + pan
 let rtScale = 1, rtTx = 0, rtTy = 0, rtPinch = null; const rtPtrs = new Map();
 const rtHolder = document.getElementById('rtHolder');
@@ -989,19 +992,12 @@ rtCanvas.addEventListener('pointerdown', e=>{
   rtPtrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
   try{ rtCanvas.setPointerCapture(e.pointerId); }catch(_){}
   if(rtPtrs.size === 2){
-    // zoom guard: only revert if a stroke is actively in progress (accidental) —
-    // NOT a finished heal/stamp the user already applied
-    if(rtDrawing && rtUndo.length){ rtCanvas.getContext('2d').putImageData(rtUndo.pop(), 0, 0);
-      document.getElementById('rtUndo').disabled = rtUndo.length === 0; }
-    rtDrawing = false; rtHideCursor();
+    rtDrawing = false; rtHideCursor();   // 2nd finger = zoom: cancel the aim, nothing was drawn
     const p = [...rtPtrs.values()];
     rtPinch = { d0:Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y), s0:rtScale,
                 mx:(p[0].x+p[1].x)/2, my:(p[0].y+p[1].y)/2, tx0:rtTx, ty0:rtTy };
   } else if(rtPtrs.size === 1 && rtTool === 'heal'){
-    rtUndo.push(rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height));
-    if(rtUndo.length > 10) rtUndo.shift();
-    document.getElementById('rtUndo').disabled = false;
-    rtDrawing = true; rtAt(e); rtShowCursor(e);
+    rtDrawing = true; rtLastE = e; rtShowCursor(e);   // aim only — heal fires on release
   }
 });
 rtCanvas.addEventListener('pointermove', e=>{
@@ -1015,10 +1011,23 @@ rtCanvas.addEventListener('pointermove', e=>{
     rtTx = rtPinch.tx0 + (mx - rtPinch.mx); rtTy = rtPinch.ty0 + (my - rtPinch.my);
     rtClampPan(); rtApplyTransform();
   } else if(rtDrawing && rtPtrs.size === 1){
-    e.preventDefault(); rtAt(e); rtShowCursor(e);
+    e.preventDefault(); rtLastE = e; rtShowCursor(e);   // keep aiming, heal only on release
   }
 });
-function rtEnd(e){ rtPtrs.delete(e.pointerId); if(rtPtrs.size < 2) rtPinch = null; if(rtPtrs.size === 0){ rtDrawing = false; rtHideCursor(); } }
+function rtEnd(e){
+  const finishHeal = rtDrawing && rtTool === 'heal' && rtLastE && rtPtrs.size === 1;
+  rtPtrs.delete(e.pointerId);
+  if(rtPtrs.size < 2) rtPinch = null;
+  if(rtPtrs.size === 0){
+    if(finishHeal){   // heal exactly where you aimed, on release
+      rtUndo.push(rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height));
+      if(rtUndo.length > 10) rtUndo.shift();
+      document.getElementById('rtUndo').disabled = false;
+      rtAt(rtLastE);
+    }
+    rtDrawing = false; rtHideCursor();
+  }
+}
 rtCanvas.addEventListener('pointerup', rtEnd);
 rtCanvas.addEventListener('pointercancel', rtEnd);
 // desktop: wheel to zoom
@@ -1064,9 +1073,9 @@ function rtSetTool(tool){
 document.querySelectorAll('.rt-mode').forEach(b=> b.onclick=()=>rtSetTool(b.dataset.tool));
 function markerDrag(el,key){
   el.addEventListener('pointerdown', e=>{ e.preventDefault(); e.stopPropagation(); try{el.setPointerCapture(e.pointerId);}catch(_){}
-    el._d=true; const a=document.getElementById('rtArea').getBoundingClientRect(); rtMk[key].x=e.clientX-a.left; rtMk[key].y=e.clientY-a.top; rtDrawMarkers(); });
-  el.addEventListener('pointermove', e=>{ if(!el._d)return; e.preventDefault(); const a=document.getElementById('rtArea').getBoundingClientRect(); rtMk[key].x=e.clientX-a.left; rtMk[key].y=e.clientY-a.top; rtDrawMarkers(); });
-  el.addEventListener('pointerup', ()=>el._d=false); el.addEventListener('pointercancel', ()=>el._d=false);
+    el._d=true; const a=document.getElementById('rtArea').getBoundingClientRect(); rtMk[key].x=e.clientX-a.left; rtMk[key].y=e.clientY-a.top; rtDrawMarkers(); rtUpdateLoupe(e, a); });
+  el.addEventListener('pointermove', e=>{ if(!el._d)return; e.preventDefault(); const a=document.getElementById('rtArea').getBoundingClientRect(); rtMk[key].x=e.clientX-a.left; rtMk[key].y=e.clientY-a.top; rtDrawMarkers(); rtUpdateLoupe(e, a); });
+  el.addEventListener('pointerup', ()=>{ el._d=false; rtHideLoupe(); }); el.addEventListener('pointercancel', ()=>{ el._d=false; rtHideLoupe(); });
 }
 markerDrag(rtSrc,'src'); markerDrag(rtTgt,'tgt');
 document.getElementById('rtStampApply').onclick = ()=>{
