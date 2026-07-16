@@ -229,6 +229,53 @@
 
   /* on phones the header has 3 left buttons + Save — the centred "PRESETS" title
      collides with the crop button, and the bottom "ПРЕСЕТЫ" tab already covers it */
+  /* ── home (landing) ── */
+  #home{position:relative; z-index:2; flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    display:none; flex-direction:column; gap:16px; padding:14px 20px calc(26px + env(safe-area-inset-bottom));}
+  body:not(.editing) #home{display:flex;}
+  body:not(.editing) header, body:not(.editing) main, body:not(.editing) .dock{display:none;}
+  #backBtn{margin-right:auto;}
+
+  .home-hero{display:flex; align-items:center; gap:13px; padding:4px 0 4px;}
+  .home-hero .avatar{width:52px; height:52px;}
+  .home-title{flex:1; min-width:0;}
+  .home-title h1{margin:0; font-size:25px; font-weight:800; letter-spacing:-.01em;}
+  .home-title p{margin:3px 0 0; font-size:10px; letter-spacing:.22em; text-transform:uppercase; color:var(--faint); font-weight:700;}
+
+  .home-big{display:grid; grid-template-columns:1.22fr 1fr; gap:12px;}
+  .big-card{position:relative; border:1px solid var(--line); border-radius:22px; padding:16px 16px 15px;
+    display:flex; flex-direction:column; align-items:flex-start; gap:9px; cursor:pointer; text-align:left;
+    background:linear-gradient(160deg, var(--panel2), var(--panel)); color:var(--text);
+    font-size:16px; font-weight:800; letter-spacing:.01em; box-shadow:0 8px 24px rgba(0,0,0,.32); transition:transform .15s;}
+  .big-card:active{transform:scale(.97);}
+  .big-card small{font-size:11px; color:var(--dim); font-weight:600; margin-top:-5px;}
+  .big-card .bc-ic{width:42px; height:42px; border-radius:13px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.08); margin-bottom:2px;}
+  .big-card .bc-ic svg{width:21px; height:21px;}
+  .big-card.gold{background:linear-gradient(150deg,#F8CE7E 0%,#EFB458 55%,#DE9A38 100%); border-color:transparent; color:var(--gold-ink);
+    box-shadow:0 10px 30px rgba(222,154,56,.28);}
+  .big-card.gold small{color:rgba(26,19,5,.62);}
+  .big-card.gold .bc-ic{background:rgba(26,19,5,.14);}
+
+  .home-sec{font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--dim); font-weight:700; margin-top:4px;}
+
+  .home-tools{display:grid; grid-template-columns:repeat(4,1fr); gap:10px;}
+  .tool-card{display:flex; flex-direction:column; align-items:center; gap:8px; padding:13px 4px 11px;
+    background:var(--panel); border:1px solid var(--line); border-radius:18px; cursor:pointer; transition:transform .15s;}
+  .tool-card:active{transform:scale(.94);}
+  .tool-card .tc-ic{width:40px; height:40px; border-radius:13px; background:var(--gold-dim); display:flex; align-items:center; justify-content:center; color:var(--gold);}
+  .tool-card .tc-ic svg{width:19px; height:19px;}
+  .tool-card b{font-size:10.5px; font-weight:700; letter-spacing:.04em; color:var(--dim);}
+
+  .home-looks{display:flex; gap:12px; overflow-x:auto; scrollbar-width:none; margin:-2px -20px 0; padding:2px 20px 8px;}
+  .home-looks::-webkit-scrollbar{display:none;}
+  .look-card{position:relative; flex:0 0 auto; width:126px; height:168px; border-radius:18px; overflow:hidden;
+    border:1px solid var(--line); background:var(--panel); cursor:pointer; padding:0; box-shadow:0 6px 18px rgba(0,0,0,.35); transition:transform .15s;}
+  .look-card:active{transform:scale(.96);}
+  .look-card canvas{width:100%; height:100%; display:block;}
+  .look-card span{position:absolute; left:0; right:0; bottom:0; padding:24px 10px 9px; text-align:left;
+    font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#fff;
+    background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.68) 100%);}
+
   @media (max-width:520px){ .hide-sm{display:none;} .title{display:none;} }
 </style>
 </head>
@@ -236,13 +283,9 @@
 <div class="glow"></div>
 
 <header>
-  <div class="brand">
-    <div class="avatar"><img src="./avatar.jpg" alt="Автор"></div>
-    <div class="brand-name hide-sm">
-      <b>Пресеты</b>
-      <small>Фоторедактор</small>
-    </div>
-  </div>
+  <button class="icon-btn" id="backBtn" aria-label="Домой">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
   <button class="icon-btn" id="pick" aria-label="Галерея">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
   </button>
@@ -255,12 +298,58 @@
   <button class="icon-btn" id="retouchBtn" aria-label="Ретушь" style="display:none">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7z"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg>
   </button>
-  <button class="pill ghost" id="install" style="display:none">Установить</button>
   <button class="pill gold" id="save" style="display:none">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
     Сохранить
   </button>
 </header>
+
+<section id="home">
+  <div class="home-hero">
+    <div class="avatar"><img src="./avatar.jpg" alt="Автор"></div>
+    <div class="home-title">
+      <h1>Пресеты</h1>
+      <p>Фоторедактор</p>
+    </div>
+    <button class="pill ghost" id="install" style="display:none">Установить</button>
+  </div>
+
+  <div class="home-big">
+    <button class="big-card gold" id="homePick">
+      <span class="bc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></span>
+      Галерея
+      <small>Открыть фото</small>
+    </button>
+    <button class="big-card" id="homeCam">
+      <span class="bc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+      Камера
+      <small>Снять сейчас</small>
+    </button>
+  </div>
+
+  <div class="home-sec">Инструменты</div>
+  <div class="home-tools">
+    <button class="tool-card" data-go="presets">
+      <span class="tc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="10" cy="19" r="2.5"/></svg></span>
+      <b>Пресеты</b>
+    </button>
+    <button class="tool-card" data-go="retouch">
+      <span class="tc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7z"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg></span>
+      <b>Ретушь</b>
+    </button>
+    <button class="tool-card" data-go="crop">
+      <span class="tc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg></span>
+      <b>Кадр</b>
+    </button>
+    <button class="tool-card" data-go="adjust">
+      <span class="tc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.4" fill="var(--bg)"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15.5" cy="16" r="2.4" fill="var(--bg)"/></svg></span>
+      <b>Настройки</b>
+    </button>
+  </div>
+
+  <div class="home-sec">Луки</div>
+  <div class="home-looks" id="homeLooks"></div>
+</section>
 
 <main>
   <div id="stageWrap">
@@ -612,7 +701,7 @@ function setSource(img){
   document.getElementById('toolbar').style.display = 'flex';
   document.getElementById('tabs').style.display = 'flex';
   setTab('presets');
-  buildChips(); render();
+  buildChips(); buildHomeLooks(); render();
 }
 
 function processedData(src){
@@ -719,8 +808,67 @@ function buildChips(){
 document.getElementById('pick').onclick = ()=> document.getElementById('file').click();
 document.getElementById('file').onchange = e=>{
   const f = e.target.files[0]; if(!f) return;
-  const img = new Image(); img.onload = ()=> setSource(img); img.src = URL.createObjectURL(f);
+  const img = new Image();
+  img.onload = ()=>{ setSource(img); goEditor(); applyPendingTool(); };
+  img.src = URL.createObjectURL(f);
 };
+
+// ─── Home (landing) ↔ editor ───
+let pendingTool = null;
+function goEditor(){ document.body.classList.add('editing'); fitStage(); render(); }
+function goHome(){
+  document.body.classList.remove('editing');
+  if(compareMode){ compareMode = false; compareBtn.classList.remove('active'); cmpOverlay.classList.remove('on'); render(); }
+}
+function applyPendingTool(){
+  const t = pendingTool; pendingTool = null;
+  if(!t || t==='presets') { setTab('presets'); return; }
+  if(t==='adjust') setTab('adjust');
+  else if(t==='retouch') openRetouch();
+  else if(t==='crop') openCrop();
+}
+function runTool(tool){
+  if(!sourceCanvas){ pendingTool = tool; document.getElementById('file').click(); return; }
+  goEditor();
+  pendingTool = tool; applyPendingTool();
+}
+document.getElementById('homePick').onclick = ()=>{ pendingTool = 'presets'; document.getElementById('file').click(); };
+document.getElementById('homeCam').onclick = ()=> openCamera();
+document.querySelectorAll('.tool-card').forEach(b=> b.onclick = ()=> runTool(b.dataset.go));
+document.getElementById('backBtn').onclick = goHome;
+
+// look cards: live previews rendered by the real engine from the current photo
+function buildHomeLooks(){
+  const host = document.getElementById('homeLooks');
+  if(!host || !sourceCanvas) return;
+  host.innerHTML = '';
+  const tw = 126*2, th = 168*2, ar = tw/th;
+  let sw = sourceCanvas.width, sh = sourceCanvas.height, sx = 0, sy = 0;
+  if(sw/sh > ar){ sw = Math.round(sh*ar); sx = (sourceCanvas.width - sw) >> 1; }
+  else { sh = Math.round(sw/ar); sy = (sourceCanvas.height - sh) >> 1; }
+  const base = document.createElement('canvas'); base.width = tw; base.height = th;
+  base.getContext('2d').drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, tw, th);
+  const bd = base.getContext('2d').getImageData(0, 0, tw, th);
+  LOOKS.forEach((look, i)=>{
+    if(i === 0) return;                       // «Оригинал» в ленте не нужен
+    const card = document.createElement('button'); card.className = 'look-card';
+    const c = document.createElement('canvas'); c.width = tw; c.height = th;
+    const id = new ImageData(new Uint8ClampedArray(bd.data), tw, th);
+    applyLook(id, look);
+    c.getContext('2d').putImageData(id, 0, 0);
+    if(look.bloom) applyBloom(c, look.bloom, look.bloomWarm);
+    const lab = document.createElement('span'); lab.textContent = look.name;
+    card.appendChild(c); card.appendChild(lab);
+    card.onclick = ()=>{
+      selected = i; intensity = 100;
+      document.getElementById('intensity').value = 100;
+      document.getElementById('intensityVal').textContent = '100';
+      buildChips();
+      goEditor(); setTab('presets'); render();
+    };
+    host.appendChild(card);
+  });
+}
 document.getElementById('intensity').oninput = e=>{
   intensity = +e.target.value;
   document.getElementById('intensityVal').textContent = intensity;
@@ -841,7 +989,7 @@ function shoot(){
   if(!camVideo.videoWidth) return;
   const c = document.createElement('canvas'); c.width = camVideo.videoWidth; c.height = camVideo.videoHeight;
   c.getContext('2d').drawImage(camVideo, 0, 0);
-  const img = new Image(); img.onload = ()=>{ closeCamera(); setSource(img); }; img.src = c.toDataURL('image/jpeg', 0.95);
+  const img = new Image(); img.onload = ()=>{ closeCamera(); setSource(img); goEditor(); }; img.src = c.toDataURL('image/jpeg', 0.95);
 }
 async function flipCamera(){ facing = facing==='environment' ? 'user' : 'environment'; try { await startStream(); } catch(e){} }
 document.getElementById('camBtn').onclick = openCamera;
