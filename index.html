@@ -216,9 +216,13 @@
     border:2px solid rgba(255,255,255,.92); box-shadow:0 6px 20px rgba(0,0,0,.55); display:none; background:#000; pointer-events:none;}
   .rt-loupe.on{display:block;}
   .rt-loupe canvas{width:100%; height:100%; display:block;}
-  .rt-tools{display:flex; align-items:center; gap:14px; padding:6px 22px 2px;}
-  .rt-tools .rt-lbl{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); font-weight:600; flex:0 0 auto;}
-  .rt-tools input[type=range]{flex:1;}
+  .rt-tools{display:flex; align-items:center; justify-content:center; gap:14px; padding:4px 22px 2px;}
+  .rt-sliders{display:flex; flex-direction:column; gap:0; padding:4px 22px 0;}
+  .rt-srow{display:flex; align-items:center; gap:10px; height:30px;}
+  .rt-srow span{flex:0 0 80px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); font-weight:600;}
+  .rt-srow input[type=range]{flex:1; height:30px;}
+  .rt-srow input[type=range]::-webkit-slider-thumb{height:20px; margin-top:-8.5px;}
+  .rt-srow b{flex:0 0 32px; text-align:right; font-family:var(--mono); font-size:12px; color:var(--gold); font-weight:600;}
   .rt-undo{flex:0 0 auto; background:var(--panel); border:1px solid var(--line); color:var(--dim); font-size:12px; font-weight:600; padding:8px 14px; border-radius:18px; cursor:pointer; transition:transform .12s;}
   .rt-undo:active{transform:scale(.94);}
   .rt-undo:disabled{opacity:.4;}
@@ -366,8 +370,12 @@
     <button class="rt-mode" data-tool="stamp">Штамп</button>
     <button class="rt-stamp-apply" id="rtStampApply">Применить</button>
   </div>
+  <div class="rt-sliders">
+    <div class="rt-srow"><span>Размер</span><input type="range" id="rtSize" min="10" max="70" value="22"><b id="rtSizeV">22</b></div>
+    <div class="rt-srow"><span>Жёсткость</span><input type="range" id="rtHard" min="0" max="100" value="45"><b id="rtHardV">45</b></div>
+    <div class="rt-srow"><span>Сила</span><input type="range" id="rtStr" min="20" max="100" value="100"><b id="rtStrV">100</b></div>
+  </div>
   <div class="rt-tools">
-    <input type="range" id="rtSize" min="10" max="70" value="22">
     <button class="rt-undo" id="rtCompare">До / После</button>
     <button class="rt-undo" id="rtUndo" disabled>Отменить</button>
   </div>
@@ -471,53 +479,85 @@ function patchStats(ctx, cx, cy, s){
   r/=n; g/=n; b/=n;
   return { mean:[r,g,b], variance: r2/n - r*r, x:cx, y:cy };
 }
-// Smart Healing Brush: auto-pick the cleanest nearby skin, colour-match to local skin, feather.
-// srcOverride={x,y} → clone-stamp mode (manual source).
-function healSpot(canvas, cx, cy, r, srcOverride){
-  const R = Math.max(4, Math.round(r)), box = Math.round(R*1.4);
+// Professional healing brush (frequency separation, как в Photoshop):
+// tone+lighting are REBUILT from the ring of skin around the defect — a robust linear
+// fit that follows the local lighting gradient (nearby blemishes rejected as outliers);
+// pore texture is borrowed from a clean donor patch as pure high-frequency detail.
+// Blended through a feathered alpha mask. srcOverride={x,y} → clone-stamp donor.
+// opts: {hardness:0..1 feather profile, strength:0..1 blend with original}.
+function healSpot(canvas, cx, cy, r, srcOverride, opts){
+  const R = Math.max(4, Math.round(r)), box = Math.round(R*1.6), P = box*2;
+  const hard = opts && opts.hardness != null ? opts.hardness : 0.45;
+  const strength = opts && opts.strength != null ? opts.strength : 1;
   const ctx = canvas.getContext('2d');
   cx = Math.round(cx); cy = Math.round(cy);
-  // reference skin tone: 4 small patches around the blemish (clean skin, excludes the spot)
-  const rs=[],gs=[],bs=[];
-  for(const [dx,dy] of [[R*3,0],[-R*3,0],[0,R*3],[0,-R*3],[R*2.2,R*2.2],[-R*2.2,-R*2.2],[R*2.2,-R*2.2],[-R*2.2,R*2.2]]){
-    const st = patchStats(ctx, cx+dx, cy+dy, R*0.45); rs.push(st.mean[0]); gs.push(st.mean[1]); bs.push(st.mean[2]);
+  const W = canvas.width, H = canvas.height;
+  const x0 = Math.max(0, Math.min(W - P, cx - box));
+  const y0 = Math.max(0, Math.min(H - P, cy - box));
+  const ccx = cx - x0, ccy = cy - y0;
+  const D = ctx.getImageData(x0, y0, P, P), dd = D.data;
+
+  // 1) lighting model: linear fit (base + gradient) per channel over the clean ring
+  const ring = [];
+  for(let y=0;y<P;y++) for(let x=0;x<P;x++){
+    const dist = Math.hypot(x-ccx, y-ccy);
+    if(dist > R*1.05 && dist < box*0.98) ring.push((y*P+x)*4);
   }
-  const med = arr => { arr.sort((a,b)=>a-b); const m = arr.length>>1; return arr.length%2 ? arr[m] : (arr[m-1]+arr[m])/2; };
-  const ring = [med(rs), med(gs), med(bs)];   // median = robust to nearby rash spots
-  // source: manual (clone stamp) or auto-picked cleanest candidate on a ring
-  let best;
-  if(srcOverride){ best = patchStats(ctx, srcOverride.x, srcOverride.y, R); }
+  const fit = idx => {
+    let n=0,sx=0,sy=0,sxx=0,syy=0; const m=[0,0,0], gx=[0,0,0], gy=[0,0,0];
+    for(const i of idx){
+      const p=i>>2, px=p%P, py=(p/P)|0, dx=px-ccx, dy=py-ccy;
+      n++; sx+=dx; sy+=dy; sxx+=dx*dx; syy+=dy*dy;
+      for(let c=0;c<3;c++){ m[c]+=dd[i+c]; gx[c]+=dd[i+c]*dx; gy[c]+=dd[i+c]*dy; }
+    }
+    for(let c=0;c<3;c++){
+      m[c]/=n;
+      gx[c] = sxx ? (gx[c]-m[c]*sx)/sxx : 0;
+      gy[c] = syy ? (gy[c]-m[c]*sy)/syy : 0;
+    }
+    return {m, gx, gy};
+  };
+  let F = fit(ring);
+  const resid = i => { const p=i>>2, dx=p%P-ccx, dy=((p/P)|0)-ccy;
+    let s=0; for(let c=0;c<3;c++) s += Math.abs(dd[i+c]-(F.m[c]+F.gx[c]*dx+F.gy[c]*dy)); return s; };
+  const clean = ring.filter(i => resid(i) < 55);      // reject nearby rash spots / edges
+  if(clean.length > ring.length*0.35) F = fit(clean);
+
+  // 2) donor texture (real pores + noise): high-frequency of a clean patch nearby
+  let sxc, syc;
+  if(srcOverride){ sxc = Math.round(srcOverride.x); syc = Math.round(srcOverride.y); }
   else {
     let bestScore = Infinity;
     for(let i=0;i<12;i++){
-      const a = i/12*Math.PI*2, dist = R*(3.2 + (i%3)*0.7);   // two rings of candidates, farther out
+      const a = i/12*Math.PI*2, dist = R*(2.6 + (i%3)*0.7);
       const st = patchStats(ctx, cx+Math.cos(a)*dist, cy+Math.sin(a)*dist, R);
-      const tone = Math.abs(st.mean[0]-ring[0]) + Math.abs(st.mean[1]-ring[1]) + Math.abs(st.mean[2]-ring[2]);
-      const score = tone + Math.max(0, st.variance-350)*0.02;   // penalise noisy (blemish/edge) patches
-      if(score < bestScore){ bestScore = score; best = st; }
+      const tone = Math.abs(st.mean[0]-F.m[0]) + Math.abs(st.mean[1]-F.m[1]) + Math.abs(st.mean[2]-F.m[2]);
+      const score = tone + Math.max(0, st.variance-320)*0.03;
+      if(score < bestScore){ bestScore = score; sxc = st.x; syc = st.y; }
     }
   }
-  // clone the chosen patch
-  const tmp = document.createElement('canvas'); tmp.width = box*2; tmp.height = box*2;
+  const sx0 = Math.max(0, Math.min(W-P, sxc-box)), sy0 = Math.max(0, Math.min(H-P, syc-box));
+  const Sp = ctx.getImageData(sx0, sy0, P, P).data;
+  const tmp = document.createElement('canvas'); tmp.width = P; tmp.height = P;
   const t = tmp.getContext('2d');
-  const bl = Math.round(R*0.12); if(bl >= 2) t.filter = 'blur(' + bl + 'px)';
-  t.drawImage(canvas, best.x-box, best.y-box, box*2, box*2, 0, 0, box*2, box*2);
-  t.filter = 'none';
-  // colour-match the patch toward local clean skin — PARTIAL, so a noisy reference
-  // (dense rash around the spot) doesn't tint the patch pink/bright
-  const k = 0.85, dR = (ring[0]-best.mean[0])*k, dG = (ring[1]-best.mean[1])*k, dB = (ring[2]-best.mean[2])*k;
-  if(Math.abs(dR)+Math.abs(dG)+Math.abs(dB) > 3){
-    const pd = t.getImageData(0,0,box*2,box*2), a = pd.data;
-    for(let i=0;i<a.length;i+=4){ a[i]+=dR; a[i+1]+=dG; a[i+2]+=dB; }
-    t.putImageData(pd, 0, 0);
+  t.filter = 'blur(' + Math.max(2, Math.round(R*0.55)) + 'px)';
+  t.drawImage(canvas, sx0, sy0, P, P, 0, 0, P, P);
+  const Lo = t.getImageData(0, 0, P, P).data;         // donor low-freq; Sp-Lo = pure texture
+
+  // 3) compose: local lighting + donor texture, feathered mask, strength blend
+  const core = R*(0.15 + hard*0.7);
+  for(let y=0;y<P;y++) for(let x=0;x<P;x++){
+    const dist = Math.hypot(x-ccx, y-ccy);
+    if(dist >= R) continue;
+    let a = dist <= core ? 1 : 0.5*(1+Math.cos(Math.PI*(dist-core)/(R-core)));
+    a *= strength;
+    const i = (y*P+x)*4, dx = x-ccx, dy = y-ccy;
+    for(let c=0;c<3;c++){
+      const healed = F.m[c] + F.gx[c]*dx + F.gy[c]*dy + (Sp[i+c] - Lo[i+c]);
+      dd[i+c] = clamp(dd[i+c]*(1-a) + healed*a);
+    }
   }
-  // soft gaussian-like feather so the circle edge never reads as a patch
-  t.globalCompositeOperation = 'destination-in';
-  const g = t.createRadialGradient(box, box, R*0.05, box, box, R);
-  g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(0.55,'rgba(0,0,0,0.94)');   // fully opaque centre so the blemish can't show through
-  g.addColorStop(0.82,'rgba(0,0,0,0.5)'); g.addColorStop(1,'rgba(0,0,0,0)');
-  t.fillStyle = g; t.fillRect(0, 0, box*2, box*2);
-  ctx.drawImage(tmp, cx-box, cy-box);
+  ctx.putImageData(D, x0, y0);
 }
 
 const LOOKS = [
@@ -922,7 +962,8 @@ document.querySelectorAll('#cropRatios button').forEach(b => b.onclick = ()=>{
 });
 
 // ─── Retouch (spot heal: tap/drag over blemishes; works on a copy, applied to sourceCanvas before the look) ───
-let rtSize = 22, rtUndo = [], rtDrawing = false, rtLastE = null;
+let rtSize = 22, rtHard = 45, rtStr = 100, rtUndo = [], rtDrawing = false, rtLastE = null;
+function rtOpts(){ return { hardness: rtHard/100, strength: rtStr/100 }; }
 const retouchEl = document.getElementById('retouch'), rtCanvas = document.getElementById('rtCanvas');
 function layoutRetouch(){
   const area = document.getElementById('rtArea'), cs = getComputedStyle(area);
@@ -946,7 +987,7 @@ function openRetouch(){
 function closeRetouch(){ retouchEl.classList.remove('open'); }
 function rtBrushR(){ const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width; return rtSize * (rtCanvas.width/disp) * 0.5; }
 function rtAt(e){ const r = rtCanvas.getBoundingClientRect();
-  healSpot(rtCanvas, (e.clientX-r.left)*(rtCanvas.width/r.width), (e.clientY-r.top)*(rtCanvas.height/r.height), rtBrushR()); }
+  healSpot(rtCanvas, (e.clientX-r.left)*(rtCanvas.width/r.width), (e.clientY-r.top)*(rtCanvas.height/r.height), rtBrushR(), null, rtOpts()); }
 const rtCursor = document.getElementById('rtCursor');
 function rtShowCursor(e){
   const ar = document.getElementById('rtArea').getBoundingClientRect();
@@ -1043,9 +1084,16 @@ document.getElementById('rtUndo').onclick = ()=>{
 };
 document.getElementById('rtSize').oninput = e=>{
   rtSize = +e.target.value;
+  document.getElementById('rtSizeV').textContent = rtSize;
   rtCursor.style.width = rtSize+'px'; rtCursor.style.height = rtSize+'px';
   rtCursor.classList.add('on'); clearTimeout(rtCursor._t); rtCursor._t = setTimeout(rtHideCursor, 600);  // preview size
   if(rtTool === 'stamp') rtDrawMarkers();
+};
+document.getElementById('rtHard').oninput = e=>{
+  rtHard = +e.target.value; document.getElementById('rtHardV').textContent = rtHard;
+};
+document.getElementById('rtStr').oninput = e=>{
+  rtStr = +e.target.value; document.getElementById('rtStrV').textContent = rtStr;
 };
 
 // ── Clone Stamp: two draggable markers (source + target) ──
@@ -1085,7 +1133,7 @@ document.getElementById('rtStampApply').onclick = ()=>{
   rtUndo.push(rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height));
   if(rtUndo.length>10) rtUndo.shift();
   document.getElementById('rtUndo').disabled=false;
-  healSpot(rtCanvas, t.x, t.y, rtSize*(rtCanvas.width/c.width)*0.5, {x:s.x, y:s.y});
+  healSpot(rtCanvas, t.x, t.y, rtSize*(rtCanvas.width/c.width)*0.5, {x:s.x, y:s.y}, rtOpts());
 };
 
 // before/after: hold to see the pristine original, release for the retouched result
