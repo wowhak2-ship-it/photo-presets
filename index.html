@@ -304,6 +304,19 @@
     font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#fff;
     background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.68) 100%);}
 
+  /* iOS install hint (только Safari на iPhone/iPad, вне установленного приложения) */
+  .ios-hint{display:flex; align-items:center; gap:12px; padding:12px 12px;
+    background:rgba(255,255,255,.07); border:1px solid var(--glass-line); border-radius:18px;
+    -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);}
+  .ios-hint .ih-ic{flex:0 0 auto; width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg, var(--brand-2), var(--brand)); color:#fff;}
+  .ios-hint .ih-ic svg{width:19px; height:19px;}
+  .ios-hint .ih-tx{flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;}
+  .ios-hint .ih-tx b{font-size:13px; font-weight:700;}
+  .ios-hint .ih-tx span{font-size:11.5px; color:var(--dim); line-height:1.35;}
+  .ios-hint .ih-x{flex:0 0 auto; width:30px; height:30px; border-radius:50%; background:transparent; border:none;
+    color:var(--faint); font-size:14px; cursor:pointer;}
+
   /* ── splash preloader (объектив/затвор) ── */
   #splash{position:fixed; inset:0; z-index:200; background:var(--bg-deep);
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
@@ -369,6 +382,15 @@
       <b>Пресеты</b>
     </div>
     <p class="hb-sub">Фоторедактор</p>
+  </div>
+
+  <div class="ios-hint" id="iosHint" style="display:none">
+    <span class="ih-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></span>
+    <div class="ih-tx">
+      <b>Установить на iPhone</b>
+      <span>Внизу Safari: «Поделиться» → «На экран “Домой”»</span>
+    </div>
+    <button class="ih-x" id="iosHintX" aria-label="Скрыть">✕</button>
   </div>
 
   <div class="home-big">
@@ -1358,6 +1380,19 @@ document.getElementById('rtApply').onclick = ()=>{
   editedCanvas = null; makePreview(); buildChips(); buildHomeLooks(); render();
   closeRetouch(); goEditor();
 };
+
+// ─── iOS install hint: только iPhone/iPad в браузере (не в установленной PWA) ───
+(function(){
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  let hidden = false; try { hidden = localStorage.getItem('iosHintHidden') === '1'; } catch(_){}
+  if(isIOS && !standalone && !hidden) document.getElementById('iosHint').style.display = 'flex';
+  document.getElementById('iosHintX').onclick = ()=>{
+    try { localStorage.setItem('iosHintHidden', '1'); } catch(_){}
+    document.getElementById('iosHint').style.display = 'none';
+  };
+})();
 
 // ─── Splash (диафрагма): держим минимум ~0.9s, прячем когда контент готов ───
 function hideSplash(){
