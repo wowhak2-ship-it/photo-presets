@@ -297,7 +297,8 @@
   .home-looks{display:flex; gap:12px; overflow-x:auto; scrollbar-width:none; margin:-2px -20px 0; padding:2px 20px 8px;}
   .home-looks::-webkit-scrollbar{display:none;}
   .look-card{position:relative; flex:0 0 auto; width:126px; height:168px; border-radius:18px; overflow:hidden;
-    border:1px solid var(--line); background:var(--panel); cursor:pointer; padding:0; box-shadow:0 6px 18px rgba(0,0,0,.35); transition:transform .15s;}
+    border:1px solid var(--line); background:var(--panel); cursor:pointer; padding:0; box-shadow:0 6px 18px rgba(0,0,0,.35);
+    transition:transform .15s; animation:rise .32s ease backwards;}
   .look-card:active{transform:scale(.96);}
   .look-card canvas{width:100%; height:100%; display:block;}
   .look-card span{position:absolute; left:0; right:0; bottom:0; padding:24px 10px 9px; text-align:left;
@@ -318,17 +319,21 @@
     color:var(--faint); font-size:14px; cursor:pointer;}
 
   /* ── splash preloader (объектив/затвор) ── */
+  /* первый кадр = системный сплэш Android (тот же фон, та же диафрагма-иконка, имя внизу),
+     затем кольцо «оживает» и начинает крутиться */
   #splash{position:fixed; inset:0; z-index:200; background:var(--bg-deep);
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
+    display:flex; align-items:center; justify-content:center;
     transition:opacity .5s ease;}
   #splash.hide{opacity:0; pointer-events:none;}
-  .sp-wrap{position:relative; width:92px; height:92px; display:flex; align-items:center; justify-content:center;}
-  .sp-ring{position:absolute; inset:0; border-radius:50%; border:2.5px solid rgba(255,255,255,.10);
-    border-top-color:var(--brand-2); animation:spSpin 1s linear infinite;}
-  .sp-ap{width:46px; height:46px; color:#fff; opacity:.92; animation:spSpin 7s linear infinite reverse;}
-  #splash b{font-size:20px; font-weight:800; letter-spacing:.02em;}
-  #splash span{font-size:9.5px; letter-spacing:.32em; text-transform:uppercase; color:var(--faint); font-weight:700; margin-top:-12px;}
+  .sp-wrap{position:relative; width:96px; height:96px; display:flex; align-items:center; justify-content:center;}
+  .sp-ring{position:absolute; inset:-14px; border-radius:50%; border:2.5px solid rgba(255,255,255,.10);
+    border-top-color:var(--brand-2); opacity:0;
+    animation:spSpin 1s linear infinite, spFade .35s ease .4s forwards;}
+  .sp-ap{width:88px; height:88px; color:#fff; animation:spSpin 8s linear infinite reverse;}
+  #splash b{position:absolute; left:0; right:0; bottom:calc(34px + env(safe-area-inset-bottom));
+    text-align:center; font-size:13px; font-weight:600; letter-spacing:.02em; color:rgba(255,255,255,.85);}
   @keyframes spSpin{to{transform:rotate(360deg)}}
+  @keyframes spFade{to{opacity:1}}
 
   /* ── motion ── */
   @keyframes rise{from{opacity:0; transform:translateY(16px)} to{opacity:1; transform:none}}
@@ -355,7 +360,6 @@
     <svg class="sp-ap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><line x1="14.31" y1="8" x2="20.05" y2="17.94"/><line x1="9.69" y1="8" x2="21.17" y2="8"/><line x1="7.38" y1="12" x2="13.12" y2="2.06"/><line x1="9.69" y1="16" x2="3.95" y2="6.06"/><line x1="14.31" y1="16" x2="2.83" y2="16"/><line x1="16.62" y1="12" x2="10.88" y2="21.94"/></svg>
   </div>
   <b>Пресеты</b>
-  <span>фоторедактор</span>
 </div>
 <div class="glow"></div>
 
@@ -914,20 +918,25 @@ document.getElementById('homeCam').onclick = ()=> openCamera();
 document.querySelectorAll('.tool-card').forEach(b=> b.onclick = ()=> runTool(b.dataset.go));
 document.getElementById('backBtn').onclick = goHome;
 
-// look cards: live previews rendered by the real engine from the current photo
+// look cards: live previews rendered by the real engine from the current photo.
+// Chunked — ОДНА карточка за кадр, чтобы главный поток не подвисал на старте (лаг на телефоне)
+let hlToken = 0;
 function buildHomeLooks(){
   const host = document.getElementById('homeLooks');
   if(!host || !sourceCanvas) return;
+  const token = ++hlToken;                    // отменяет недостроенную ленту при смене фото
   host.innerHTML = '';
-  const tw = 126*2, th = 168*2, ar = tw/th;
+  const tw = 189, th = 252, ar = tw/th;       // 1.5x под карточку 126×168 — быстрее в 1.8 раза
   let sw = sourceCanvas.width, sh = sourceCanvas.height, sx = 0, sy = 0;
   if(sw/sh > ar){ sw = Math.round(sh*ar); sx = (sourceCanvas.width - sw) >> 1; }
   else { sh = Math.round(sw/ar); sy = (sourceCanvas.height - sh) >> 1; }
   const base = document.createElement('canvas'); base.width = tw; base.height = th;
   base.getContext('2d').drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, tw, th);
   const bd = base.getContext('2d').getImageData(0, 0, tw, th);
-  LOOKS.forEach((look, i)=>{
-    if(i === 0) return;                       // «Оригинал» в ленте не нужен
+  let i = 1;                                   // «Оригинал» в ленте не нужен
+  const step = ()=>{
+    if(token !== hlToken || i >= LOOKS.length) return;
+    const look = LOOKS[i], idx = i; i++;
     const card = document.createElement('button'); card.className = 'look-card';
     const c = document.createElement('canvas'); c.width = tw; c.height = th;
     const id = new ImageData(new Uint8ClampedArray(bd.data), tw, th);
@@ -937,15 +946,19 @@ function buildHomeLooks(){
     const lab = document.createElement('span'); lab.textContent = look.name;
     card.appendChild(c); card.appendChild(lab);
     card.onclick = ()=>{
-      selected = i; intensity = 100;
+      selected = idx; intensity = 100;
       document.getElementById('intensity').value = 100;
       document.getElementById('intensityVal').textContent = '100';
       buildChips();
       goEditor(); setTab('presets'); render();
     };
     host.appendChild(card);
-  });
+    hlSchedule(step);
+  };
+  hlSchedule(step);
 }
+// rAF замирает в скрытой вкладке/при погасшем экране — тогда строим через setTimeout
+function hlSchedule(fn){ document.hidden ? setTimeout(fn, 16) : requestAnimationFrame(fn); }
 document.getElementById('intensity').oninput = e=>{
   intensity = +e.target.value;
   document.getElementById('intensityVal').textContent = intensity;
@@ -1399,8 +1412,8 @@ function hideSplash(){
   const s = document.getElementById('splash'); if(!s) return;
   s.classList.add('hide'); setTimeout(()=> s.remove(), 600);
 }
-window.addEventListener('load', ()=> setTimeout(hideSplash, 900));
-setTimeout(hideSplash, 2500);   // страховка, если load задержится
+window.addEventListener('load', ()=> setTimeout(hideSplash, 550));
+setTimeout(hideSplash, 2200);   // страховка, если load задержится
 
 // ─── PWA ───
 if('serviceWorker' in navigator){ window.addEventListener('load', ()=> navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
