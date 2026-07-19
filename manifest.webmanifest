@@ -1,13 +1,13 @@
 {
-  "name": "Photo Presets — фоторедактор",
-  "short_name": "Presets",
-  "description": "Фоторедактор с Lightroom-пресетами: кривые, тонирование, зерно, виньетка.",
+  "name": "Пресеты",
+  "short_name": "Пресеты",
+  "description": "Фоторедактор: пресеты, ретушь, кадрирование.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0D0D0F",
-  "theme_color": "#0D0D0F",
+  "background_color": "#0E1013",
+  "theme_color": "#14171C",
   "lang": "ru",
   "icons": [
     { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
