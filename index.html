@@ -1426,9 +1426,16 @@ function bagsRegions(lms, W, H){
     let dx = -ay, dy = ax;                                    // перпендикуляр оси глаза
     if(chin){ if(dx*(chin.x-ecx) + dy*(chin.y-ecy) < 0){ dx=-dx; dy=-dy; } }
     else if(dy < 0){ dx=-dx; dy=-dy; }
+    // хвостики вдоль оси глаза за настоящие уголки — полумесяц геометрически сходится в иглу
+    // ровно в lowPts[0]/[last] (top и bot берут ОДНУ и ту же contour-точку с разным сдвигом
+    // вдоль down), а любой feather-blur гасит тонкую иглу сильнее всего именно там; проверено
+    // тепловой картой — без хвостиков край у переносицы оставался вообще без покрытия
+    const extLo = { x: c1.x - ax*eyeW*0.10, y: c1.y - ay*eyeW*0.10 };
+    const extHi = { x: c2.x + ax*eyeW*0.10, y: c2.y + ay*eyeW*0.10 };
+    const lowPtsExt = [extLo, ...lowPts, extHi];
     // с запасом от линии ресниц (0.22, не 0.08 — иначе задевает веко) до середины щеки
-    const top = lowPts.map(p=>({x:p.x+dx*eyeW*0.22, y:p.y+dy*eyeW*0.22}));
-    const bot = [...lowPts].reverse().map(p=>({x:p.x+dx*eyeW*0.62, y:p.y+dy*eyeW*0.62}));
+    const top = lowPtsExt.map(p=>({x:p.x+dx*eyeW*0.22, y:p.y+dy*eyeW*0.22}));
+    const bot = [...lowPtsExt].reverse().map(p=>({x:p.x+dx*eyeW*0.62, y:p.y+dy*eyeW*0.62}));
     const eyePoly = contour.map(p=>({x:ecx+(p.x-ecx)*1.28, y:ecy+(p.y-ecy)*1.28}));
     regs.push({ poly:[...top,...bot], eyePoly, eyeW, down:{x:dx, y:dy} });
   }
@@ -1448,10 +1455,10 @@ function bagsBuildZone(r){
   if(bw<8 || bh<8) return null;
   const mc = document.createElement('canvas'); mc.width=bw; mc.height=bh;
   const mctx = mc.getContext('2d');
-  // перо у острых уголков полумесяца гаснет почти до нуля на резком расстоянии (проверено:
-  // 179→47→1 за 10% ширины) — а именно у внутреннего уголка чаще всего самая тёмная природная
-  // складка, поэтому виден жёсткий обрыв тона; вдвое мягче перо тянет переход дальше и плавнее
-  mctx.filter = 'blur(' + Math.max(3, Math.round(eyeW*0.30)) + 'px)';
+  // перо мягче, чем изначально (0.14), чтобы не было жёсткого обрыва тона на переходе;
+  // не сильнее — иначе тонкая игла полумесяца у самих уголков (см. хвостики выше) гасится
+  // почти до нуля, оставляя необработанным именно то место, где чаще всего темнее всего
+  mctx.filter = 'blur(' + Math.max(3, Math.round(eyeW*0.24)) + 'px)';
   mctx.fillStyle = '#fff'; mctx.beginPath();
   r.poly.forEach((p,i)=> i ? mctx.lineTo(p.x-bx, p.y-by) : mctx.moveTo(p.x-bx, p.y-by));
   mctx.closePath(); mctx.fill();
