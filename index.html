@@ -1470,35 +1470,34 @@ function bagsBuildZone(r){
   lctx.filter = 'blur(' + Math.max(2, Math.round(eyeW*0.16)) + 'px)';
   lctx.drawImage(rtCanvas, bx, by, bw, bh, 0, 0, bw, bh);
   const low = lctx.getImageData(0,0,bw,bh).data;
+  // отдельная, СИЛЬНО размытая карта темноты — крупные пятна текстуры/пор гасятся, остаётся только
+  // общая форма тени; по ней сила реагирует локально (темнее в ядре круга — сильнее эффект именно там),
+  // но без шума отдельных пикселей, который раньше давал пятнистость
+  const dc = document.createElement('canvas'); dc.width=bw; dc.height=bh;
+  const dctx = dc.getContext('2d');
+  dctx.filter = 'blur(' + Math.max(4, Math.round(eyeW*0.38)) + 'px)';
+  dctx.drawImage(rtCanvas, bx, by, bw, bh, 0, 0, bw, bh);
+  const darkMap = dctx.getImageData(0,0,bw,bh).data;
   // центр глаза в координатах бокса (для эталона щеки и попадания в геометрию)
   const srcPts = r.eyePoly || r.poly;
   const ecx = srcPts.reduce((s,p)=>s+p.x,0)/srcPts.length - bx;
   const ecy = srcPts.reduce((s,p)=>s+p.y,0)/srcPts.length - by;
-  // эталон «чистая щека»: МАКСИМУМ нескольких проб вдоль лица — надёжнее одной скользящей точки,
-  // которая на реальных фото часто сама попадает в край тени (проверено численно)
-  let cheekRef = 0;
+  // эталон «чистая щека» — ЦВЕТ (R,G,B), не только яркость: МАКСИМУМ нескольких проб вдоль лица
+  // (надёжнее одной скользящей точки, которая на реальных фото часто сама попадает в край тени —
+  // проверено численно), берём RGB именно самой светлой пробы, чтобы эталон был цельным тоном кожи
+  let cheekR=0, cheekG=0, cheekB=0, cheekLum=-1;
   for(const k of [0.5, 0.75, 1.0, 1.25]){
     const px = Math.round(ecx + r.down.x*eyeW*k), py = Math.round(ecy + r.down.y*eyeW*k);
     const s = 4, x0=Math.max(0,px-s), y0=Math.max(0,py-s), x1=Math.min(bw,px+s), y1=Math.min(bh,py+s);
     if(x1<=x0 || y1<=y0) continue;
-    let sum=0, n=0;
-    for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++){ const i=(y*bw+x)*4; sum+=(low[i]+low[i+1]+low[i+2])/3; n++; }
-    if(n) cheekRef = Math.max(cheekRef, sum/n);
+    let sr=0,sg=0,sb=0, n=0;
+    for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++){ const i=(y*bw+x)*4; sr+=low[i]; sg+=low[i+1]; sb+=low[i+2]; n++; }
+    if(!n) continue;
+    const r_=sr/n, g_=sg/n, b_=sb/n, lum=(r_+g_+b_)/3;
+    if(lum > cheekLum){ cheekLum=lum; cheekR=r_; cheekG=g_; cheekB=b_; }
   }
-  if(!cheekRef) cheekRef = 150;
-  // ОДНО число силы на всю зону (не по пикселю — иначе шум текстуры даёт пятнистость):
-  // насколько зона в среднем темнее эталона; лёгкая полутень почти не тронется, настоящий синяк — полностью
-  let wsum=0, wn=0;
-  for(let y=0; y<bh; y++) for(let x=0; x<bw; x++){
-    const i=(y*bw+x)*4, w=mask[i+3]/255; if(!w) continue;
-    wsum += ((low[i]+low[i+1]+low[i+2])/3) * w; wn += w;
-  }
-  const zoneAvg = wn ? wsum/wn : cheekRef;
-  // реальные тёмные круги дают скромный контраст по чистой яркости (~10-25 люма — проверено на
-  // настоящем фото с выраженными кругами), поэтому порог мягче и запас силы сверху
-  const zoneDark = Math.min(1, Math.max(0, (cheekRef-zoneAvg)/15));
-  const liftAmt = zoneDark * (cheekRef-zoneAvg) * 1.5;
-  return {bx, by, bw, bh, orig, low, mask, liftAmt};
+  if(cheekLum < 0){ cheekR=cheekG=cheekB=150; cheekLum=150; }
+  return {bx, by, bw, bh, orig, low, mask, darkMap, cheekR, cheekG, cheekB, cheekLum};
 }
 function bagsPrepare(faces){
   const W = rtCanvas.width, H = rtCanvas.height;
@@ -1527,18 +1526,25 @@ function bagsApply(t){
   if(!bagsData) return;
   const ctx = rtCanvas.getContext('2d');
   for(const r of bagsData.regs){
-    if(r.liftAmt < 0.5) continue;                             // зона и так не темнее эталона — не трогаем
     const out = new ImageData(new Uint8ClampedArray(r.orig.data), r.bw, r.bh);
-    const od = out.data, low = r.low, m = r.mask, bw = r.bw, bh = r.bh, lift = r.liftAmt;
+    const od = out.data, low = r.low, dm = r.darkMap, m = r.mask, bw = r.bw, bh = r.bh;
+    const cR=r.cheekR, cG=r.cheekG, cB=r.cheekB, cLum=r.cheekLum;
     for(let y=0; y<bh; y++) for(let x=0; x<bw; x++){
       const i = (y*bw+x)*4;
-      const a = (m[i+3]/255) * t;                             // чистая геометрия — форма без шума по текстуре
+      const ageom = m[i+3]/255; if(!ageom) continue;
+      // локальная темнота (по сглаженной карте, без шума пикселей) — самое тёмное место в зоне
+      // получает эффект почти полностью, лёгкая полутень рядом — почти не тронется
+      const dLum = (dm[i]+dm[i+1]+dm[i+2])/3;
+      const local = Math.min(1, Math.max(0, (cLum-dLum)/15));
+      const a = ageom * local * t * 1.5;                      // запас силы — реальные круги дают контраст ~10-25 люма
       if(a < 0.004) continue;
-      const hk = 1 - 0.3*a;
-      for(let c=0;c<3;c++){
-        const lo = low[i+c], nl = lo + lift*a;                // весь синяк ровно поднимается к тону щеки
-        od[i+c] = clamp(nl + (r.orig.data[i+c]-lo)*hk);       // + настоящая текстура поверх
-      }
+      const aClamped = Math.min(1, a), hk = 1 - 0.3*aClamped;
+      // сдвиг тона к ЦВЕТУ щеки (не только к яркости) — снимает и синеву/желтизну круга, не только темноту
+      const lr=low[i], lg=low[i+1], lb=low[i+2];
+      const nr = lr + (cR-lr)*aClamped, ng = lg + (cG-lg)*aClamped, nb = lb + (cB-lb)*aClamped;
+      od[i]   = clamp(nr + (r.orig.data[i]  -lr)*hk);         // + настоящая текстура поверх
+      od[i+1] = clamp(ng + (r.orig.data[i+1]-lg)*hk);
+      od[i+2] = clamp(nb + (r.orig.data[i+2]-lb)*hk);
     }
     ctx.putImageData(out, r.bx, r.by);
   }
