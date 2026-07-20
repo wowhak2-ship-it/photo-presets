@@ -1437,7 +1437,7 @@ function bagsRegions(lms, W, H){
 // общий сборщик зоны (авто от лица или ручная от тапа)
 function bagsBuildZone(r){
   const W = rtCanvas.width, H = rtCanvas.height, ctx = rtCanvas.getContext('2d');
-  const eyeW = r.eyeW, pad = eyeW*0.8;
+  const eyeW = r.eyeW, pad = eyeW*0.9;
   const xs = r.poly.map(p=>p.x).concat(r.eyePoly ? r.eyePoly.map(p=>p.x) : []);
   const ys = r.poly.map(p=>p.y).concat(r.eyePoly ? r.eyePoly.map(p=>p.y) : []);
   const bx = Math.max(0, Math.round(Math.min(...xs)-pad));
@@ -1448,7 +1448,10 @@ function bagsBuildZone(r){
   if(bw<8 || bh<8) return null;
   const mc = document.createElement('canvas'); mc.width=bw; mc.height=bh;
   const mctx = mc.getContext('2d');
-  mctx.filter = 'blur(' + Math.max(3, Math.round(eyeW*0.14)) + 'px)';
+  // перо у острых уголков полумесяца гаснет почти до нуля на резком расстоянии (проверено:
+  // 179→47→1 за 10% ширины) — а именно у внутреннего уголка чаще всего самая тёмная природная
+  // складка, поэтому виден жёсткий обрыв тона; вдвое мягче перо тянет переход дальше и плавнее
+  mctx.filter = 'blur(' + Math.max(3, Math.round(eyeW*0.30)) + 'px)';
   mctx.fillStyle = '#fff'; mctx.beginPath();
   r.poly.forEach((p,i)=> i ? mctx.lineTo(p.x-bx, p.y-by) : mctx.moveTo(p.x-bx, p.y-by));
   mctx.closePath(); mctx.fill();
