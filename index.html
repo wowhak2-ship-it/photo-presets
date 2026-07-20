@@ -1272,12 +1272,14 @@ rtCanvas.addEventListener('pointerdown', e=>{
   rtPtrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
   try{ rtCanvas.setPointerCapture(e.pointerId); }catch(_){}
   if(rtPtrs.size === 2){
-    rtDrawing = false; rtHideCursor();   // 2nd finger = zoom: cancel the aim, nothing was drawn
+    rtDrawing = false; rtHideCursor(); rtBagsTap = null;   // 2nd finger = zoom: cancel aim/tap
     const p = [...rtPtrs.values()];
     rtPinch = { d0:Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y), s0:rtScale,
                 mx:(p[0].x+p[1].x)/2, my:(p[0].y+p[1].y)/2, tx0:rtTx, ty0:rtTy };
   } else if(rtPtrs.size === 1 && rtTool === 'heal'){
     rtDrawing = true; rtLastE = e; rtShowCursor(e);   // aim only — heal fires on release
+  } else if(rtPtrs.size === 1 && rtTool === 'bags'){
+    rtBagsTap = {x:e.clientX, y:e.clientY};           // кандидат в тап «добавить зону»
   }
 });
 rtCanvas.addEventListener('pointermove', e=>{
@@ -1305,6 +1307,13 @@ function rtEnd(e){
       document.getElementById('rtUndo').disabled = false;
       rtAt(rtLastE);
     }
+    if(rtBagsTap && rtTool === 'bags' &&
+       Math.hypot(e.clientX-rtBagsTap.x, e.clientY-rtBagsTap.y) < 12){
+      const r = rtCanvas.getBoundingClientRect();
+      bagsAddManual((e.clientX-r.left)*(rtCanvas.width/r.width),
+                    (e.clientY-r.top)*(rtCanvas.height/r.height));
+    }
+    rtBagsTap = null;
     rtDrawing = false; rtHideCursor();
   }
 }
@@ -1385,6 +1394,7 @@ document.getElementById('rtStampApply').onclick = ()=>{
 // сохраняется через частотное разложение: света/тон = low, поры = high (почти нетронуты).
 const MP_VER = '0.10.14';
 let bagsKit = null, bagsData = null, bagsBusy = false;
+let bagsManual = [], bagsLastFaces = null, bagsLastEyeW = 0, rtBagsTap = null;
 async function loadFaceKit(){
   if(bagsKit) return bagsKit;
   const vision = await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`);
@@ -1394,8 +1404,8 @@ async function loadFaceKit(){
   catch(_){ bagsKit = await vision.FaceLandmarker.createFromOptions(files, opts('CPU')); }
   return bagsKit;
 }
-// зона под глазом: сдвиг ВДОЛЬ ЛИЦА (перпендикуляр оси глаза к подбородку — работает при
-// наклоне головы), сам глаз жёстко вырезается из маски — эффект не может лечь на глаз
+// зона под глазом: геометрия от точек лица × КАРТА ТЕМНОТЫ — эффект концентрируется
+// ровно на синяке (тёмном относительно щеки), глаз жёстко вырезан, наклон головы учтён
 function bagsRegions(lms, W, H){
   const eyes = [
     { low:[33,7,163,144,145,153,154,155,133],   up:[173,157,158,159,160,161,246] },
@@ -1416,52 +1426,83 @@ function bagsRegions(lms, W, H){
     let dx = -ay, dy = ax;                                    // перпендикуляр оси глаза
     if(chin){ if(dx*(chin.x-ecx) + dy*(chin.y-ecy) < 0){ dx=-dx; dy=-dy; } }
     else if(dy < 0){ dx=-dx; dy=-dy; }
-    const mid = lowPts.slice(1, -1);                          // без уголков — иначе клин к виску
-    const top = mid.map(p=>({x:p.x+dx*eyeW*0.24, y:p.y+dy*eyeW*0.24}));
-    const bot = [...mid].reverse().map(p=>({x:p.x+dx*eyeW*0.72, y:p.y+dy*eyeW*0.72}));
-    const eyePoly = contour.map(p=>({x:ecx+(p.x-ecx)*1.3, y:ecy+(p.y-ecy)*1.3}));
+    // выше и на всю ширину глаза — синяк тянется до уголков; точную форму даст карта темноты
+    const top = lowPts.map(p=>({x:p.x+dx*eyeW*0.08, y:p.y+dy*eyeW*0.08}));
+    const bot = [...lowPts].reverse().map(p=>({x:p.x+dx*eyeW*0.55, y:p.y+dy*eyeW*0.55}));
+    const eyePoly = contour.map(p=>({x:ecx+(p.x-ecx)*1.28, y:ecy+(p.y-ecy)*1.28}));
     regs.push({ poly:[...top,...bot], eyePoly, eyeW, down:{x:dx, y:dy} });
   }
   return regs;
 }
-function bagsPrepare(faces){
+// общий сборщик зоны (авто от лица или ручная от тапа)
+function bagsBuildZone(r){
   const W = rtCanvas.width, H = rtCanvas.height, ctx = rtCanvas.getContext('2d');
-  const regs = [];
-  for(const lms of faces) for(const r of bagsRegions(lms, W, H)){
-    const eyeW = r.eyeW, pad = eyeW*0.8;                      // pad > blur+drop, перо и щека внутри бокса
-    const xs = r.poly.map(p=>p.x).concat(r.eyePoly.map(p=>p.x));
-    const ys = r.poly.map(p=>p.y).concat(r.eyePoly.map(p=>p.y));
-    const bx = Math.max(0, Math.round(Math.min(...xs)-pad));
-    const by = Math.max(0, Math.round(Math.min(...ys)-pad));
-    const bx1 = Math.min(W, Math.round(Math.max(...xs)+pad));
-    const by1 = Math.min(H, Math.round(Math.max(...ys)+pad));
-    const bw = bx1-bx, bh = by1-by;
-    if(bw<8 || bh<8) continue;
-    // маска: мягкая полоса МИНУС глаз (запас 1.3, своё перо)
-    const mc = document.createElement('canvas'); mc.width=bw; mc.height=bh;
-    const mctx = mc.getContext('2d');
-    mctx.filter = 'blur(' + Math.max(3, Math.round(eyeW*0.16)) + 'px)';
-    mctx.fillStyle = '#fff'; mctx.beginPath();
-    r.poly.forEach((p,i)=> i ? mctx.lineTo(p.x-bx, p.y-by) : mctx.moveTo(p.x-bx, p.y-by));
-    mctx.closePath(); mctx.fill();
+  const eyeW = r.eyeW, pad = eyeW*0.8;
+  const xs = r.poly.map(p=>p.x).concat(r.eyePoly ? r.eyePoly.map(p=>p.x) : []);
+  const ys = r.poly.map(p=>p.y).concat(r.eyePoly ? r.eyePoly.map(p=>p.y) : []);
+  const bx = Math.max(0, Math.round(Math.min(...xs)-pad));
+  const by = Math.max(0, Math.round(Math.min(...ys)-pad));
+  const bx1 = Math.min(W, Math.round(Math.max(...xs)+pad));
+  const by1 = Math.min(H, Math.round(Math.max(...ys)+pad));
+  const bw = bx1-bx, bh = by1-by;
+  if(bw<8 || bh<8) return null;
+  const mc = document.createElement('canvas'); mc.width=bw; mc.height=bh;
+  const mctx = mc.getContext('2d');
+  mctx.filter = 'blur(' + Math.max(3, Math.round(eyeW*0.14)) + 'px)';
+  mctx.fillStyle = '#fff'; mctx.beginPath();
+  r.poly.forEach((p,i)=> i ? mctx.lineTo(p.x-bx, p.y-by) : mctx.moveTo(p.x-bx, p.y-by));
+  mctx.closePath(); mctx.fill();
+  if(r.eyePoly){
     mctx.globalCompositeOperation = 'destination-out';
     mctx.filter = 'blur(' + Math.max(2, Math.round(eyeW*0.07)) + 'px)';
     mctx.beginPath();
     r.eyePoly.forEach((p,i)=> i ? mctx.lineTo(p.x-bx, p.y-by) : mctx.moveTo(p.x-bx, p.y-by));
     mctx.closePath(); mctx.fill();
     mctx.globalCompositeOperation = 'source-over';
-    const mask = mctx.getImageData(0,0,bw,bh).data;           // альфа-канал = маска
-    const orig = ctx.getImageData(bx, by, bw, bh);
-    const lc = document.createElement('canvas'); lc.width=bw; lc.height=bh;
-    const lctx = lc.getContext('2d');
-    lctx.filter = 'blur(' + Math.max(2, Math.round(eyeW*0.16)) + 'px)';
-    lctx.drawImage(rtCanvas, bx, by, bw, bh, 0, 0, bw, bh);
-    const low = lctx.getImageData(0,0,bw,bh).data;
-    const dxD = Math.round(r.down.x*eyeW*0.62), dyD = Math.round(r.down.y*eyeW*0.62);
-    regs.push({bx, by, bw, bh, orig, low, mask, dxD, dyD});
   }
+  const mask = mctx.getImageData(0,0,bw,bh).data;             // альфа-канал = перо зоны
+  const orig = ctx.getImageData(bx, by, bw, bh);
+  const lc = document.createElement('canvas'); lc.width=bw; lc.height=bh;
+  const lctx = lc.getContext('2d');
+  lctx.filter = 'blur(' + Math.max(2, Math.round(eyeW*0.16)) + 'px)';
+  lctx.drawImage(rtCanvas, bx, by, bw, bh, 0, 0, bw, bh);
+  const low = lctx.getImageData(0,0,bw,bh).data;
+  const dxD = Math.round(r.down.x*eyeW*0.62), dyD = Math.round(r.down.y*eyeW*0.62);
+  // карта темноты: маска умножается на «насколько пиксель темнее щеки» —
+  // эффект ложится ровно на синяк и не трогает нормальную кожу ниже
+  for(let y=0; y<bh; y++) for(let x=0; x<bw; x++){
+    const i = (y*bw+x)*4;
+    if(!mask[i+3]) continue;
+    const cxp = Math.min(bw-1, Math.max(0, x+dxD)), cyp = Math.min(bh-1, Math.max(0, y+dyD));
+    const ci = (cyp*bw+cxp)*4;
+    const dark = Math.min(1, Math.max(0,
+      ((low[ci]+low[ci+1]+low[ci+2]) - (low[i]+low[i+1]+low[i+2])) / 78));
+    mask[i+3] = Math.round(mask[i+3] * (0.12 + 0.88*dark));
+  }
+  return {bx, by, bw, bh, orig, low, mask, dxD, dyD};
+}
+function bagsPrepare(faces){
+  const W = rtCanvas.width, H = rtCanvas.height;
+  const regs = [];
+  for(const lms of (faces||[])) for(const r of bagsRegions(lms, W, H)){
+    const z = bagsBuildZone(r); if(z){ regs.push(z); bagsLastEyeW = r.eyeW; }
+  }
+  for(const m of bagsManual){ const z = bagsBuildZone(m); if(z) regs.push(z); }
   bagsData = regs.length ? {regs} : null;
   return regs.length;
+}
+// ручная зона по тапу — и когда лицо не нашлось, и как поправка к авто-зонам
+function bagsAddManual(px, py){
+  const w = bagsLastEyeW || rtCanvas.width*0.11;
+  const rx = w*0.8, ry = w*0.45, poly = [];
+  for(let k=0;k<22;k++){ const a=k/22*Math.PI*2; poly.push({x:px+Math.cos(a)*rx, y:py+Math.sin(a)*ry}); }
+  bagsManual.push({poly, eyeW:w, down:{x:0, y:1}});
+  if(bagsManual.length > 6) bagsManual.shift();
+  bagsPrepare(bagsLastFaces);
+  const slider = document.getElementById('rtBags');
+  slider.disabled = !bagsData;
+  document.getElementById('rtTop').textContent = 'Зоны: ' + (bagsData ? bagsData.regs.length : 0) + ' · двигайте ползунок';
+  const v = +slider.value; if(v > 0) bagsApply(v/100);
 }
 function bagsApply(t){
   if(!bagsData) return;
@@ -1471,16 +1512,14 @@ function bagsApply(t){
     const od = out.data, low = r.low, m = r.mask, bw = r.bw, bh = r.bh;
     for(let y=0; y<bh; y++) for(let x=0; x<bw; x++){
       const i = (y*bw+x)*4;
-      const a = (m[i+3]/255) * t;
+      const a = (m[i+3]/255) * t;                             // темнота уже в маске — без двойного гейта
       if(a < 0.004) continue;
-      const cxp = Math.min(bw-1, Math.max(0, x + r.dxD));     // точка щеки вдоль лица
+      const cxp = Math.min(bw-1, Math.max(0, x + r.dxD));
       const cyp = Math.min(bh-1, Math.max(0, y + r.dyD));
       const ci = (cyp*bw + cxp)*4;
-      const lL = (low[i]+low[i+1]+low[i+2])/3, cL = (low[ci]+low[ci+1]+low[ci+2])/3;
-      const dark = Math.min(1, Math.max(0, (cL - lL)/34));    // сильнее реагирует на настоящие синяки
-      const lift = dark * a * 0.92, hk = 1 - 0.25*a;
+      const hk = 1 - 0.3*a;
       for(let c=0;c<3;c++){
-        const lo = low[i+c], nl = lo + (low[ci+c]-lo)*lift;   // тон к щеке (уходит и синева)
+        const lo = low[i+c], nl = lo + (low[ci+c]-lo)*a;      // на 100% тон полностью выравнивается к щеке
         od[i+c] = clamp(nl + (r.orig.data[i+c]-lo)*hk);       // + настоящая текстура
       }
     }
@@ -1490,19 +1529,30 @@ function bagsApply(t){
 async function bagsEnter(){
   const slider = document.getElementById('rtBags'), top = document.getElementById('rtTop');
   slider.value = 0; document.getElementById('rtBagsV').textContent = '0'; slider.disabled = true;
+  bagsManual = []; bagsData = null; bagsLastFaces = null;
   if(bagsBusy) return; bagsBusy = true;
   try{
     top.textContent = bagsKit ? 'Ищу лицо…' : 'Загружаю модель…';
     const kit = await loadFaceKit();
     if(rtTool !== 'bags'){ bagsBusy = false; return; }
     top.textContent = 'Ищу лицо…';
-    const res = kit.detect(rtCanvas);
-    const faces = (res && res.faceLandmarks) || [];
-    if(!faces.length || !bagsPrepare(faces)){ top.textContent = 'Лицо не найдено'; bagsBusy = false; return; }
-    top.textContent = 'Синяки под глазами · двигайте ползунок';
+    let res = kit.detect(rtCanvas);
+    let faces = (res && res.faceLandmarks) || [];
+    if(!faces.length && rtCanvas.width > 900){            // ретрай на ~720px — детект надёжнее
+      const t = document.createElement('canvas'); const s = 720/rtCanvas.width;
+      t.width = 720; t.height = Math.max(1, Math.round(rtCanvas.height*s));
+      t.getContext('2d').drawImage(rtCanvas, 0, 0, t.width, t.height);
+      res = kit.detect(t); faces = (res && res.faceLandmarks) || [];
+    }
+    bagsLastFaces = faces;
+    if(!faces.length || !bagsPrepare(faces)){
+      top.textContent = 'Лицо не найдено — коснитесь синяка под глазом';
+      bagsBusy = false; return;                            // тап добавит зону вручную
+    }
+    top.textContent = 'Синяки · ползунок; тап добавляет зону';
     slider.disabled = false;
   } catch(e){
-    top.textContent = 'Модель недоступна — проверьте интернет';
+    top.textContent = 'Модель недоступна — коснитесь синяка под глазом';
   }
   bagsBusy = false;
 }
