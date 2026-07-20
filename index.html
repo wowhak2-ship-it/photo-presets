@@ -1491,8 +1491,10 @@ function bagsBuildZone(r){
     wsum += ((low[i]+low[i+1]+low[i+2])/3) * w; wn += w;
   }
   const zoneAvg = wn ? wsum/wn : cheekRef;
-  const zoneDark = Math.min(1, Math.max(0, (cheekRef-zoneAvg)/30));
-  const liftAmt = zoneDark * (cheekRef-zoneAvg);
+  // реальные тёмные круги дают скромный контраст по чистой яркости (~10-25 люма — проверено на
+  // настоящем фото с выраженными кругами), поэтому порог мягче и запас силы сверху
+  const zoneDark = Math.min(1, Math.max(0, (cheekRef-zoneAvg)/15));
+  const liftAmt = zoneDark * (cheekRef-zoneAvg) * 1.5;
   return {bx, by, bw, bh, orig, low, mask, liftAmt};
 }
 function bagsPrepare(faces){
