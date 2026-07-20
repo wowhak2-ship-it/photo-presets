@@ -1426,9 +1426,9 @@ function bagsRegions(lms, W, H){
     let dx = -ay, dy = ax;                                    // перпендикуляр оси глаза
     if(chin){ if(dx*(chin.x-ecx) + dy*(chin.y-ecy) < 0){ dx=-dx; dy=-dy; } }
     else if(dy < 0){ dx=-dx; dy=-dy; }
-    // выше и на всю ширину глаза — синяк тянется до уголков; точную форму даст карта темноты
-    const top = lowPts.map(p=>({x:p.x+dx*eyeW*0.08, y:p.y+dy*eyeW*0.08}));
-    const bot = [...lowPts].reverse().map(p=>({x:p.x+dx*eyeW*0.55, y:p.y+dy*eyeW*0.55}));
+    // с запасом от линии ресниц (0.22, не 0.08 — иначе задевает веко) до середины щеки
+    const top = lowPts.map(p=>({x:p.x+dx*eyeW*0.22, y:p.y+dy*eyeW*0.22}));
+    const bot = [...lowPts].reverse().map(p=>({x:p.x+dx*eyeW*0.62, y:p.y+dy*eyeW*0.62}));
     const eyePoly = contour.map(p=>({x:ecx+(p.x-ecx)*1.28, y:ecy+(p.y-ecy)*1.28}));
     regs.push({ poly:[...top,...bot], eyePoly, eyeW, down:{x:dx, y:dy} });
   }
@@ -1460,26 +1460,40 @@ function bagsBuildZone(r){
     mctx.closePath(); mctx.fill();
     mctx.globalCompositeOperation = 'source-over';
   }
-  const mask = mctx.getImageData(0,0,bw,bh).data;             // альфа-канал = перо зоны
+  const mask = mctx.getImageData(0,0,bw,bh).data;             // альфа-канал = мягкая форма зоны (без потемнения)
   const orig = ctx.getImageData(bx, by, bw, bh);
   const lc = document.createElement('canvas'); lc.width=bw; lc.height=bh;
   const lctx = lc.getContext('2d');
   lctx.filter = 'blur(' + Math.max(2, Math.round(eyeW*0.16)) + 'px)';
   lctx.drawImage(rtCanvas, bx, by, bw, bh, 0, 0, bw, bh);
   const low = lctx.getImageData(0,0,bw,bh).data;
-  const dxD = Math.round(r.down.x*eyeW*0.62), dyD = Math.round(r.down.y*eyeW*0.62);
-  // карта темноты: маска умножается на «насколько пиксель темнее щеки» —
-  // эффект ложится ровно на синяк и не трогает нормальную кожу ниже
-  for(let y=0; y<bh; y++) for(let x=0; x<bw; x++){
-    const i = (y*bw+x)*4;
-    if(!mask[i+3]) continue;
-    const cxp = Math.min(bw-1, Math.max(0, x+dxD)), cyp = Math.min(bh-1, Math.max(0, y+dyD));
-    const ci = (cyp*bw+cxp)*4;
-    const dark = Math.min(1, Math.max(0,
-      ((low[ci]+low[ci+1]+low[ci+2]) - (low[i]+low[i+1]+low[i+2])) / 78));
-    mask[i+3] = Math.round(mask[i+3] * (0.12 + 0.88*dark));
+  // центр глаза в координатах бокса (для эталона щеки и попадания в геометрию)
+  const srcPts = r.eyePoly || r.poly;
+  const ecx = srcPts.reduce((s,p)=>s+p.x,0)/srcPts.length - bx;
+  const ecy = srcPts.reduce((s,p)=>s+p.y,0)/srcPts.length - by;
+  // эталон «чистая щека»: МАКСИМУМ нескольких проб вдоль лица — надёжнее одной скользящей точки,
+  // которая на реальных фото часто сама попадает в край тени (проверено численно)
+  let cheekRef = 0;
+  for(const k of [0.5, 0.75, 1.0, 1.25]){
+    const px = Math.round(ecx + r.down.x*eyeW*k), py = Math.round(ecy + r.down.y*eyeW*k);
+    const s = 4, x0=Math.max(0,px-s), y0=Math.max(0,py-s), x1=Math.min(bw,px+s), y1=Math.min(bh,py+s);
+    if(x1<=x0 || y1<=y0) continue;
+    let sum=0, n=0;
+    for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++){ const i=(y*bw+x)*4; sum+=(low[i]+low[i+1]+low[i+2])/3; n++; }
+    if(n) cheekRef = Math.max(cheekRef, sum/n);
   }
-  return {bx, by, bw, bh, orig, low, mask, dxD, dyD};
+  if(!cheekRef) cheekRef = 150;
+  // ОДНО число силы на всю зону (не по пикселю — иначе шум текстуры даёт пятнистость):
+  // насколько зона в среднем темнее эталона; лёгкая полутень почти не тронется, настоящий синяк — полностью
+  let wsum=0, wn=0;
+  for(let y=0; y<bh; y++) for(let x=0; x<bw; x++){
+    const i=(y*bw+x)*4, w=mask[i+3]/255; if(!w) continue;
+    wsum += ((low[i]+low[i+1]+low[i+2])/3) * w; wn += w;
+  }
+  const zoneAvg = wn ? wsum/wn : cheekRef;
+  const zoneDark = Math.min(1, Math.max(0, (cheekRef-zoneAvg)/30));
+  const liftAmt = zoneDark * (cheekRef-zoneAvg);
+  return {bx, by, bw, bh, orig, low, mask, liftAmt};
 }
 function bagsPrepare(faces){
   const W = rtCanvas.width, H = rtCanvas.height;
@@ -1508,19 +1522,17 @@ function bagsApply(t){
   if(!bagsData) return;
   const ctx = rtCanvas.getContext('2d');
   for(const r of bagsData.regs){
+    if(r.liftAmt < 0.5) continue;                             // зона и так не темнее эталона — не трогаем
     const out = new ImageData(new Uint8ClampedArray(r.orig.data), r.bw, r.bh);
-    const od = out.data, low = r.low, m = r.mask, bw = r.bw, bh = r.bh;
+    const od = out.data, low = r.low, m = r.mask, bw = r.bw, bh = r.bh, lift = r.liftAmt;
     for(let y=0; y<bh; y++) for(let x=0; x<bw; x++){
       const i = (y*bw+x)*4;
-      const a = (m[i+3]/255) * t;                             // темнота уже в маске — без двойного гейта
+      const a = (m[i+3]/255) * t;                             // чистая геометрия — форма без шума по текстуре
       if(a < 0.004) continue;
-      const cxp = Math.min(bw-1, Math.max(0, x + r.dxD));
-      const cyp = Math.min(bh-1, Math.max(0, y + r.dyD));
-      const ci = (cyp*bw + cxp)*4;
       const hk = 1 - 0.3*a;
       for(let c=0;c<3;c++){
-        const lo = low[i+c], nl = lo + (low[ci+c]-lo)*a;      // на 100% тон полностью выравнивается к щеке
-        od[i+c] = clamp(nl + (r.orig.data[i+c]-lo)*hk);       // + настоящая текстура
+        const lo = low[i+c], nl = lo + lift*a;                // весь синяк ровно поднимается к тону щеки
+        od[i+c] = clamp(nl + (r.orig.data[i+c]-lo)*hk);       // + настоящая текстура поверх
       }
     }
     ctx.putImageData(out, r.bx, r.by);
