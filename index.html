@@ -1426,18 +1426,22 @@ function bagsRegions(lms, W, H){
     let dx = -ay, dy = ax;                                    // перпендикуляр оси глаза
     if(chin){ if(dx*(chin.x-ecx) + dy*(chin.y-ecy) < 0){ dx=-dx; dy=-dy; } }
     else if(dy < 0){ dx=-dx; dy=-dy; }
-    // хвостики вдоль оси глаза за настоящие уголки — полумесяц геометрически сходится в иглу
-    // ровно в lowPts[0]/[last] (top и bot берут ОДНУ и ту же contour-точку с разным сдвигом
-    // вдоль down), а любой feather-blur гасит тонкую иглу сильнее всего именно там; проверено
-    // тепловой картой — без хвостиков край у переносицы оставался вообще без покрытия
-    const extLo = { x: c1.x - ax*eyeW*0.10, y: c1.y - ay*eyeW*0.10 };
-    const extHi = { x: c2.x + ax*eyeW*0.10, y: c2.y + ay*eyeW*0.10 };
-    const lowPtsExt = [extLo, ...lowPts, extHi];
-    // с запасом от линии ресниц (0.22, не 0.08 — иначе задевает веко) до середины щеки
-    const top = lowPtsExt.map(p=>({x:p.x+dx*eyeW*0.22, y:p.y+dy*eyeW*0.22}));
-    const bot = [...lowPtsExt].reverse().map(p=>({x:p.x+dx*eyeW*0.62, y:p.y+dy*eyeW*0.62}));
+    // ЭЛЛИПС вместо рукописного полумесяца: у ручной геометрии (top/bot от landmarks со сдвигом)
+    // неизбежно возникают острые точки ровно в уголках глаза (там, где обе стороны берут одну и
+    // ту же contour-точку) — любое перо гасит такую иглу сильнее всего именно там, где чаще всего
+    // самая тёмная складка; чинил это дважды точечно (хвостики, разный blur) — оба раза частично.
+    // У эллипса по построению нет углов вообще, поэтому вся граница получает одинаково плавное
+    // перо — весь класс этого бага исчезает, а не глушится в конкретной точке.
+    const bandCx = ecx + dx*eyeW*0.38, bandCy = ecy + dy*eyeW*0.38;   // центр — примерно середина былой полосы 0.22..0.62
+    const rx = eyeW*0.66, ry = eyeW*0.32, rot = Math.atan2(ay, ax);
+    const poly = [];
+    for(let i=0;i<20;i++){
+      const t = i/20*Math.PI*2, lx = Math.cos(t)*rx, ly = Math.sin(t)*ry;
+      poly.push({ x: bandCx + lx*Math.cos(rot) - ly*Math.sin(rot),
+                  y: bandCy + lx*Math.sin(rot) + ly*Math.cos(rot) });
+    }
     const eyePoly = contour.map(p=>({x:ecx+(p.x-ecx)*1.28, y:ecy+(p.y-ecy)*1.28}));
-    regs.push({ poly:[...top,...bot], eyePoly, eyeW, down:{x:dx, y:dy} });
+    regs.push({ poly, eyePoly, eyeW, down:{x:dx, y:dy} });
   }
   return regs;
 }
@@ -1533,7 +1537,12 @@ function bagsApply(t){
   if(!bagsData) return;
   const ctx = rtCanvas.getContext('2d');
   for(const r of bagsData.regs){
-    const out = new ImageData(new Uint8ClampedArray(r.orig.data), r.bw, r.bh);
+    // база — ТЕКУЩЕЕ содержимое канваса, а не застывший снимок r.orig: у широких эллипсов
+    // соседних глаз боксы теперь могут пересекаться у переносицы, и если писать полным
+    // прямоугольником снимок «до», пиксели без своего эффекта (alpha=0) стирали бы обратно
+    // то, что уже нарисовала соседняя зона в области пересечения — проверено, давало чёткий
+    // прямоугольный шрам. r.orig/r.low остаются чистыми снимками только для формулы эффекта
+    const out = ctx.getImageData(r.bx, r.by, r.bw, r.bh);
     const od = out.data, low = r.low, dm = r.darkMap, m = r.mask, bw = r.bw, bh = r.bh;
     const cR=r.cheekR, cG=r.cheekG, cB=r.cheekB, cLum=r.cheekLum;
     for(let y=0; y<bh; y++) for(let x=0; x<bw; x++){
