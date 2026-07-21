@@ -201,6 +201,9 @@
     transform:translate(-50%,-50%); pointer-events:none; opacity:0; transition:opacity .12s;}
   .rt-cursor.on{opacity:1;}
   .rt-modes{display:flex; align-items:center; justify-content:center; gap:8px; padding:6px 16px 0;}
+  /* зашли через отдельную карточку «Тени» — кисть/штамп тут не нужны; visibility (не display),
+     чтобы место осталось зарезервированным и фото не «прыгало» крупнее с лишним воздухом вокруг */
+  .retouch.shadows-only .rt-modes{visibility:hidden; pointer-events:none;}
   .rt-mode{background:var(--panel); border:1px solid var(--line); color:var(--dim); font-size:12px; font-weight:600;
     padding:8px 16px; border-radius:18px; cursor:pointer; transition:transform .12s, color .15s, background .15s;}
   .rt-mode:active{transform:scale(.94);}
@@ -282,7 +285,7 @@
   .home-sec{font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--dim); font-weight:700; margin-top:4px;}
 
   /* tools row — как ряд иконок в рефе, стеклянные квадраты */
-  .home-tools{display:grid; grid-template-columns:repeat(4,1fr); gap:10px;}
+  .home-tools{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
   .tool-card{display:flex; flex-direction:column; align-items:center; gap:9px; padding:4px 0 2px;
     background:transparent; border:none; cursor:pointer; transition:transform .15s;}
   .tool-card:active{transform:scale(.93);}
@@ -351,6 +354,13 @@
   }
 
   @media (max-width:520px){ .hide-sm{display:none;} .title{display:none;} }
+
+  /* ── back-toast: «назад» на главной без экрана для возврата — предупреждение перед выходом ── */
+  .back-toast{position:fixed; left:50%; bottom:calc(28px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(10px);
+    background:var(--panel2); border:1px solid var(--line-2); color:var(--text); font-size:13.5px; font-weight:600;
+    padding:13px 22px; border-radius:26px; box-shadow:0 10px 28px rgba(0,0,0,.5); z-index:10000;
+    opacity:0; pointer-events:none; transition:opacity .22s ease, transform .22s ease; white-space:nowrap;}
+  .back-toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 </style>
 </head>
 <body>
@@ -419,6 +429,10 @@
     <button class="tool-card" data-go="retouch">
       <span class="tc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7z"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg></span>
       <b>Ретушь</b>
+    </button>
+    <button class="tool-card" data-go="shadows">
+      <span class="tc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3.2"/></svg></span>
+      <b>Тени</b>
     </button>
     <button class="tool-card" data-go="crop">
       <span class="tc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg></span>
@@ -540,14 +554,13 @@
   <div class="rt-modes" id="rtModes">
     <button class="rt-mode active" data-tool="heal">Умная кисть</button>
     <button class="rt-mode" data-tool="stamp">Штамп</button>
-    <button class="rt-mode" data-tool="bags">Синяки</button>
     <button class="rt-stamp-apply" id="rtStampApply">Применить</button>
   </div>
   <div class="rt-sliders">
     <div class="rt-srow"><span>Размер</span><input type="range" id="rtSize" min="10" max="70" value="22"><b id="rtSizeV">22</b></div>
     <div class="rt-srow"><span>Жёсткость</span><input type="range" id="rtHard" min="0" max="100" value="45"><b id="rtHardV">45</b></div>
     <div class="rt-srow"><span>Сила</span><input type="range" id="rtStr" min="20" max="100" value="100"><b id="rtStrV">100</b></div>
-    <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Синяки</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
+    <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Тени</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
   </div>
   <div class="rt-tools">
     <button class="rt-undo" id="rtCompare">До / После</button>
@@ -558,6 +571,8 @@
     <button class="crop-btn gold" id="rtApply">Применить</button>
   </div>
 </div>
+
+<div class="back-toast" id="backToast">Нажмите ещё раз для выхода</div>
 
 <input type="file" id="file" accept="image/*" hidden>
 
@@ -897,7 +912,7 @@ document.getElementById('file').onchange = e=>{
 
 // ─── Home (landing) ↔ editor ───
 let pendingTool = null;
-function goEditor(){ document.body.classList.add('editing'); fitStage(); render(); }
+function goEditor(){ ensureTrap(); document.body.classList.add('editing'); fitStage(); render(); }
 function goHome(){
   document.body.classList.remove('editing');
   if(compareMode){ compareMode = false; compareBtn.classList.remove('active'); cmpOverlay.classList.remove('on'); render(); }
@@ -907,7 +922,9 @@ function applyPendingTool(){
   // retouch/crop are full-screen overlays over the CURRENT screen:
   // Отмена returns where you came from (home), Применить lands in the editor
   if(t==='retouch'){ openRetouch(); return; }
+  if(t==='shadows'){ openShadows(); return; }
   if(t==='crop'){ openCrop(); return; }
+  if(!t) return;   // выбрали фото просто через «Галерея»/«Камера» — остаёмся на главной, фото уже подхвачено лентой луков
   goEditor();
   setTab(t==='adjust' ? 'adjust' : 'presets');
 }
@@ -915,7 +932,7 @@ function runTool(tool){
   if(!sourceCanvas){ pendingTool = tool; document.getElementById('file').click(); return; }
   pendingTool = tool; applyPendingTool();
 }
-document.getElementById('homePick').onclick = ()=>{ pendingTool = 'presets'; document.getElementById('file').click(); };
+document.getElementById('homePick').onclick = ()=>{ pendingTool = null; document.getElementById('file').click(); };
 document.getElementById('homeCam').onclick = ()=> openCamera();
 document.querySelectorAll('.tool-card').forEach(b=> b.onclick = ()=> runTool(b.dataset.go));
 document.getElementById('backBtn').onclick = goHome;
@@ -1068,6 +1085,7 @@ async function startStream(){
   camVideo.srcObject = camStream;
 }
 async function openCamera(){
+  ensureTrap();
   cam.classList.add('open');
   try { await startStream(); }
   catch(e){
@@ -1081,7 +1099,7 @@ function shoot(){
   if(!camVideo.videoWidth) return;
   const c = document.createElement('canvas'); c.width = camVideo.videoWidth; c.height = camVideo.videoHeight;
   c.getContext('2d').drawImage(camVideo, 0, 0);
-  const img = new Image(); img.onload = ()=>{ closeCamera(); setSource(img); goEditor(); }; img.src = c.toDataURL('image/jpeg', 0.95);
+  const img = new Image(); img.onload = ()=>{ closeCamera(); setSource(img); }; img.src = c.toDataURL('image/jpeg', 0.95);
 }
 async function flipCamera(){ facing = facing==='environment' ? 'user' : 'environment'; try { await startStream(); } catch(e){} }
 document.getElementById('camX').onclick = closeCamera;
@@ -1125,6 +1143,7 @@ function refreshCrop(){ const d = layoutCrop(); cf = frameForAR(d.w, d.h, cropAR
 
 function openCrop(){
   if(!sourceCanvas) return;
+  ensureTrap();
   cropRotate = 0; cropAR = null;
   document.querySelectorAll('#cropRatios button').forEach(b=> b.classList.toggle('active', b.dataset.ar==='free'));
   cropEl.classList.add('open');
@@ -1214,16 +1233,25 @@ function layoutRetouch(){
 }
 function openRetouch(){
   if(!sourceCanvas) return;
+  ensureTrap();
   rtCanvas.width = sourceCanvas.width; rtCanvas.height = sourceCanvas.height;
   rtCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);   // working copy of the original
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
   bagsData = null;
+  retouchEl.classList.remove('shadows-only');
   retouchEl.classList.add('open');
   layoutRetouch(); rtResetZoom(); rtSetTool('heal');
 }
-function closeRetouch(){ retouchEl.classList.remove('open'); }
+// отдельная карточка «Тени» на главной — тот же оверлей ретуши, но сразу в режиме
+// «Тени» и без переключателя Умная кисть/Штамп (они там просто не нужны)
+function openShadows(){
+  openRetouch();
+  retouchEl.classList.add('shadows-only');
+  rtSetTool('bags');
+}
+function closeRetouch(){ retouchEl.classList.remove('open'); retouchEl.classList.remove('shadows-only'); }
 function rtBrushR(){ const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width; return rtSize * (rtCanvas.width/disp) * 0.5; }
 function rtAt(e){ const r = rtCanvas.getBoundingClientRect();
   healSpot(rtCanvas, (e.clientX-r.left)*(rtCanvas.width/r.width), (e.clientY-r.top)*(rtCanvas.height/r.height), rtBrushR(), null, rtOpts()); }
@@ -1368,7 +1396,7 @@ function rtSetTool(tool){
   // «Синяки»: свой слайдер вместо кисти
   document.querySelectorAll('.rt-srow').forEach(r=>{ if(r.id!=='rtBagsRow') r.style.display = bags?'none':'flex'; });
   document.getElementById('rtBagsRow').style.display = bags?'flex':'none';
-  document.getElementById('rtTop').textContent = bags ? 'Синяки под глазами' : 'Ретушь · коснитесь дефектов';
+  document.getElementById('rtTop').textContent = bags ? 'Тени под глазами' : 'Ретушь · коснитесь дефектов';
   if(bags) bagsEnter();
 }
 document.querySelectorAll('.rt-mode').forEach(b=> b.onclick=()=>rtSetTool(b.dataset.tool));
@@ -1551,10 +1579,13 @@ function bagsApply(t){
       // локальная темнота (по сглаженной карте, без шума пикселей) — самое тёмное место в зоне
       // получает эффект почти полностью, лёгкая полутень рядом — почти не тронется
       const dLum = (dm[i]+dm[i+1]+dm[i+2])/3;
-      const local = Math.min(1, Math.max(0, (cLum-dLum)/15));
-      const a = ageom * local * t * 1.5;                      // запас силы — реальные круги дают контраст ~10-25 люма
+      const local = Math.min(1, Math.max(0, (cLum-dLum)/20));
+      // потолок 0.68, БЕЗ буста силы — раньше при полной силе тон долетал ровно до цвета щеки
+      // и на части пикселей давал светлее естественной кожи («белое пятно»); теперь тон мягко
+      // тянется к щеке, но не долетает до неё — читается как «тон кожи», не как замазка
+      const a = ageom * local * t * 0.68;
       if(a < 0.004) continue;
-      const aClamped = Math.min(1, a), hk = 1 - 0.3*aClamped;
+      const aClamped = Math.min(0.68, a), hk = 1 - 0.3*aClamped;
       // сдвиг тона к ЦВЕТУ щеки (не только к яркости) — снимает и синеву/желтизну круга, не только темноту
       const lr=low[i], lg=low[i+1], lb=low[i+2];
       const nr = lr + (cR-lr)*aClamped, ng = lg + (cG-lg)*aClamped, nb = lb + (cB-lb)*aClamped;
@@ -1585,13 +1616,13 @@ async function bagsEnter(){
     }
     bagsLastFaces = faces;
     if(!faces.length || !bagsPrepare(faces)){
-      top.textContent = 'Лицо не найдено — коснитесь синяка под глазом';
+      top.textContent = 'Лицо не найдено — коснитесь тени под глазом';
       bagsBusy = false; return;                            // тап добавит зону вручную
     }
-    top.textContent = 'Синяки · ползунок; тап добавляет зону';
+    top.textContent = 'Тени · ползунок; тап добавляет зону';
     slider.disabled = false;
   } catch(e){
-    top.textContent = 'Модель недоступна — коснитесь синяка под глазом';
+    top.textContent = 'Модель недоступна — коснитесь тени под глазом';
   }
   bagsBusy = false;
 }
@@ -1651,6 +1682,54 @@ const installBtn = document.getElementById('install');
 window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredPrompt = e; installBtn.style.display = 'inline-flex'; });
 installBtn.onclick = async ()=>{ if(!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; installBtn.style.display='none'; };
 window.addEventListener('appinstalled', ()=> { installBtn.style.display = 'none'; });
+
+// ─── Аппаратная кнопка «Назад» (Android PWA): с любого экрана — на главную;
+// с главной — «нажмите ещё раз для выхода», повторное нажатие в течение 2с — реально выходит.
+// Держим ровно одну «ловушку» в истории, пока мы «внутри» приложения (trapped=true).
+// На главной после первого «назад» ловушку 2с не восстанавливаем — если за это время нажали
+// снова, физическому back уже нечего перехватывать, и он уходит в системный обработчик,
+// закрывая PWA (сделать это напрямую через JS нельзя). ensureTrap() отдельно подстраховывает:
+// если экран открыли ИМЕННО в эти 2с (ловушки ещё нет), он тут же её восстановит — иначе
+// «назад» из этого экрана мог бы закрыть приложение вместо перехода на главную.
+let trapped = true;
+let exitWindowT = null;
+function ensureTrap(){
+  if(!trapped){ trapped = true; clearTimeout(exitWindowT); history.pushState({trap:true}, ''); }
+}
+function isAnyScreenOpen(){
+  return document.body.classList.contains('editing')
+      || cam.classList.contains('open')
+      || cropEl.classList.contains('open')
+      || retouchEl.classList.contains('open');
+}
+function forceHome(){
+  if(cam.classList.contains('open')) closeCamera();
+  if(cropEl.classList.contains('open')) closeCrop();
+  if(retouchEl.classList.contains('open')) closeRetouch();
+  if(document.body.classList.contains('editing')) goHome();
+}
+const backToast = document.getElementById('backToast');
+let backToastT = null;
+function showBackToast(){
+  backToast.classList.add('show');
+  clearTimeout(backToastT);
+  backToastT = setTimeout(()=> backToast.classList.remove('show'), 2000);
+}
+history.pushState({trap:true}, '');
+window.addEventListener('popstate', ()=>{
+  trapped = false;
+  if(isAnyScreenOpen()){
+    forceHome();
+    trapped = true; history.pushState({trap:true}, '');   // остаёмся «внутри» — ловушка нужна для следующего экрана
+    return;
+  }
+  // мы уже на главной — это попытка выйти
+  showBackToast();
+  exitWindowT = setTimeout(()=>{
+    // не нажали повторно за 2с — молча восстанавливаем ловушку, «назад» снова просто предупредит
+    trapped = true; history.pushState({trap:true}, '');
+  }, 2000);
+});
 </script>
 </body>
 </html>
