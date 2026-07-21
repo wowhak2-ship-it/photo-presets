@@ -1289,14 +1289,12 @@ rtCanvas.addEventListener('pointerdown', e=>{
   rtPtrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
   try{ rtCanvas.setPointerCapture(e.pointerId); }catch(_){}
   if(rtPtrs.size === 2){
-    rtDrawing = false; rtHideCursor(); rtBagsTap = null;   // 2nd finger = zoom: cancel aim/tap
+    rtDrawing = false; rtHideCursor();   // 2nd finger = zoom: cancel aim
     const p = [...rtPtrs.values()];
     rtPinch = { d0:Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y), s0:rtScale,
                 mx:(p[0].x+p[1].x)/2, my:(p[0].y+p[1].y)/2, tx0:rtTx, ty0:rtTy };
   } else if(rtPtrs.size === 1 && rtTool === 'heal'){
     rtDrawing = true; rtLastE = e; rtShowCursor(e);   // aim only — heal fires on release
-  } else if(rtPtrs.size === 1 && rtTool === 'bags'){
-    rtBagsTap = {x:e.clientX, y:e.clientY};           // кандидат в тап «добавить зону»
   }
 });
 rtCanvas.addEventListener('pointermove', e=>{
@@ -1324,13 +1322,6 @@ function rtEnd(e){
       document.getElementById('rtUndo').disabled = false;
       rtAt(rtLastE);
     }
-    if(rtBagsTap && rtTool === 'bags' &&
-       Math.hypot(e.clientX-rtBagsTap.x, e.clientY-rtBagsTap.y) < 12){
-      const r = rtCanvas.getBoundingClientRect();
-      bagsAddManual((e.clientX-r.left)*(rtCanvas.width/r.width),
-                    (e.clientY-r.top)*(rtCanvas.height/r.height));
-    }
-    rtBagsTap = null;
     rtDrawing = false; rtHideCursor();
   }
 }
@@ -1411,7 +1402,6 @@ document.getElementById('rtStampApply').onclick = ()=>{
 // сохраняется через частотное разложение: света/тон = low, поры = high (почти нетронуты).
 const MP_VER = '0.10.14';
 let bagsKit = null, bagsData = null, bagsBusy = false;
-let bagsManual = [], bagsLastFaces = null, bagsLastEyeW = 0, rtBagsTap = null;
 async function loadFaceKit(){
   if(bagsKit) return bagsKit;
   const vision = await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`);
@@ -1462,7 +1452,7 @@ function bagsRegions(lms, W, H){
   }
   return regs;
 }
-// общий сборщик зоны (авто от лица или ручная от тапа)
+// сборщик зоны из геометрии региона
 function bagsBuildZone(r){
   const W = rtCanvas.width, H = rtCanvas.height, ctx = rtCanvas.getContext('2d');
   const eyeW = r.eyeW, pad = eyeW*0.9;
@@ -1531,24 +1521,10 @@ function bagsPrepare(faces){
   const W = rtCanvas.width, H = rtCanvas.height;
   const regs = [];
   for(const lms of (faces||[])) for(const r of bagsRegions(lms, W, H)){
-    const z = bagsBuildZone(r); if(z){ regs.push(z); bagsLastEyeW = r.eyeW; }
+    const z = bagsBuildZone(r); if(z) regs.push(z);
   }
-  for(const m of bagsManual){ const z = bagsBuildZone(m); if(z) regs.push(z); }
   bagsData = regs.length ? {regs} : null;
   return regs.length;
-}
-// ручная зона по тапу — и когда лицо не нашлось, и как поправка к авто-зонам
-function bagsAddManual(px, py){
-  const w = bagsLastEyeW || rtCanvas.width*0.11;
-  const rx = w*0.8, ry = w*0.45, poly = [];
-  for(let k=0;k<22;k++){ const a=k/22*Math.PI*2; poly.push({x:px+Math.cos(a)*rx, y:py+Math.sin(a)*ry}); }
-  bagsManual.push({poly, eyeW:w, down:{x:0, y:1}});
-  if(bagsManual.length > 6) bagsManual.shift();
-  bagsPrepare(bagsLastFaces);
-  const slider = document.getElementById('rtBags');
-  slider.disabled = !bagsData;
-  document.getElementById('rtTop').textContent = 'Зоны: ' + (bagsData ? bagsData.regs.length : 0) + ' · двигайте ползунок';
-  const v = +slider.value; if(v > 0) bagsApply(v/100);
 }
 function bagsApply(t){
   if(!bagsData) return;
@@ -1588,7 +1564,7 @@ function bagsApply(t){
 async function bagsEnter(){
   const slider = document.getElementById('rtBags'), top = document.getElementById('rtTop');
   slider.value = 0; document.getElementById('rtBagsV').textContent = '0'; slider.disabled = true;
-  bagsManual = []; bagsData = null; bagsLastFaces = null;
+  bagsData = null;
   if(bagsBusy) return; bagsBusy = true;
   try{
     top.textContent = bagsKit ? 'Ищу лицо…' : 'Загружаю модель…';
@@ -1603,15 +1579,14 @@ async function bagsEnter(){
       t.getContext('2d').drawImage(rtCanvas, 0, 0, t.width, t.height);
       res = kit.detect(t); faces = (res && res.faceLandmarks) || [];
     }
-    bagsLastFaces = faces;
     if(!faces.length || !bagsPrepare(faces)){
-      top.textContent = 'Лицо не найдено — коснитесь тени под глазом';
-      bagsBusy = false; return;                            // тап добавит зону вручную
+      top.textContent = 'Лицо не найдено';
+      bagsBusy = false; return;
     }
-    top.textContent = 'Тени · ползунок; тап добавляет зону';
+    top.textContent = 'Тени · двигайте ползунок';
     slider.disabled = false;
   } catch(e){
-    top.textContent = 'Модель недоступна — коснитесь тени под глазом';
+    top.textContent = 'Модель недоступна — проверьте интернет';
   }
   bagsBusy = false;
 }
