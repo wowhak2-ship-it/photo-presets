@@ -331,8 +331,9 @@
     color:var(--faint); font-size:14px; cursor:pointer;}
 
   /* ── splash preloader (объектив/затвор) ── */
-  /* первый кадр = системный сплэш Android (тот же фон, та же диафрагма-иконка, имя внизу),
-     затем кольцо «оживает» и начинает крутиться */
+  /* первый кадр = системный сплэш Android (тот же фон), но БЕЗ иконки/текста — просто тёмный
+     экран, чтобы не было заметно смены картинки; затем (через .4s) сразу вместе проявляются
+     иконка+кольцо+текст — уже как «наш» прелоадер начал работать */
   #splash{position:fixed; inset:0; z-index:200; background:var(--bg-deep);
     display:flex; align-items:center; justify-content:center;
     transition:opacity .5s ease;}
@@ -341,9 +342,11 @@
   .sp-ring{position:absolute; inset:-14px; border-radius:50%; border:2.5px solid rgba(255,255,255,.10);
     border-top-color:var(--brand-2); opacity:0;
     animation:spSpin 1s linear infinite, spFade .35s ease .4s forwards;}
-  .sp-ap{width:88px; height:88px; display:block; animation:spSpin 8s linear infinite reverse;}
+  .sp-ap{width:88px; height:88px; display:block; opacity:0;
+    animation:spSpin 8s linear infinite reverse, spFade .35s ease .4s forwards;}
   #splash b{position:absolute; left:0; right:0; bottom:calc(34px + env(safe-area-inset-bottom));
-    text-align:center; font-size:13px; font-weight:600; letter-spacing:.02em; color:rgba(255,255,255,.85);}
+    text-align:center; font-size:13px; font-weight:600; letter-spacing:.02em; color:rgba(255,255,255,.85);
+    opacity:0; animation:spFade .35s ease .4s forwards;}
   @keyframes spSpin{to{transform:rotate(360deg)}}
   @keyframes spFade{to{opacity:1}}
 
