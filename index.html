@@ -341,7 +341,7 @@
   .sp-ring{position:absolute; inset:-14px; border-radius:50%; border:2.5px solid rgba(255,255,255,.10);
     border-top-color:var(--brand-2); opacity:0;
     animation:spSpin 1s linear infinite, spFade .35s ease .4s forwards;}
-  .sp-ap{width:88px; height:88px; color:#fff; animation:spSpin 8s linear infinite reverse;}
+  .sp-ap{width:88px; height:88px; display:block; animation:spSpin 8s linear infinite reverse;}
   #splash b{position:absolute; left:0; right:0; bottom:calc(34px + env(safe-area-inset-bottom));
     text-align:center; font-size:13px; font-weight:600; letter-spacing:.02em; color:rgba(255,255,255,.85);}
   @keyframes spSpin{to{transform:rotate(360deg)}}
@@ -376,7 +376,7 @@
 <div id="splash" aria-hidden="true">
   <div class="sp-wrap">
     <div class="sp-ring"></div>
-    <svg class="sp-ap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><line x1="14.31" y1="8" x2="20.05" y2="17.94"/><line x1="9.69" y1="8" x2="21.17" y2="8"/><line x1="7.38" y1="12" x2="13.12" y2="2.06"/><line x1="9.69" y1="16" x2="3.95" y2="6.06"/><line x1="14.31" y1="16" x2="2.83" y2="16"/><line x1="16.62" y1="12" x2="10.88" y2="21.94"/></svg>
+    <img class="sp-ap" src="./icon-512.png" alt="" width="88" height="88">
   </div>
   <b>Пресеты</b>
 </div>
