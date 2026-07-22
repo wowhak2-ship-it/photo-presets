@@ -16,26 +16,27 @@
 
 <style>
   :root{
-    /* brand: #FFFFFF / #343B45 / #B62472 */
-    --bg:#14171C; --bg-deep:#0E1013; --panel:#272D35; --panel2:#343B45;
-    --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.15);
-    --text:#FFFFFF; --dim:#A6AEB8; --faint:#6E7681;
-    --brand:#B62472; --brand-2:#D9328A;
-    --gold:#D63D8C; --gold-ink:#FFFFFF; --gold-dim:rgba(214,61,140,.16);
-    --glass:rgba(39,45,53,.6); --glass-line:rgba(255,255,255,.12);
+    /* film-dark: тёплый уголь + янтарь + чинограф-красный */
+    --bg:#100E0B; --bg-deep:#0A0908; --panel:#1A150E; --panel2:#241D13;
+    --line:rgba(224,162,74,.14); --line-2:rgba(224,162,74,.24);
+    --text:#F4EFE5; --dim:#A2988A; --faint:#8B8172;
+    --brand:#E0A24A; --brand-2:#D2422E;
+    --gold:#E0A24A; --gold-ink:#171104; --gold-dim:rgba(224,162,74,.16);
+    --china:#D2422E;                       /* пометка выбранного кадра */
+    --glass:rgba(18,14,9,.72); --glass-line:rgba(255,255,255,.11);
     --mono:ui-monospace,'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; height:100%;}
   body{background:var(--bg-deep); color:var(--text);
-    background-image:radial-gradient(120% 72% at 50% -8%, #202730 0%, var(--bg) 46%, var(--bg-deep) 100%);
+    background-image:radial-gradient(120% 72% at 50% -8%, #221B12 0%, var(--bg) 46%, var(--bg-deep) 100%);
     font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden;
     padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);}
 
   .glow{position:fixed; left:50%; bottom:-130px; transform:translateX(-50%);
     width:135%; height:320px; pointer-events:none; z-index:0; filter:blur(90px); opacity:.34;
-    background:radial-gradient(50% 100% at 50% 100%, #D9328A 0%, #B62472 44%, rgba(182,36,114,0) 72%);}
+    background:radial-gradient(50% 100% at 50% 100%, #E0A24A 0%, #A56A1E 44%, rgba(165,106,30,0) 72%);}
 
   /* bottom dock: raised tool panel with depth */
   .dock{position:relative; z-index:2; display:none;
@@ -65,8 +66,8 @@
   .pill{display:inline-flex; align-items:center; gap:7px; border-radius:22px; padding:10px 16px;
     font-size:13px; font-weight:600; cursor:pointer; border:1px solid var(--line); background:var(--panel); color:var(--text);}
   .pill svg{width:17px; height:17px;}
-  .pill.gold{background:linear-gradient(135deg, var(--brand-2), var(--brand)); color:#fff; border-color:transparent; box-shadow:0 4px 16px rgba(182,36,114,.35);}
-  .pill.ghost{background:transparent; color:var(--gold); border-color:rgba(214,61,140,.45);}
+  .pill.gold{background:var(--gold); color:var(--gold-ink); font-weight:700; border-color:transparent; box-shadow:0 4px 16px rgba(224,162,74,.28);}
+  .pill.ghost{background:transparent; color:var(--gold); border-color:rgba(224,162,74,.45);}
   .pill:active{transform:scale(.97);}
 
   main{position:relative; z-index:1; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:6px 16px; overflow:hidden;}
@@ -95,7 +96,7 @@
     -webkit-mask:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent); mask:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);}
   input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:34px; background:transparent; outline:none; position:relative; z-index:1;}
   input[type=range]::-webkit-slider-runnable-track{height:3px; border-radius:3px; background:var(--line-2);}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:6px; height:26px; margin-top:-11.5px; border-radius:3px; background:var(--gold); cursor:pointer; box-shadow:0 0 12px rgba(214,61,140,.75);}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:6px; height:26px; margin-top:-11.5px; border-radius:3px; background:var(--gold); cursor:pointer; box-shadow:0 0 12px rgba(224,162,74,.75);}
   input[type=range]::-moz-range-track{height:3px; border-radius:3px; background:var(--line-2);}
   input[type=range]::-moz-range-thumb{width:6px; height:26px; border:none; border-radius:3px; background:var(--gold);}
 
@@ -111,7 +112,7 @@
   .chip canvas{width:72px; height:72px; border-radius:15px; background:var(--panel); border:2px solid transparent;
     box-shadow:0 4px 12px rgba(0,0,0,.4); transition:border-color .15s, transform .15s;}
   .chip:active canvas{transform:scale(.95);}
-  .chip.active canvas{border-color:var(--gold); box-shadow:0 0 0 2px rgba(214,61,140,.3), 0 4px 16px rgba(214,61,140,.15);}
+  .chip.active canvas{border-color:var(--gold); box-shadow:0 0 0 2px rgba(224,162,74,.3), 0 4px 16px rgba(224,162,74,.15);}
   .chip span{font-size:11px; letter-spacing:.08em; font-weight:600; color:var(--dim); white-space:nowrap; text-transform:uppercase;}
   .chip.active span{color:var(--gold);}
 
@@ -125,7 +126,7 @@
   .cam-flip{width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,.13); border:1px solid rgba(255,255,255,.12); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .12s;}
   .cam-flip:active{transform:scale(.92);}
   .cam-flip svg{width:22px;height:22px;}
-  .shutter{width:76px; height:76px; border-radius:50%; background:#fff; border:4px solid var(--gold); box-shadow:0 0 0 3px rgba(214,61,140,.22), 0 6px 18px rgba(0,0,0,.45); cursor:pointer; padding:0;}
+  .shutter{width:76px; height:76px; border-radius:50%; background:#fff; border:4px solid var(--gold); box-shadow:0 0 0 3px rgba(224,162,74,.22), 0 6px 18px rgba(0,0,0,.45); cursor:pointer; padding:0;}
   .shutter:active{transform:scale(.94);}
   .cam-err{color:#fff; text-align:center; padding:40px 24px; font-size:14px; line-height:1.5;}
 
@@ -178,12 +179,12 @@
   .crop-ratios button{background:var(--panel); border:1px solid var(--line); color:var(--dim); font-size:12px; font-weight:600;
     padding:9px 15px; border-radius:20px; cursor:pointer; transition:transform .12s, color .15s, background .15s, border-color .15s;}
   .crop-ratios button:active{transform:scale(.94);}
-  .crop-ratios button.active{background:var(--gold-dim); border-color:rgba(214,61,140,.5); color:var(--gold);}
+  .crop-ratios button.active{background:var(--gold-dim); border-color:rgba(224,162,74,.5); color:var(--gold);}
   .crop-bar{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 20px calc(16px + env(safe-area-inset-bottom));}
   .crop-btn{display:inline-flex; align-items:center; gap:7px; background:var(--panel2); border:1px solid var(--line); color:var(--text);
     font-size:14px; font-weight:600; padding:12px 20px; border-radius:24px; cursor:pointer;}
   .crop-btn svg{width:17px; height:17px;}
-  .crop-btn.gold{background:linear-gradient(135deg, var(--brand-2), var(--brand)); color:#fff; border-color:transparent; box-shadow:0 4px 16px rgba(182,36,114,.3);}
+  .crop-btn.gold{background:var(--gold); color:var(--gold-ink); font-weight:700; border-color:transparent; box-shadow:0 4px 16px rgba(224,162,74,.28);}
   .crop-btn.ghost{background:transparent; color:var(--dim);}
   .crop-btn:active{transform:scale(.97);}
 
@@ -209,7 +210,7 @@
   .rt-mode{background:var(--panel); border:1px solid var(--line); color:var(--dim); font-size:12px; font-weight:600;
     padding:8px 16px; border-radius:18px; cursor:pointer; transition:transform .12s, color .15s, background .15s;}
   .rt-mode:active{transform:scale(.94);}
-  .rt-mode.active{background:var(--gold-dim); border-color:rgba(214,61,140,.5); color:var(--gold);}
+  .rt-mode.active{background:var(--gold-dim); border-color:rgba(224,162,74,.5); color:var(--gold);}
   .rt-stamp-apply{display:none; background:var(--gold); color:var(--gold-ink); border:none; font-size:12px; font-weight:700;
     padding:8px 16px; border-radius:18px; cursor:pointer; margin-left:auto;}
   .rt-stamp-apply:active{transform:scale(.95);}
@@ -253,69 +254,51 @@
     display:none; flex-direction:column; gap:16px; padding:14px 20px calc(26px + env(safe-area-inset-bottom));}
   body:not(.editing) #home{display:flex;}
   body:not(.editing) header, body:not(.editing) main, body:not(.editing) .dock{display:none;}
-  /* hero banner (по рефу: градиентная плашка с брендом) */
-  .hero-banner{position:relative; border-radius:24px; padding:14px 16px 18px; overflow:hidden;
-    display:flex; flex-direction:column;
-    background:
-      radial-gradient(130% 160% at 88% -25%, rgba(255,255,255,.20) 0%, rgba(255,255,255,0) 46%),
-      linear-gradient(132deg, #D9328A 0%, #B62472 52%, #343B45 130%);
-    box-shadow:0 14px 40px rgba(182,36,114,.30);}
-  .hb-waves{position:absolute; inset:0; pointer-events:none; opacity:.14;
-    background:
-      radial-gradient(closest-side at 78% 130%, transparent 60%, #fff 60.6%, transparent 61.8%),
-      radial-gradient(closest-side at 20% -40%, transparent 55%, #fff 55.6%, transparent 56.8%),
-      radial-gradient(closest-side at 108% 30%, transparent 70%, #fff 70.5%, transparent 71.5%);}
-  .hb-top{display:flex; align-items:center; justify-content:space-between; position:relative; z-index:1;}
-  .hb-top .avatar{width:36px; height:36px; border-color:rgba(255,255,255,.55); box-shadow:0 2px 10px rgba(0,0,0,.3);}
-  .pill.glass-pill{background:rgba(255,255,255,.16); color:#fff; border:1px solid rgba(255,255,255,.4);
-    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);}
-  .hb-brand{position:relative; z-index:1; display:flex; align-items:center; gap:11px; margin-top:16px;}
-  .hb-logo{width:36px; height:36px; color:#fff; flex:0 0 auto;}
-  .hb-brand b{font-size:30px; font-weight:800; letter-spacing:-.01em; color:#fff;}
-  .hb-sub{position:relative; z-index:1; margin:2px 0 0 47px; font-size:9.5px; letter-spacing:.26em; text-transform:uppercase; color:rgba(255,255,255,.78); font-weight:700;}
+  /* ── контактный лист: фото сразу во всех луках, как контролька из проявочной ── */
+  .sheet-top{display:flex; align-items:center; justify-content:space-between;}
+  .brand-row{display:flex; align-items:center; gap:9px;}
+  .brand-row .bdot{width:9px; height:9px; border-radius:50%; background:var(--china);
+    box-shadow:0 0 12px rgba(210,66,46,.6);}
+  .brand-row b{font-size:12.5px; letter-spacing:.28em; font-weight:600; color:var(--text);}
+  .sheet-right{display:flex; align-items:center; gap:10px;}
+  .roll{font-family:var(--mono); font-size:9.5px; letter-spacing:.12em; color:var(--dim);}
 
-  .home-big{display:grid; grid-template-columns:1.22fr 1fr; gap:12px;}
-  .big-card{position:relative; border:1px solid var(--line); border-radius:22px; padding:16px 16px 15px;
-    display:flex; flex-direction:column; align-items:flex-start; gap:9px; cursor:pointer; text-align:left;
-    background:linear-gradient(160deg, var(--panel2), var(--panel)); color:var(--text);
-    font-size:16px; font-weight:800; letter-spacing:.01em; box-shadow:0 8px 24px rgba(0,0,0,.32); transition:transform .15s;}
-  .big-card:active{transform:scale(.97);}
-  .big-card small{font-size:11px; color:var(--dim); font-weight:600; margin-top:-5px;}
-  .big-card .bc-ic{width:42px; height:42px; border-radius:13px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.08); margin-bottom:2px;}
-  .big-card .bc-ic svg{width:21px; height:21px;}
-  .big-card.gold{background:linear-gradient(150deg,#E0459B 0%,#B62472 60%,#8F1B58 100%); border-color:transparent; color:#fff;
-    box-shadow:0 12px 32px rgba(182,36,114,.35);}
-  .big-card.gold small{color:rgba(255,255,255,.72);}
-  .big-card.gold .bc-ic{background:rgba(255,255,255,.16);}
-  .big-card.white{background:#FFFFFF; border-color:transparent; color:#343B45; box-shadow:0 10px 28px rgba(0,0,0,.35);}
-  .big-card.white small{color:rgba(52,59,69,.62);}
-  .big-card.white .bc-ic{background:rgba(52,59,69,.1); color:#343B45;}
-
-  .home-sec{font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--dim); font-weight:700; margin-top:4px;}
-
-  /* tools row — как ряд иконок в рефе, стеклянные квадраты */
-  .home-tools{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
-  .tool-card{display:flex; flex-direction:column; align-items:center; gap:9px; padding:4px 0 2px;
-    background:transparent; border:none; cursor:pointer; transition:transform .15s;}
-  .tool-card:active{transform:scale(.93);}
-  .tool-card .tc-ic{width:56px; height:56px; border-radius:18px;
-    background:rgba(255,255,255,.07); border:1px solid var(--glass-line);
-    -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
-    display:flex; align-items:center; justify-content:center; color:#fff;
-    box-shadow:0 6px 18px rgba(0,0,0,.28);}
-  .tool-card .tc-ic svg{width:22px; height:22px;}
-  .tool-card b{font-size:11px; font-weight:600; letter-spacing:.03em; color:var(--dim);}
-
-  .home-looks{display:flex; gap:12px; overflow-x:auto; scrollbar-width:none; margin:-2px -20px 0; padding:2px 20px 8px;}
-  .home-looks::-webkit-scrollbar{display:none;}
-  .look-card{position:relative; flex:0 0 auto; width:126px; height:168px; border-radius:18px; overflow:hidden;
-    border:1px solid var(--line); background:var(--panel); cursor:pointer; padding:0; box-shadow:0 6px 18px rgba(0,0,0,.35);
-    transition:transform .15s; animation:rise .32s ease backwards;}
+  .contact-sheet{display:grid; grid-template-columns:repeat(3,1fr); gap:12px;}
+  .look-card{position:relative; border-radius:3px; border:0; background:transparent;
+    cursor:pointer; padding:0; transition:transform .15s; animation:rise .32s ease backwards;}
   .look-card:active{transform:scale(.96);}
-  .look-card canvas{width:100%; height:100%; display:block;}
-  .look-card span{position:absolute; left:0; right:0; bottom:0; padding:24px 10px 9px; text-align:left;
-    font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#fff;
-    background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.68) 100%);}
+  .look-card .thumb{position:relative; border-radius:3px; overflow:hidden; background:var(--panel);
+    box-shadow:0 0 0 1px rgba(255,255,255,.07) inset, 0 4px 14px rgba(0,0,0,.4);}
+  .look-card canvas{width:100%; height:auto; display:block;}
+  .look-card .meta{display:flex; gap:5px; align-items:baseline; margin-top:6px;}
+  .look-card .no{font-family:var(--mono); font-size:9px; font-weight:600; color:var(--dim);}
+  .look-card .nm{font-size:9px; letter-spacing:.04em; color:var(--dim);
+    text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  /* выбранный кадр обведён «чинографом» — красным карандашом, как на контрольках */
+  .look-card.on{transform:scale(1.035); z-index:2;}
+  .look-card.on .thumb{box-shadow:0 12px 30px rgba(0,0,0,.66);}
+  .look-card.on .thumb::after{content:""; position:absolute; inset:-5px; pointer-events:none;
+    border:2.5px solid var(--china); border-radius:7px 11px 8px 10px; transform:rotate(-.8deg);}
+  .look-card.on .no{color:var(--china);}
+  .look-card.on .nm{color:var(--text);}
+
+  /* краевая маркировка плёнки */
+  .edge-mark{display:flex; align-items:center; gap:9px; padding-top:12px;
+    border-top:1px solid var(--line); font-family:var(--mono);}
+  .em-arrow{color:var(--china); font-size:9px;}
+  .em-txt{color:var(--dim); font-size:8.5px; letter-spacing:.2em;}
+  .em-line{flex:1; height:1px; background:var(--line);}
+  .em-n{color:var(--gold); font-size:8.5px; letter-spacing:.12em; font-weight:600;}
+
+  /* действия внизу — всегда под рукой */
+  .home-actions{position:sticky; bottom:0; display:flex; gap:10px; align-items:center;
+    padding:12px 0 calc(6px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg, transparent, var(--bg-deep) 38%);}
+  .ghost-btn{flex:1; padding:14px; border-radius:999px; border:1px solid var(--line);
+    background:transparent; color:var(--text); font-size:11px; letter-spacing:.14em; cursor:pointer;}
+  .solid-btn{padding:14px 22px; border-radius:999px; border:0; background:var(--gold);
+    color:var(--gold-ink); font-size:11px; font-weight:700; letter-spacing:.14em; cursor:pointer;}
+  .ghost-btn:active,.solid-btn:active{transform:scale(.97);}
 
   /* iOS install hint (только Safari на iPhone/iPad, вне установленного приложения) */
   .ios-hint{display:flex; align-items:center; gap:12px; padding:12px 12px;
@@ -370,17 +353,15 @@
 </header>
 
 <section id="home">
-  <div class="hero-banner">
-    <div class="hb-waves"></div>
-    <div class="hb-top">
-      <div class="avatar"><img src="./avatar.jpg" alt="Автор"></div>
+  <div class="sheet-top">
+    <div class="brand-row">
+      <i class="bdot"></i>
+      <b>ПРЕСЕТЫ</b>
+    </div>
+    <div class="sheet-right">
+      <span class="roll" id="rollInfo">12 ЛУКОВ</span>
       <button class="pill glass-pill" id="install" style="display:none">Установить</button>
     </div>
-    <div class="hb-brand">
-      <svg class="hb-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="10"/><line x1="14.31" y1="8" x2="20.05" y2="17.94"/><line x1="9.69" y1="8" x2="21.17" y2="8"/><line x1="7.38" y1="12" x2="13.12" y2="2.06"/><line x1="9.69" y1="16" x2="3.95" y2="6.06"/><line x1="14.31" y1="16" x2="2.83" y2="16"/><line x1="16.62" y1="12" x2="10.88" y2="21.94"/></svg>
-      <b>Пресеты</b>
-    </div>
-    <p class="hb-sub">Фоторедактор</p>
   </div>
 
   <div class="ios-hint" id="iosHint" style="display:none">
@@ -392,45 +373,19 @@
     <button class="ih-x" id="iosHintX" aria-label="Скрыть">✕</button>
   </div>
 
-  <div class="home-big">
-    <button class="big-card gold" id="homePick">
-      <span class="bc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></span>
-      Галерея
-      <small>Открыть фото</small>
-    </button>
-    <button class="big-card white" id="homeCam">
-      <span class="bc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
-      Камера
-      <small>Снять сейчас</small>
-    </button>
+  <div class="contact-sheet" id="homeLooks"></div>
+
+  <div class="edge-mark">
+    <span class="em-arrow">▶</span>
+    <span class="em-txt">ПРЕСЕТЫ</span>
+    <span class="em-line"></span>
+    <span class="em-n" id="edgeCount">00/12</span>
   </div>
 
-  <div class="home-sec">Инструменты</div>
-  <div class="home-tools">
-    <button class="tool-card" data-go="presets">
-      <span class="tc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="10" cy="19" r="2.5"/></svg></span>
-      <b>Пресеты</b>
-    </button>
-    <button class="tool-card" data-go="retouch">
-      <span class="tc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7z"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg></span>
-      <b>Ретушь</b>
-    </button>
-    <button class="tool-card" data-go="shadows">
-      <span class="tc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3.2"/></svg></span>
-      <b>Тени</b>
-    </button>
-    <button class="tool-card" data-go="crop">
-      <span class="tc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg></span>
-      <b>Кадр</b>
-    </button>
-    <button class="tool-card" data-go="adjust">
-      <span class="tc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.4" fill="var(--bg)"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15.5" cy="16" r="2.4" fill="var(--bg)"/></svg></span>
-      <b>Настройки</b>
-    </button>
+  <div class="home-actions">
+    <button class="ghost-btn" id="homePick">ВЫБРАТЬ ДРУГОЕ ФОТО</button>
+    <button class="solid-btn" id="homeCam">СНЯТЬ</button>
   </div>
-
-  <div class="home-sec">Луки</div>
-  <div class="home-looks" id="homeLooks"></div>
 </section>
 
 <main>
@@ -453,6 +408,18 @@
   <button class="tool" id="compare">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
     ДО / ПОСЛЕ
+  </button>
+  <button class="tool" data-go="retouch">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="13" r="6.4"/><path d="M17.6 4.4v3.2M16 6h3.2"/><circle cx="11" cy="13" r="2.2" fill="currentColor" stroke="none"/></svg>
+    Ретушь
+  </button>
+  <button class="tool" data-go="shadows">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5s3.6-5 9-5 9 5 9 5-3.6 5-9 5-9-5-9-5z"/><circle cx="12" cy="10.5" r="2.3" fill="currentColor" stroke="none"/><path d="M7 17.6c1.8 1.5 8.2 1.5 10 0"/></svg>
+    Тени
+  </button>
+  <button class="tool" data-go="crop">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
+    Кадр
   </button>
 </div>
 
@@ -923,7 +890,7 @@ function runTool(tool){
 }
 document.getElementById('homePick').onclick = ()=>{ pendingTool = null; document.getElementById('file').click(); };
 document.getElementById('homeCam').onclick = ()=> openCamera();
-document.querySelectorAll('.tool-card').forEach(b=> b.onclick = ()=> runTool(b.dataset.go));
+document.querySelectorAll('[data-go]').forEach(b=> b.onclick = ()=> runTool(b.dataset.go));
 document.getElementById('backBtn').onclick = goHome;
 
 // look cards: live previews rendered by the real engine from the current photo.
@@ -932,27 +899,43 @@ let hlToken = 0;
 function buildHomeLooks(){
   const host = document.getElementById('homeLooks');
   if(!host || !sourceCanvas) return;
-  const token = ++hlToken;                    // отменяет недостроенную ленту при смене фото
+  const token = ++hlToken;                    // отменяет недостроенный лист при смене фото
   host.innerHTML = '';
-  const tw = 189, th = 252, ar = tw/th;       // 1.5x под карточку 126×168 — быстрее в 1.8 раза
+  // кадры повторяют форму снимка: вертикальный портрет не режем в квадрат, а горизонтальный
+  // не растягиваем — иначе на групповых фото люди уезжают из кадра
+  const srcAr = sourceCanvas.width / sourceCanvas.height;
+  const ar = srcAr > 1.15 ? 4/3 : (srcAr < 0.87 ? 3/4 : 1);
+  const tw = 189, th = Math.round(tw / ar);
   let sw = sourceCanvas.width, sh = sourceCanvas.height, sx = 0, sy = 0;
   if(sw/sh > ar){ sw = Math.round(sh*ar); sx = (sourceCanvas.width - sw) >> 1; }
   else { sh = Math.round(sw/ar); sy = (sourceCanvas.height - sh) >> 1; }
   const base = document.createElement('canvas'); base.width = tw; base.height = th;
   base.getContext('2d').drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, tw, th);
   const bd = base.getContext('2d').getImageData(0, 0, tw, th);
-  let i = 1;                                   // «Оригинал» в ленте не нужен
+  const total = LOOKS.length;
+  const counter = document.getElementById('edgeCount');
+  const roll = document.getElementById('rollInfo');
+  if(roll) roll.textContent = total + ' ЛУКОВ';
+  let i = 0;                                   // «Оригинал» — кадр 01 контактного листа
   const step = ()=>{
-    if(token !== hlToken || i >= LOOKS.length) return;
+    if(token !== hlToken || i >= total) return;
     const look = LOOKS[i], idx = i; i++;
-    const card = document.createElement('button'); card.className = 'look-card';
+    const card = document.createElement('button');
+    card.className = 'look-card' + (idx === selected ? ' on' : '');
+    const wrap = document.createElement('div'); wrap.className = 'thumb';
     const c = document.createElement('canvas'); c.width = tw; c.height = th;
     const id = new ImageData(new Uint8ClampedArray(bd.data), tw, th);
     applyLook(id, look);
     c.getContext('2d').putImageData(id, 0, 0);
     if(look.bloom) applyBloom(c, look.bloom, look.bloomWarm);
-    const lab = document.createElement('span'); lab.textContent = look.name;
-    card.appendChild(c); card.appendChild(lab);
+    wrap.appendChild(c);
+    const meta = document.createElement('div'); meta.className = 'meta';
+    const no = document.createElement('span'); no.className = 'no';
+    no.textContent = String(idx + 1).padStart(2, '0');
+    const nm = document.createElement('span'); nm.className = 'nm';
+    nm.textContent = look.name;
+    meta.appendChild(no); meta.appendChild(nm);
+    card.appendChild(wrap); card.appendChild(meta);
     card.onclick = ()=>{
       selected = idx; intensity = 100;
       document.getElementById('intensity').value = 100;
@@ -961,6 +944,7 @@ function buildHomeLooks(){
       goEditor(); setTab('presets'); render();
     };
     host.appendChild(card);
+    if(counter) counter.textContent = String(idx + 1).padStart(2, '0') + '/' + total;
     hlSchedule(step);
   };
   hlSchedule(step);
