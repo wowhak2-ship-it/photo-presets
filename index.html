@@ -140,12 +140,36 @@
   .cam video{flex:1; width:100%; object-fit:cover; min-height:0; background:#000;}
   .cam-bar{display:flex; align-items:center; justify-content:space-between; padding:24px 34px; padding-bottom:calc(24px + env(safe-area-inset-bottom));
     background:linear-gradient(180deg, rgba(7,8,9,0) 0%, var(--bg-deep) 58%);}
-  .cam-x{position:absolute; top:calc(16px + env(safe-area-inset-top)); left:16px; width:40px; height:40px; border-radius:50%; background:rgba(0,0,0,.45); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.14); color:#fff; font-size:19px; cursor:pointer; z-index:2; transition:transform .12s;}
+  /* верхняя строка видоискателя: закрыть · КАМЕРА · текущий лук */
+  .cam-top{position:absolute; top:calc(14px + env(safe-area-inset-top)); left:0; right:0; z-index:3;
+    display:flex; align-items:center; justify-content:space-between; padding:0 18px;}
+  .cam-title{font-family:var(--mono); font-size:11px; letter-spacing:.2em; color:var(--text);
+    text-shadow:0 1px 6px rgba(0,0,0,.85);}
+  .cam-look{font-family:var(--mono); font-size:10px; letter-spacing:.13em; color:var(--dim);
+    text-shadow:0 1px 6px rgba(0,0,0,.85);}
+  .cam-x{width:40px; height:40px; border-radius:50%; background:rgba(0,0,0,.45); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.14); color:#fff; font-size:19px; cursor:pointer; transition:transform .12s;}
   .cam-x:active{transform:scale(.92);}
+  /* сетка третей и уголки кадра — как в видоискателе плёночной камеры */
+  .cam-grid{position:absolute; inset:0; z-index:2; pointer-events:none;}
+  .cam-grid i{position:absolute; background:rgba(255,255,255,.16);}
+  .cam-grid .v1{left:33.33%; top:0; bottom:0; width:1px;}
+  .cam-grid .v2{left:66.66%; top:0; bottom:0; width:1px;}
+  .cam-grid .h1{top:33.33%; left:0; right:0; height:1px;}
+  .cam-grid .h2{top:66.66%; left:0; right:0; height:1px;}
+  .vfm{position:absolute; z-index:2; width:26px; height:26px; pointer-events:none;
+    border:2px solid rgba(255,255,255,.75);}
+  .vfm.tl{left:22px; top:calc(74px + env(safe-area-inset-top)); border-right:0; border-bottom:0;}
+  .vfm.tr{right:22px; top:calc(74px + env(safe-area-inset-top)); border-left:0; border-bottom:0;}
+  .vfm.bl{left:22px; bottom:calc(150px + env(safe-area-inset-bottom)); border-right:0; border-top:0;}
+  .vfm.br{right:22px; bottom:calc(150px + env(safe-area-inset-bottom)); border-left:0; border-top:0;}
   .cam-flip{width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,.13); border:1px solid rgba(255,255,255,.12); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .12s;}
   .cam-flip:active{transform:scale(.92);}
   .cam-flip svg{width:22px;height:22px;}
-  .shutter{width:76px; height:76px; border-radius:50%; background:#fff; border:4px solid var(--gold); box-shadow:0 0 0 3px rgba(224,162,74,.22), 0 6px 18px rgba(0,0,0,.45); cursor:pointer; padding:0;}
+  /* спуск — диафрагма объектива, фирменный знак приложения */
+  .shutter{width:82px; height:82px; border-radius:50%; background:rgba(255,255,255,.06);
+    border:3px solid var(--gold); box-shadow:0 0 30px rgba(224,162,74,.28); cursor:pointer; padding:0;
+    display:flex; align-items:center; justify-content:center; transition:transform .12s;}
+  .shutter svg{width:46px; height:46px;}
   .shutter:active{transform:scale(.94);}
   .cam-err{color:#fff; text-align:center; padding:40px 24px; font-size:14px; line-height:1.5;}
 
@@ -472,11 +496,27 @@
 </div><!-- /dock -->
 
 <div class="cam" id="cam">
-  <button class="cam-x" id="camX">✕</button>
+  <div class="cam-top">
+    <button class="cam-x" id="camX">✕</button>
+    <span class="cam-title">КАМЕРА</span>
+    <span class="cam-look" id="camLook">ПЛЁНКА</span>
+  </div>
   <video id="camVideo" playsinline autoplay muted></video>
+  <div class="cam-grid" aria-hidden="true"><i class="v1"></i><i class="v2"></i><i class="h1"></i><i class="h2"></i></div>
+  <span class="vfm tl"></span><span class="vfm tr"></span><span class="vfm bl"></span><span class="vfm br"></span>
   <div class="cam-bar">
     <div style="width:48px"></div>
-    <button class="shutter" id="shutter" aria-label="Снять"></button>
+    <button class="shutter" id="shutter" aria-label="Снять">
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="24" r="20" fill="none" stroke="var(--gold)" stroke-width="1.4" opacity=".55"/>
+        <g stroke="#F4EFE5" stroke-width="2.4" stroke-linecap="round" opacity=".92">
+          <line x1="24" y1="7" x2="34" y2="18"/><line x1="41" y1="24" x2="30" y2="30"/>
+          <line x1="34" y1="38" x2="30" y2="24"/><line x1="24" y1="41" x2="14" y2="30"/>
+          <line x1="7" y1="24" x2="18" y2="18"/><line x1="14" y1="10" x2="18" y2="24"/>
+        </g>
+        <circle cx="24" cy="24" r="4.2" fill="var(--china)"/>
+      </svg>
+    </button>
     <button class="cam-flip" id="camFlip" aria-label="Сменить камеру">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0 0 20.5 15"/></svg>
     </button>
@@ -845,9 +885,12 @@ function makePreview(){
 let raf = 0;
 // заголовок редактора — номер и имя текущего лука, как подпись кадра на плёнке
 function updateHdrTitle(){
+  const look = LOOKS[selected];
+  if(!look) return;
   const el = document.getElementById('hdrTitle');
-  if(!el || !LOOKS[selected]) return;
-  el.textContent = String(selected+1).padStart(2,'0') + ' · ' + LOOKS[selected].name;
+  if(el) el.textContent = String(selected+1).padStart(2,'0') + ' · ' + look.name;
+  const cl = document.getElementById('camLook');   // видоискатель подписан текущим луком
+  if(cl) cl.textContent = look.name.toUpperCase();
 }
 function render(){ if(!sourceCanvas) return; updateHdrTitle(); cancelAnimationFrame(raf); raf = requestAnimationFrame(renderNow); }
 // Размытая подложка под кадром. Рисуем в крошечный холст (48px) — растянет и размоет уже CSS,
