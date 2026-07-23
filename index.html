@@ -173,6 +173,34 @@
   .shutter:active{transform:scale(.94);}
   .cam-err{color:#fff; text-align:center; padding:40px 24px; font-size:14px; line-height:1.5;}
 
+  /* ── первый запуск ── */
+  .onb{position:fixed; inset:0; z-index:60; background:var(--bg-deep); display:none;
+    flex-direction:column; align-items:center; text-align:center;
+    padding:calc(58px + env(safe-area-inset-top)) 30px calc(26px + env(safe-area-inset-bottom));}
+  .onb.open{display:flex;}
+  .onb-brand{display:flex; align-items:center; gap:9px;}
+  .onb-brand i{width:9px; height:9px; border-radius:50%; background:var(--china);
+    box-shadow:0 0 12px rgba(210,66,46,.6);}
+  .onb-brand b{color:var(--text); font-size:13px; letter-spacing:.28em; font-weight:600;}
+  .onb-tag{color:var(--dim); font-family:var(--mono); font-size:10px; letter-spacing:.16em; margin-top:8px;}
+  .onb-hero{flex:1; display:grid; place-items:center; width:100%;}
+  /* веер отпечатков: один кадр в трёх плёнках — суть приложения одним взглядом */
+  .onb-fan{position:relative; width:172px; height:228px;}
+  .ofc{position:absolute; inset:0; border-radius:8px; overflow:hidden; box-shadow:0 18px 40px rgba(0,0,0,.55);}
+  .ofc canvas{width:100%; height:100%; display:block;}
+  .ofc.a{transform:rotate(-10deg) translate(-20px,10px);}
+  .ofc.c{transform:rotate(10deg) translate(20px,10px);}
+  .ofc.b{z-index:3; border:2.5px solid var(--china); box-shadow:0 22px 46px rgba(0,0,0,.6);}
+  .onb-h1{color:var(--text); font-size:28px; font-weight:700; line-height:1.12; margin-top:8px;}
+  .onb-sub{color:var(--dim); font-size:14px; line-height:1.5; max-width:290px; margin:14px auto 0;}
+  .onb-btns{width:100%; display:flex; flex-direction:column; gap:10px; margin-top:26px;}
+  .onb-primary{padding:16px; border-radius:14px; background:var(--gold); color:var(--gold-ink);
+    border:0; font-size:14px; font-weight:700; cursor:pointer;}
+  .onb-second{padding:15px; border-radius:14px; background:transparent; border:1px solid var(--line);
+    color:var(--text); font-size:13px; cursor:pointer;}
+  .onb-primary:active,.onb-second:active{transform:scale(.97);}
+  .onb-perm{color:var(--faint); font-size:10.5px; line-height:1.5; margin-top:16px; max-width:270px;}
+
   /* ── настройки приложения ── */
   .icon-btn{width:34px; height:34px; border-radius:10px; background:rgba(255,255,255,.05);
     border:1px solid var(--line); color:var(--dim); display:flex; align-items:center;
@@ -586,6 +614,28 @@
   </div>
 </div>
 
+<div class="onb" id="onb">
+  <div class="onb-brand"><i></i><b>ПРЕСЕТЫ</b></div>
+  <div class="onb-tag">СПЕШЕЛТИ-ПЛЁНКА ДЛЯ ФОТО</div>
+
+  <div class="onb-hero">
+    <div class="onb-fan">
+      <div class="ofc a"><canvas></canvas></div>
+      <div class="ofc c"><canvas></canvas></div>
+      <div class="ofc b"><canvas></canvas></div>
+    </div>
+  </div>
+
+  <div class="onb-h1">Один кадр —<br>двенадцать плёнок</div>
+  <div class="onb-sub">Выберите фото — и увидите его сразу во всех луках. Проявка занимает секунду.</div>
+
+  <div class="onb-btns">
+    <button class="onb-primary" id="onbPick">Открыть фото</button>
+    <button class="onb-second" id="onbCam">Снять на камеру</button>
+  </div>
+  <div class="onb-perm">Нужен доступ к галерее и камере. Фото обрабатываются на телефоне и никуда не отправляются.</div>
+</div>
+
 <div class="settings" id="settings">
   <div class="cam-top">
     <button class="cam-x" id="setClose">✕</button>
@@ -942,7 +992,38 @@ function setSource(img){
   document.getElementById('tabs').style.display = 'flex';
   setTab('presets');
   buildChips(); buildHomeLooks(); render();
+  paintOnbFan();
 }
+
+// ─── Первый запуск ───
+// Веер из трёх отпечатков — то же фото в трёх плёнках, посчитанное тем же движком.
+function paintOnbFan(){
+  const cards = document.querySelectorAll('.onb-fan .ofc canvas');
+  if(!cards.length || !sourceCanvas) return;
+  const w = 172, h = 228, far = w/h, ar = sourceCanvas.width/sourceCanvas.height;
+  let sw = sourceCanvas.width, sh = sourceCanvas.height, sx = 0, sy = 0;
+  if(ar > far){ sw = Math.round(sh*far); sx = (sourceCanvas.width-sw)>>1; }
+  else { sh = Math.round(sw/far); sy = (sourceCanvas.height-sh)>>1; }
+  const base = document.createElement('canvas'); base.width = w; base.height = h;
+  base.getContext('2d').drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, w, h);
+  const bd = base.getContext('2d').getImageData(0, 0, w, h);
+  const pick = [7, 3, 2];                       // Ч/Б, Кино, Плёнка — впереди «Плёнка»
+  cards.forEach((c, k)=>{
+    const look = LOOKS[pick[k]] || LOOKS[0];
+    c.width = w; c.height = h;
+    const id = new ImageData(new Uint8ClampedArray(bd.data), w, h);
+    applyLook(id, look);
+    c.getContext('2d').putImageData(id, 0, 0);
+  });
+}
+const onbEl = document.getElementById('onb');
+function closeOnb(){
+  onbEl.classList.remove('open');
+  try{ localStorage.setItem('onboarded', '1'); }catch(_){}
+}
+document.getElementById('onbPick').onclick = ()=>{ closeOnb(); document.getElementById('homePick').click(); };
+document.getElementById('onbCam').onclick  = ()=>{ closeOnb(); document.getElementById('homeCam').click(); };
+try{ if(localStorage.getItem('onboarded') !== '1') onbEl.classList.add('open'); }catch(_){}
 
 function processedData(src){
   src = src || sourceCanvas;
