@@ -1,5 +1,5 @@
 // Service worker — offline cache for the Photo Presets PWA
-const CACHE = 'photo-presets-v8';
+const CACHE = 'photo-presets-v9';
 const ASSETS = [
   './',
   './index.html',
@@ -33,9 +33,11 @@ self.addEventListener('fetch', e => {
                  url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
 
   if (isHTML) {
-    // Network-first: always get fresh HTML/JS, fall back to cache when offline
+    // Network-first, bypassing the browser's HTTP cache — GitHub Pages serves
+    // index.html with max-age=600, so a plain fetch() could hand back a stale
+    // copy for ten minutes after a deploy.
     e.respondWith(
-      fetch(req).then(resp => {
+      fetch(req, { cache: 'no-store' }).then(resp => {
         const copy = resp.clone();
         caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
         return resp;

@@ -2143,7 +2143,26 @@ document.getElementById('rtApply').onclick = ()=>{
 })();
 
 // ─── PWA ───
-if('serviceWorker' in navigator){ window.addEventListener('load', ()=> navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
+// Обновление установленного приложения. Без этого телефон живёт на старой версии:
+// сам sw.js браузер перепроверяет редко, а страница не узнаёт, что вышла новая.
+if('serviceWorker' in navigator){
+  window.addEventListener('load', async ()=>{
+    try{
+      const reg = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
+      reg.update();                                   // спросить сервер сразу при запуске
+      setInterval(()=> reg.update(), 60 * 60 * 1000);  // и раз в час, пока приложение открыто
+      let reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+        if(reloading) return; reloading = true;
+        location.reload();                             // новая версия готова — показать её
+      });
+    }catch(_){}
+  });
+  // приложение вернулось из фона — проверить, не вышло ли обновление
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden) navigator.serviceWorker.getRegistration().then(r=> r && r.update()).catch(()=>{});
+  });
+}
 let deferredPrompt = null;
 const installBtn = document.getElementById('install');
 window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredPrompt = e; installBtn.style.display = 'inline-flex'; });
