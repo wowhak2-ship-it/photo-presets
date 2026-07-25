@@ -42,10 +42,12 @@
 
   /* bottom dock: raised tool panel with depth */
   /* чистая шапка редактора: текстовое «Сохранить», простая стрелка */
-  #backBtn{background:transparent; border:0; width:38px; height:38px; color:var(--text);}
+  #backBtn{background:transparent; border:0; width:38px; height:38px; color:var(--text);
+    filter:drop-shadow(0 1px 6px rgba(0,0,0,.9));}
+  .hdr-title{text-shadow:0 1px 6px rgba(0,0,0,.9);}
   .ed-save{background:transparent; border:0; padding:8px 4px; cursor:pointer;
     color:var(--gold); font-family:var(--mono); font-size:12px; font-weight:600;
-    letter-spacing:.1em; text-transform:uppercase;}
+    letter-spacing:.1em; text-transform:uppercase; text-shadow:0 1px 6px rgba(0,0,0,.9);}
   .ed-save:active{transform:scale(.96);}
 
   /* интенсивность — жест по кадру: подсказка в покое, крупное значение при протяжке */
@@ -71,9 +73,11 @@
     box-shadow:0 -0.5px 0 rgba(255,255,255,.07) inset, 0 -18px 48px rgba(0,0,0,.45); padding-top:6px;}
   .dock.on{display:block;}
 
-  header{position:relative; z-index:3; display:flex; align-items:center; gap:8px; padding:12px 16px 10px;
-    background:var(--glass); -webkit-backdrop-filter:blur(18px) saturate(1.25); backdrop-filter:blur(18px) saturate(1.25);
-    border-bottom:1px solid var(--line);}
+  /* шапка плавает над кадром: глухая плашка отрезала бы верх фотографии */
+  header{position:absolute; top:0; left:0; right:0; z-index:6;
+    display:flex; align-items:center; gap:8px;
+    padding:calc(12px + env(safe-area-inset-top)) 16px 26px;
+    background:linear-gradient(180deg, rgba(0,0,0,.72), transparent);}
   .hdr-title{flex:1; text-align:center; font-family:var(--mono); font-size:11px; font-weight:500;
     letter-spacing:.2em; text-transform:uppercase; color:var(--text); white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis;}
@@ -571,7 +575,7 @@
     </div>
   </div>
   <div class="stage-vig" id="stageVig" style="display:none"></div>
-  <div class="int-hint" id="intHint" style="display:none">Веди по кадру — сила</div>
+  <div class="int-hint" id="intHint" style="display:none">Веди по кадру — сила · удержи — до/после</div>
   <div class="int-gauge" id="intGauge"><b id="intGaugeVal">100</b><div class="igbar"><div class="igfill" id="intGaugeFill"></div></div></div>
   <div id="empty">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
@@ -581,10 +585,6 @@
 
 <div class="dock" id="dock">
 <div class="toolbar" id="toolbar">
-  <button class="tool" id="compare">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
-    ДО / ПОСЛЕ
-  </button>
   <button class="tool" data-go="retouch">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="13" r="6.4"/><path d="M17.6 4.4v3.2M16 6h3.2"/><circle cx="11" cy="13" r="2.2" fill="currentColor" stroke="none"/></svg>
     Ретушь
@@ -597,11 +597,15 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
     Кадр
   </button>
+  <button class="tool" id="tabAdjust">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15.5" cy="16" r="2.6"/></svg>
+    Настройки<span class="dot"></span>
+  </button>
 </div>
 
-<div class="tabs" id="tabs">
+<div class="tabs" id="tabs" style="display:none">
   <button class="tab active" data-tab="presets">Луки</button>
-  <button class="tab" data-tab="adjust">Настройки<span class="dot"></span></button>
+  <button class="tab" data-tab="adjust">Настройки</button>
 </div>
 
 <div class="slider-row" id="sliderRow">
@@ -1031,7 +1035,7 @@ function setSource(img){
   document.getElementById('save').style.display = 'inline-flex';
   document.getElementById('dock').classList.add('on');
   document.getElementById('toolbar').style.display = 'flex';
-  document.getElementById('tabs').style.display = 'flex';
+  // строка вкладок скрыта: переключение живёт в кнопке «Настройки» в ряду инструментов
   setTab('presets');
   buildChips(); buildHomeLooks(); render();
   paintOnbFan();
@@ -1315,10 +1319,14 @@ function setTab(name){
   document.getElementById('panelAdjust').style.display = pres?'none':'flex';
   const hint = document.getElementById('intHint');
   if(hint) hint.style.display = pres?'block':'none';            // подсказка только в режиме луков
+  const tAdj = document.getElementById('tabAdjust');            // инструмент подсвечен, пока открыт
+  if(tAdj) tAdj.classList.toggle('active', !pres);
   fitStage();   // panel height differs per tab → re-fit the photo
   if(compareMode) drawCompare();
 }
 document.querySelectorAll('.tab').forEach(t=> t.onclick = ()=> setTab(t.dataset.tab));
+// «Настройки» — четвёртый инструмент в ряду: тумблер между луками и ручной коррекцией
+document.getElementById('tabAdjust').onclick = ()=> setTab(curTab === 'adjust' ? 'presets' : 'adjust');
 
 function updateAdjDot(){
   const on = ADJ_KEYS.some(k=> adjust[k]!==0);
@@ -1450,7 +1458,9 @@ document.getElementById('expShare').onclick = ()=> expBlob(async b=>{
 });
 
 // ─── Before / after: toggle + smooth drag (composites cached layers, throttled to animation frames) ───
-const compareBtn = document.getElementById('compare');
+// кнопки «ДО/ПОСЛЕ» в ряду больше нет — сравнение вызывается удержанием кадра.
+// Заглушка, чтобы существующий код продолжал работать без правок.
+const compareBtn = document.getElementById('compare') || document.createElement('button');
 const cmpOverlay = document.getElementById('cmp'), stageWrap = document.getElementById('stageWrap');
 compareBtn.onclick = ()=>{
   compareMode = !compareMode;
@@ -1486,22 +1496,36 @@ function setIntensity(v){
   document.getElementById('intGaugeVal').textContent = v;
   document.getElementById('intGaugeFill').style.height = v + '%';
 }
+// удержание кадра без движения = «до/после», как в макете
+let holdTimer = 0, holdMoved = false;
+function clearHold(){ if(holdTimer){ clearTimeout(holdTimer); holdTimer = 0; } }
 stageWrap.addEventListener('pointerdown', e=>{
   if(compareMode || curTab !== 'presets') return;   // сравнение и настройки жест не трогают
-  intDrag = true; intStartX = e.clientX; intStartVal = intensity;
+  intDrag = true; intStartX = e.clientX; intStartVal = intensity; holdMoved = false;
   try { stageWrap.setPointerCapture(e.pointerId); } catch(_){}
   setIntensity(intensity);
   intGauge.classList.add('on');
   const hint = document.getElementById('intHint'); if(hint) hint.style.opacity = '0';
+  clearHold();
+  holdTimer = setTimeout(()=>{                       // палец стоит на месте — показываем оригинал
+    if(holdMoved) return;
+    intDrag = false; intGauge.classList.remove('on');
+    compareMode = true; cmpOverlay.classList.add('on'); render();
+  }, 380);
 });
 stageWrap.addEventListener('pointermove', e=>{
   if(!intDrag) return;
+  if(Math.abs(e.clientX - intStartX) > 6){ holdMoved = true; clearHold(); }   // повёл — это не удержание
   e.preventDefault();
   const w = stage.getBoundingClientRect().width || 320;
   setIntensity(intStartVal + (e.clientX - intStartX) / w * 130);   // полный размах кадра ≈ 130 пунктов
   scrubbing = true; render();
 });
 function endIntDrag(){
+  clearHold();
+  if(compareMode){                                   // отпустили после удержания — снимаем сравнение
+    compareMode = false; cmpOverlay.classList.remove('on'); render();
+  }
   if(!intDrag) return; intDrag = false; scrubbing = false; render();
   intGauge.classList.remove('on');
   const hint = document.getElementById('intHint'); if(hint) hint.style.opacity = '';
