@@ -225,11 +225,12 @@
   .onb-perm{color:var(--faint); font-size:10.5px; line-height:1.5; margin-top:16px; max-width:270px;}
 
   /* ── настройки приложения ── */
-  .icon-btn{width:34px; height:34px; border-radius:10px; background:rgba(255,255,255,.05);
-    border:1px solid var(--line); color:var(--dim); display:flex; align-items:center;
-    justify-content:center; cursor:pointer; flex:0 0 auto; transition:transform .12s;}
-  .icon-btn svg{width:17px; height:17px;}
-  .icon-btn:active{transform:scale(.92);}
+  /* на контактном листе шестерёнка не должна спорить с логотипом — без рамки и фона */
+  .icon-btn{width:28px; height:28px; border-radius:8px; background:transparent;
+    border:0; color:var(--faint); display:flex; align-items:center;
+    justify-content:center; cursor:pointer; flex:0 0 auto; transition:transform .12s, color .15s;}
+  .icon-btn svg{width:16px; height:16px;}
+  .icon-btn:active{transform:scale(.92); color:var(--gold);}
   .settings{position:fixed; inset:0; z-index:56; background:var(--bg-deep); display:none; flex-direction:column;}
   .settings.open{display:flex;}
   .set-body{flex:1; min-height:0; overflow-y:auto; padding:calc(74px + env(safe-area-inset-top)) 20px
@@ -423,7 +424,7 @@
      collides with the crop button, and the bottom "ПРЕСЕТЫ" tab already covers it */
   /* ── home (landing) ── */
   #home{position:relative; z-index:2; flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
-    display:none; flex-direction:column; gap:16px; padding:14px 20px calc(26px + env(safe-area-inset-bottom));}
+    display:none; flex-direction:column; gap:11px; padding:12px 18px calc(12px + env(safe-area-inset-bottom));}
   body:not(.editing) #home{display:flex;}
   body:not(.editing) header, body:not(.editing) main, body:not(.editing) .dock{display:none;}
   /* ── контактный лист: фото сразу во всех луках, как контролька из проявочной ── */
@@ -455,7 +456,7 @@
   .look-card.on .nm{color:var(--text);}
 
   /* краевая маркировка плёнки */
-  .edge-mark{display:flex; align-items:center; gap:9px; padding-top:12px;
+  .edge-mark{display:flex; align-items:center; gap:9px; padding-top:9px;
     border-top:1px solid var(--line); font-family:var(--mono);}
   .em-arrow{color:var(--china); font-size:9px;}
   .em-txt{color:var(--dim); font-size:8.5px; letter-spacing:.2em;}
@@ -463,9 +464,8 @@
   .em-n{color:var(--gold); font-size:8.5px; letter-spacing:.12em; font-weight:600;}
 
   /* действия внизу — всегда под рукой */
-  .home-actions{position:sticky; bottom:0; display:flex; gap:10px; align-items:center;
-    padding:12px 0 calc(6px + env(safe-area-inset-bottom));
-    background:linear-gradient(180deg, transparent, var(--bg-deep) 38%);}
+  /* обычным потоком под краевой маркировкой: sticky перекрывал её собой */
+  .home-actions{display:flex; gap:10px; align-items:center; padding:4px 0 2px;}
   .ghost-btn{flex:1; padding:14px; border-radius:999px; border:1px solid var(--line);
     background:transparent; color:var(--text); font-size:11px; letter-spacing:.14em; cursor:pointer;}
   .solid-btn{padding:14px 22px; border-radius:999px; border:0; background:var(--gold);
