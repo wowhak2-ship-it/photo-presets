@@ -1,5 +1,5 @@
 // Service worker — offline cache for the Photo Presets PWA
-const CACHE = 'photo-presets-v7';
+const CACHE = 'photo-presets-v8';
 const ASSETS = [
   './',
   './index.html',

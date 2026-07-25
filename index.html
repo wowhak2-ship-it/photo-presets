@@ -111,9 +111,14 @@
   #stage{max-width:100%; max-height:100%; border-radius:0; display:none;}
   #cmp{position:absolute; inset:0; display:none; pointer-events:none;}
   #cmp.on{display:block;}
-  .cmp-lab{position:absolute; top:12px; font-size:11px; letter-spacing:.14em; font-weight:700;
-    background:rgba(0,0,0,.55); color:#fff; padding:5px 10px; border-radius:20px;}
-  .cmp-lab.b{left:12px;} .cmp-lab.a{right:12px;}
+  /* метки сравнения: моно как везде, с воздухом вокруг текста */
+  .cmp-lab{position:absolute; top:calc(84px + env(safe-area-inset-top));
+    font-family:var(--mono); font-size:10px; letter-spacing:.16em; font-weight:600;
+    background:var(--glass); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+    border:1px solid var(--glass-line); color:var(--text);
+    padding:9px 16px; border-radius:999px; box-shadow:0 4px 14px rgba(0,0,0,.4);
+    line-height:1.2;}   /* сбрасываем line-height:0, унаследованный от #stageWrap */
+  .cmp-lab.b{left:16px;} .cmp-lab.a{right:16px;}
   #cmpDiv{position:absolute; top:0; bottom:0; width:2px; background:#fff; transform:translateX(-1px); box-shadow:0 0 8px rgba(0,0,0,.5);}
   #cmpHandle{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
     width:40px; height:40px; border-radius:50%; background:#fff; color:#111; font-size:15px; font-weight:700;
@@ -320,16 +325,29 @@
     background-image:radial-gradient(120% 55% at 50% 0%, #16181F 0%, var(--bg) 50%, var(--bg-deep) 100%);
     display:none; flex-direction:column;}
   .crop.open{display:flex;}
-  /* шапка оверлея: отмена · название · применить — подтверждение всегда наверху */
-  .ov-top{position:relative; z-index:3; display:flex; align-items:center; justify-content:space-between;
-    gap:10px; padding:calc(14px + env(safe-area-inset-top)) 18px 13px;}
-  .ov-act{background:transparent; border:0; padding:6px 2px; cursor:pointer;
-    font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.1em;
-    text-transform:uppercase; color:var(--dim); white-space:nowrap;}
+  /* шапка оверлея — та же, что в редакторе: стрелка · название · действие */
+  .ov-top{position:absolute; top:0; left:0; right:0; z-index:6;
+    display:flex; align-items:center; gap:8px;
+    padding:calc(12px + env(safe-area-inset-top)) 16px 26px;
+    background:linear-gradient(180deg, rgba(0,0,0,.72), transparent);}
+  .ov-back{background:transparent; border:0; width:38px; height:38px; padding:0;
+    color:var(--text); cursor:pointer; flex:0 0 auto;
+    display:flex; align-items:center; justify-content:center;
+    filter:drop-shadow(0 1px 6px rgba(0,0,0,.9));}
+  .ov-back svg{width:22px; height:22px;}
+  .ov-back:active{transform:scale(.92);}
+  .ov-act{background:transparent; border:0; padding:8px 4px; cursor:pointer;
+    font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--dim); white-space:nowrap;
+    text-shadow:0 1px 6px rgba(0,0,0,.9);}
   .ov-act.gold{color:var(--gold);}
   .ov-act:active{transform:scale(.96);}
   .ov-act:disabled{opacity:.4;}
-  .ov-top .crop-top, .ov-top .rt-top{padding:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  /* название по центру — как #hdrTitle в редакторе */
+  .ov-top .crop-top, .ov-top .rt-top{padding:0; flex:1; text-align:center;
+    font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--text); text-shadow:0 1px 6px rgba(0,0,0,.9);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   /* подсказка живёт над кадром, а не в заголовке — заголовок должен быть коротким */
   .ov-hint{position:absolute; left:50%; top:calc(60px + env(safe-area-inset-top)); transform:translateX(-50%);
     z-index:3; padding:7px 13px; border-radius:999px; background:var(--glass);
@@ -339,7 +357,7 @@
 
   .crop-top{text-align:center; padding:calc(14px + env(safe-area-inset-top)) 16px 13px; font-family:var(--mono); font-size:11px; letter-spacing:.2em; color:var(--text); font-weight:500; text-transform:uppercase;
     background:var(--glass); -webkit-backdrop-filter:blur(18px) saturate(1.25); backdrop-filter:blur(18px) saturate(1.25); border-bottom:1px solid var(--line);}
-  .crop-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:8px 16px; overflow:hidden;}
+  .crop-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:calc(76px + env(safe-area-inset-top)) 16px 8px; overflow:hidden;}
   .crop-holder{position:relative; line-height:0; touch-action:none;}
   #cropCanvas{display:block;}
   .crop-frame{position:absolute; border:1.5px solid rgba(255,255,255,.95); box-shadow:0 0 0 9999px rgba(0,0,0,.55);
@@ -378,7 +396,7 @@
   .retouch.open{display:flex;}
   .rt-top{text-align:center; padding:calc(14px + env(safe-area-inset-top)) 16px 13px; font-family:var(--mono); font-size:11px; letter-spacing:.2em; color:var(--text); font-weight:500; text-transform:uppercase;
     background:var(--glass); -webkit-backdrop-filter:blur(18px) saturate(1.25); backdrop-filter:blur(18px) saturate(1.25); border-bottom:1px solid var(--line);}
-  .rt-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:8px 16px; overflow:hidden;}
+  .rt-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:calc(76px + env(safe-area-inset-top)) 16px 8px; overflow:hidden;}
   .rt-holder{position:relative; line-height:0; touch-action:none; transform-origin:center center; will-change:transform;}
   #rtCanvas{display:block; touch-action:none; cursor:crosshair; border-radius:14px; box-shadow:0 12px 38px rgba(0,0,0,.5);}
   .rt-cursor{position:absolute; left:0; top:0; width:0; height:0; border-radius:50%; z-index:3;
@@ -751,8 +769,10 @@
 
 <div class="crop" id="crop">
   <div class="ov-top">
-    <button class="ov-act" id="cropCancel">Отмена</button>
-    <span class="crop-top">Кадрирование</span>
+    <button class="ov-back" id="cropCancel" aria-label="Отмена">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <span class="crop-top">Кадр</span>
     <button class="ov-act gold" id="cropApply">Применить</button>
   </div>
   <div class="crop-area" id="cropArea">
@@ -787,7 +807,9 @@
 
 <div class="retouch" id="retouch">
   <div class="ov-top">
-    <button class="ov-act" id="rtCancel">Отмена</button>
+    <button class="ov-back" id="rtCancel" aria-label="Отмена">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
     <span class="rt-top" id="rtTop">Ретушь</span>
     <button class="ov-act gold" id="rtApply">Применить</button>
   </div>
