@@ -41,6 +41,29 @@
 
 
   /* bottom dock: raised tool panel with depth */
+  /* чистая шапка редактора: текстовое «Сохранить», простая стрелка */
+  #backBtn{background:transparent; border:0; width:38px; height:38px; color:var(--text);}
+  .ed-save{background:transparent; border:0; padding:8px 4px; cursor:pointer;
+    color:var(--gold); font-family:var(--mono); font-size:12px; font-weight:600;
+    letter-spacing:.1em; text-transform:uppercase;}
+  .ed-save:active{transform:scale(.96);}
+
+  /* интенсивность — жест по кадру: подсказка в покое, крупное значение при протяжке */
+  .int-hint{position:absolute; left:50%; bottom:18px; transform:translateX(-50%); z-index:4;
+    padding:8px 14px; border-radius:999px; background:var(--glass);
+    -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+    border:1px solid var(--glass-line); color:var(--text); font-size:11px;
+    letter-spacing:.02em; pointer-events:none; white-space:nowrap; transition:opacity .2s;}
+  .int-gauge{position:absolute; right:18px; top:50%; transform:translateY(-50%); z-index:4;
+    display:flex; flex-direction:column; align-items:flex-end; opacity:0; pointer-events:none;
+    transition:opacity .15s; text-shadow:0 1px 8px rgba(0,0,0,.9);}
+  .int-gauge.on{opacity:1;}
+  .int-gauge b{color:var(--gold); font-family:var(--mono); font-size:34px; font-weight:600;
+    font-variant-numeric:tabular-nums; line-height:1;}
+  .int-gauge .igbar{width:4px; height:150px; border-radius:2px; margin-top:12px;
+    background:rgba(255,255,255,.18); position:relative; overflow:hidden;}
+  .int-gauge .igfill{position:absolute; left:0; right:0; bottom:0; background:var(--gold); border-radius:2px;}
+
   .dock{position:relative; z-index:2; display:none;
     background:var(--glass);
     -webkit-backdrop-filter:blur(20px) saturate(1.3); backdrop-filter:blur(20px) saturate(1.3);
@@ -478,10 +501,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
   </button>
   <div class="hdr-title" id="hdrTitle">Редактор</div>
-  <button class="pill gold" id="save" style="display:none">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
-    Сохранить
-  </button>
+  <button class="ed-save" id="save" style="display:none">Сохранить</button>
 </header>
 
 <section id="home">
@@ -534,6 +554,8 @@
     </div>
   </div>
   <div class="stage-vig" id="stageVig" style="display:none"></div>
+  <div class="int-hint" id="intHint" style="display:none">Веди по кадру — сила</div>
+  <div class="int-gauge" id="intGauge"><b id="intGaugeVal">100</b><div class="igbar"><div class="igfill" id="intGaugeFill"></div></div></div>
   <div id="empty">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
     <div>Нажмите «Галерея» или «Камера»</div>
@@ -561,7 +583,7 @@
 </div>
 
 <div class="tabs" id="tabs">
-  <button class="tab active" data-tab="presets">Пресеты</button>
+  <button class="tab active" data-tab="presets">Луки</button>
   <button class="tab" data-tab="adjust">Настройки<span class="dot"></span></button>
 </div>
 
@@ -1262,12 +1284,17 @@ document.getElementById('intensity').oninput = e=>{
 document.getElementById('intensity').onchange = ()=>{ scrubbing = false; render(); };
 
 // ─── Tabs (presets / adjust) + manual adjustment sliders ───
+let curTab = 'presets';
 function setTab(name){
+  curTab = name;
   document.querySelectorAll('.tab').forEach(t=> t.classList.toggle('active', t.dataset.tab===name));
   const pres = name==='presets';
-  document.getElementById('sliderRow').style.display = pres?'flex':'none';
-  document.getElementById('chips').style.display = pres?'flex':'none';
+  document.getElementById('sliderRow').style.display = 'none';   // интенсивность теперь жест по кадру
+  document.getElementById('perf').style.display   = pres?'flex':'none';
+  document.getElementById('chips').style.display  = pres?'flex':'none';
   document.getElementById('panelAdjust').style.display = pres?'none':'flex';
+  const hint = document.getElementById('intHint');
+  if(hint) hint.style.display = pres?'block':'none';            // подсказка только в режиме луков
   fitStage();   // panel height differs per tab → re-fit the photo
   if(compareMode) drawCompare();
 }
@@ -1427,6 +1454,40 @@ stageWrap.addEventListener('pointerdown', e=>{
 stageWrap.addEventListener('pointermove', e=>{ if(compareMode && dragging){ e.preventDefault(); queueDraw(e); } });
 stageWrap.addEventListener('pointerup', ()=>{ dragging = false; });
 stageWrap.addEventListener('pointercancel', ()=>{ dragging = false; });
+
+// ─── Интенсивность жестом: протяжка по кадру влево/вправо ───
+let intDrag = false, intStartX = 0, intStartVal = 100;
+const intGauge = document.getElementById('intGauge');
+function setIntensity(v){
+  v = Math.max(0, Math.min(100, Math.round(v)));
+  intensity = v;
+  document.getElementById('intensity').value = v;
+  document.getElementById('intensityVal').textContent = v;
+  document.getElementById('intGaugeVal').textContent = v;
+  document.getElementById('intGaugeFill').style.height = v + '%';
+}
+stageWrap.addEventListener('pointerdown', e=>{
+  if(compareMode || curTab !== 'presets') return;   // сравнение и настройки жест не трогают
+  intDrag = true; intStartX = e.clientX; intStartVal = intensity;
+  try { stageWrap.setPointerCapture(e.pointerId); } catch(_){}
+  setIntensity(intensity);
+  intGauge.classList.add('on');
+  const hint = document.getElementById('intHint'); if(hint) hint.style.opacity = '0';
+});
+stageWrap.addEventListener('pointermove', e=>{
+  if(!intDrag) return;
+  e.preventDefault();
+  const w = stage.getBoundingClientRect().width || 320;
+  setIntensity(intStartVal + (e.clientX - intStartX) / w * 130);   // полный размах кадра ≈ 130 пунктов
+  scrubbing = true; render();
+});
+function endIntDrag(){
+  if(!intDrag) return; intDrag = false; scrubbing = false; render();
+  intGauge.classList.remove('on');
+  const hint = document.getElementById('intHint'); if(hint) hint.style.opacity = '';
+}
+stageWrap.addEventListener('pointerup', endIntDrag);
+stageWrap.addEventListener('pointercancel', endIntDrag);
 
 function makeDemoPhoto(){
   const c = document.createElement('canvas'); c.width=900; c.height=600; const x=c.getContext('2d');
