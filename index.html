@@ -1303,7 +1303,7 @@ document.getElementById('file').onchange = e=>{
 
 // ─── Home (landing) ↔ editor ───
 let pendingTool = null;
-function goEditor(){ ensureTrap(); document.body.classList.add('editing'); fitStage(); render(); }
+function goEditor(){ ensureTrap(); document.body.classList.add('editing'); resetSwipeDemo(); fitStage(); render(); }
 function goHome(){
   document.body.classList.remove('editing');
   if(compareMode){ compareMode = false; compareBtn.classList.remove('active'); cmpOverlay.classList.remove('on'); render(); }
@@ -1590,15 +1590,19 @@ stageWrap.addEventListener('pointercancel', ()=>{ dragging = false; });
 
 // ─── Интенсивность жестом: протяжка по кадру влево/вправо ───
 let intDrag = false, intStartX = 0, intStartVal = 100;
-// показ жеста нужен, пока человек не сделал свайп сам — потом только мешает
+// Показ жеста идёт при каждом входе в редактор и гаснет, как только взялись
+// за кадр: подсказка нужна снова, а мешать во время правки не должна.
 let swipeLearned = false;
-try{ swipeLearned = localStorage.getItem('swipeLearned') === '1'; }catch(_){}
 function markSwipeLearned(){
   if(swipeLearned) return;
   swipeLearned = true;
-  try{ localStorage.setItem('swipeLearned', '1'); }catch(_){}
   const demo = document.getElementById('swipeDemo');
   if(demo) demo.style.display = 'none';
+}
+function resetSwipeDemo(){
+  swipeLearned = false;
+  const demo = document.getElementById('swipeDemo');
+  if(demo && curTab === 'presets') demo.style.display = 'block';
 }
 const intGauge = document.getElementById('intGauge');
 function setIntensity(v){
