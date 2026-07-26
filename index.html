@@ -112,7 +112,8 @@
   #cmp{position:absolute; inset:0; display:none; pointer-events:none;}
   #cmp.on{display:block;}
   /* метки сравнения: моно как везде, с воздухом вокруг текста */
-  .cmp-lab{position:absolute; top:calc(84px + env(safe-area-inset-top));
+  /* отступ отсчитывается от верха КАДРА, а не экрана: шапка плавает отдельно */
+  .cmp-lab{position:absolute; top:14px;
     font-family:var(--mono); font-size:10px; letter-spacing:.16em; font-weight:600;
     background:var(--glass); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
     border:1px solid var(--glass-line); color:var(--text);
@@ -1161,6 +1162,7 @@ function fitStage(){
   if(h > availH){ h = availH; w = h*ar; }
   stage.style.width = Math.floor(w)+'px';
   stage.style.height = Math.floor(h)+'px';
+  if(compareMode) placeCmpLabels();   // кадр сменил размер — метки за ним
 }
 
 // downscaled copy of the source for lag-free live scrubbing (full res only on release)
@@ -1501,10 +1503,21 @@ document.getElementById('expShare').onclick = ()=> expBlob(async b=>{
 // ─── Before / after: toggle + smooth drag (composites cached layers, throttled to animation frames) ───
 const compareBtn = document.getElementById('compare');
 const cmpOverlay = document.getElementById('cmp'), stageWrap = document.getElementById('stageWrap');
+// Метки живут внутри кадра, а шапка плавает над экраном. Поэтому держим их
+// у верха кадра, но не выше шапки — иначе на высоком снимке они уедут под неё.
+function placeCmpLabels(){
+  const ph = stage.getBoundingClientRect();
+  if(!ph.height) return;
+  const header = document.querySelector('header');
+  const hb = header ? header.getBoundingClientRect().bottom : 76;
+  const top = Math.max(14, Math.round(hb + 10 - ph.top));
+  document.querySelectorAll('.cmp-lab').forEach(l=> l.style.top = top + 'px');
+}
 compareBtn.onclick = ()=>{
   compareMode = !compareMode;
   compareBtn.classList.toggle('active', compareMode);
   cmpOverlay.classList.toggle('on', compareMode);
+  if(compareMode) placeCmpLabels();
   render();
 };
 let dragging = false, dragRaf = 0, pendingPos = 0.5;
