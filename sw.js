@@ -1,16 +1,16 @@
 // Service worker — offline cache for the Photo Presets PWA
-const CACHE = 'photo-presets-v11';
+const CACHE = 'photo-presets-v12';
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
   './demo.jpg',
   './avatar.jpg',
-  './icon-192.png',
-  './icon-512.png',
-  './icon-192-maskable.png',
-  './icon-512-maskable.png',
-  './apple-touch-icon.png'
+  './icon-192-v2.png',
+  './icon-512-v2.png',
+  './icon-192-maskable-v2.png',
+  './icon-512-maskable-v2.png',
+  './apple-touch-icon-v2.png'
 ];
 
 self.addEventListener('install', e => {
