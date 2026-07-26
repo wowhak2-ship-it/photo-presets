@@ -1662,6 +1662,18 @@ loadDemo();
 // re-fit the photo on rotate / viewport change
 window.addEventListener('resize', ()=>{ fitStage(); if(compareMode) drawCompare(); if(cropEl.classList.contains('open')) refreshCrop(); if(retouchEl.classList.contains('open')) layoutRetouch(); });
 
+// Высота нижней панели меняется уже после первой отрисовки: подписи чипов ждут
+// шрифт из сети, и до его прихода панель ниже, чем будет. Кадр, подогнанный в
+// этот момент, оказывается слишком высоким — и лента уезжает за край экрана.
+// Поэтому пересчитываем, как только панель меняет высоту.
+if(window.ResizeObserver){
+  new ResizeObserver(()=>{ if(document.body.classList.contains('editing')) fitStage(); })
+    .observe(document.getElementById('dock'));
+}
+if(document.fonts && document.fonts.ready){
+  document.fonts.ready.then(()=>{ if(sourceCanvas) fitStage(); }).catch(()=>{});
+}
+
 // ─── Camera ───
 let camStream = null, facing = 'environment';
 const cam = document.getElementById('cam'), camVideo = document.getElementById('camVideo');
