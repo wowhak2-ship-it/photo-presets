@@ -51,6 +51,36 @@
   .ed-save:active{transform:scale(.96);}
 
   /* интенсивность — жест по кадру: подсказка в покое, крупное значение при протяжке */
+  /* Подсказка жестом: призрачное касание едет по кадру слева направо.
+     Показывается, пока пользователь ни разу не покрутил силу пресета. */
+  .swipe-demo{position:absolute; left:0; right:0; top:50%; height:0; z-index:4; pointer-events:none;}
+  .sd-touch{position:absolute; top:-27px; width:54px; height:54px; border-radius:50%;
+    border:1.5px solid rgba(255,255,255,.85); background:rgba(255,255,255,.14);
+    box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 6px 18px rgba(0,0,0,.4);
+    animation:sdMove 2.6s cubic-bezier(.5,0,.5,1) infinite;}
+  .sd-touch::after{content:""; position:absolute; inset:19px; border-radius:50%; background:var(--china);}
+  .sd-trail{position:absolute; top:-2px; height:4px; border-radius:2px;
+    background:linear-gradient(90deg, rgba(224,162,74,0), rgba(224,162,74,.55));
+    animation:sdTrail 2.6s cubic-bezier(.5,0,.5,1) infinite;}
+  @keyframes sdMove{
+    0%   { left:22%; opacity:0; transform:scale(.7); }
+    12%  { opacity:1; transform:scale(1); }
+    68%  { left:calc(78% - 54px); opacity:1; transform:scale(1); }
+    84%  { left:calc(78% - 54px); opacity:0; transform:scale(.9); }
+    100% { left:22%; opacity:0; transform:scale(.7); }
+  }
+  @keyframes sdTrail{
+    0%   { left:22%; width:0; opacity:0; }
+    12%  { left:22%; width:0; opacity:.9; }
+    68%  { left:22%; width:calc(56% - 54px); opacity:.9; }
+    84%  { left:22%; width:calc(56% - 54px); opacity:0; }
+    100% { left:22%; width:0; opacity:0; }
+  }
+  @media (prefers-reduced-motion:reduce){
+    .sd-touch, .sd-trail{ animation:none; }
+    .swipe-demo{ display:none !important; }
+  }
+
   .int-hint{position:absolute; left:50%; bottom:18px; transform:translateX(-50%); z-index:4;
     padding:8px 14px; border-radius:999px; background:var(--glass);
     -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
@@ -616,7 +646,11 @@
     </div>
   </div>
   <div class="stage-vig" id="stageVig" style="display:none"></div>
-  <div class="int-hint" id="intHint" style="display:none">Веди по кадру — сила</div>
+  <div class="swipe-demo" id="swipeDemo" style="display:none" aria-hidden="true">
+    <span class="sd-trail"></span>
+    <span class="sd-touch"></span>
+  </div>
+  <div class="int-hint" id="intHint" style="display:none">Свайп — сила пресета</div>
   <div class="int-gauge" id="intGauge"><b id="intGaugeVal">100</b><div class="igbar"><div class="igfill" id="intGaugeFill"></div></div></div>
   <div id="empty">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
@@ -1377,6 +1411,8 @@ function setTab(name){
   document.getElementById('panelAdjust').style.display = pres?'none':'flex';
   const hint = document.getElementById('intHint');
   if(hint) hint.style.display = pres?'block':'none';            // подсказка только в режиме луков
+  const demo = document.getElementById('swipeDemo');            // и показ жеста вместе с ней
+  if(demo) demo.style.display = (pres && !swipeLearned) ? 'block' : 'none';
   const tAdj = document.getElementById('tabAdjust');            // инструмент подсвечен, пока открыт
   if(tAdj) tAdj.classList.toggle('active', !pres);
   fitStage();   // panel height differs per tab → re-fit the photo
@@ -1554,6 +1590,16 @@ stageWrap.addEventListener('pointercancel', ()=>{ dragging = false; });
 
 // ─── Интенсивность жестом: протяжка по кадру влево/вправо ───
 let intDrag = false, intStartX = 0, intStartVal = 100;
+// показ жеста нужен, пока человек не сделал свайп сам — потом только мешает
+let swipeLearned = false;
+try{ swipeLearned = localStorage.getItem('swipeLearned') === '1'; }catch(_){}
+function markSwipeLearned(){
+  if(swipeLearned) return;
+  swipeLearned = true;
+  try{ localStorage.setItem('swipeLearned', '1'); }catch(_){}
+  const demo = document.getElementById('swipeDemo');
+  if(demo) demo.style.display = 'none';
+}
 const intGauge = document.getElementById('intGauge');
 function setIntensity(v){
   v = Math.max(0, Math.min(100, Math.round(v)));
@@ -1570,6 +1616,7 @@ stageWrap.addEventListener('pointerdown', e=>{
   setIntensity(intensity);
   intGauge.classList.add('on');
   const hint = document.getElementById('intHint'); if(hint) hint.style.opacity = '0';
+  markSwipeLearned();                       // человек взялся за кадр — показ больше не нужен
 });
 stageWrap.addEventListener('pointermove', e=>{
   if(!intDrag) return;
