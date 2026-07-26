@@ -325,6 +325,11 @@
     background-image:radial-gradient(120% 55% at 50% 0%, #16181F 0%, var(--bg) 50%, var(--bg-deep) 100%);
     display:none; flex-direction:column;}
   .crop.open{display:flex;}
+  /* подложка под кадром в оверлеях — тот же приём, что в редакторе:
+     кадр целиком, а пустоту заполняет он же, размытый и притушенный */
+  .ov-bg{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0;
+    filter:blur(28px) brightness(.45); transform:scale(1.3);}
+
   /* шапка оверлея — та же, что в редакторе: стрелка · название · действие */
   .ov-top{position:absolute; top:0; left:0; right:0; z-index:6;
     display:flex; align-items:center; gap:8px;
@@ -359,7 +364,7 @@
 
   .crop-top{text-align:center; padding:calc(14px + env(safe-area-inset-top)) 16px 13px; font-family:var(--mono); font-size:11px; letter-spacing:.2em; color:var(--text); font-weight:500; text-transform:uppercase;
     background:var(--glass); -webkit-backdrop-filter:blur(18px) saturate(1.25); backdrop-filter:blur(18px) saturate(1.25); border-bottom:1px solid var(--line);}
-  .crop-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:calc(76px + env(safe-area-inset-top)) 16px 8px; overflow:hidden;}
+  .crop-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:calc(76px + env(safe-area-inset-top)) 0 0; overflow:hidden;}
   .crop-holder{position:relative; line-height:0; touch-action:none;}
   #cropCanvas{display:block;}
   .crop-frame{position:absolute; border:1.5px solid rgba(255,255,255,.95); box-shadow:0 0 0 9999px rgba(0,0,0,.55);
@@ -398,9 +403,9 @@
   .retouch.open{display:flex;}
   .rt-top{text-align:center; padding:calc(14px + env(safe-area-inset-top)) 16px 13px; font-family:var(--mono); font-size:11px; letter-spacing:.2em; color:var(--text); font-weight:500; text-transform:uppercase;
     background:var(--glass); -webkit-backdrop-filter:blur(18px) saturate(1.25); backdrop-filter:blur(18px) saturate(1.25); border-bottom:1px solid var(--line);}
-  .rt-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:calc(76px + env(safe-area-inset-top)) 16px 8px; overflow:hidden;}
+  .rt-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:calc(76px + env(safe-area-inset-top)) 0 0; overflow:hidden;}
   .rt-holder{position:relative; line-height:0; touch-action:none; transform-origin:center center; will-change:transform;}
-  #rtCanvas{display:block; touch-action:none; cursor:crosshair; border-radius:14px; box-shadow:0 12px 38px rgba(0,0,0,.5);}
+  #rtCanvas{display:block; touch-action:none; cursor:crosshair; z-index:1;}
   .rt-cursor{position:absolute; left:0; top:0; width:0; height:0; border-radius:50%; z-index:3;
     border:1.5px solid rgba(255,255,255,.92); background:rgba(255,255,255,.1);
     box-shadow:0 0 0 1px rgba(0,0,0,.45), inset 0 0 6px rgba(0,0,0,.25);
@@ -778,6 +783,7 @@
     <button class="ov-act gold" id="cropApply">Применить</button>
   </div>
   <div class="crop-area" id="cropArea">
+    <canvas class="ov-bg" id="cropBg" aria-hidden="true"></canvas>
     <div class="crop-holder" id="cropHolder">
       <canvas id="cropCanvas"></canvas>
       <div class="crop-frame" id="cropFrame">
@@ -817,6 +823,7 @@
   </div>
   <div class="ov-hint" id="rtHint">Коснитесь дефектов на коже</div>
   <div class="rt-area" id="rtArea">
+    <canvas class="ov-bg" id="rtBg" aria-hidden="true"></canvas>
     <div class="rt-holder" id="rtHolder">
       <canvas id="rtCanvas"></canvas>
     </div>
@@ -1096,14 +1103,14 @@ function paintOnbFan(){
     c.getContext('2d').putImageData(id, 0, 0);
   });
 }
+// Стартовый экран. Показывается при каждом запуске и уходит только тогда,
+// когда снимок действительно загружен — иначе отменённый выбор файла оставил
+// бы пользователя на контактном листе с демо-кадром.
 const onbEl = document.getElementById('onb');
-function closeOnb(){
-  onbEl.classList.remove('open');
-  try{ localStorage.setItem('onboarded', '1'); }catch(_){}
-}
-document.getElementById('onbPick').onclick = ()=>{ closeOnb(); document.getElementById('homePick').click(); };
-document.getElementById('onbCam').onclick  = ()=>{ closeOnb(); document.getElementById('homeCam').click(); };
-try{ if(localStorage.getItem('onboarded') !== '1') onbEl.classList.add('open'); }catch(_){}
+function closeOnb(){ onbEl.classList.remove('open'); }
+document.getElementById('onbPick').onclick = ()=> document.getElementById('homePick').click();
+document.getElementById('onbCam').onclick  = ()=> document.getElementById('homeCam').click();
+onbEl.classList.add('open');
 
 function processedData(src){
   src = src || sourceCanvas;
@@ -1239,7 +1246,7 @@ function buildChips(){
 document.getElementById('file').onchange = e=>{
   const f = e.target.files[0]; if(!f) return;
   const img = new Image();
-  img.onload = ()=>{ setSource(img); applyPendingTool(); };
+  img.onload = ()=>{ setSource(img); closeOnb(); applyPendingTool(); };
   img.src = URL.createObjectURL(f);
 };
 
@@ -1599,7 +1606,7 @@ function shoot(){
   if(!camVideo.videoWidth) return;
   const c = document.createElement('canvas'); c.width = camVideo.videoWidth; c.height = camVideo.videoHeight;
   c.getContext('2d').drawImage(camVideo, 0, 0);
-  const img = new Image(); img.onload = ()=>{ closeCamera(); setSource(img); }; img.src = c.toDataURL('image/jpeg', 0.95);
+  const img = new Image(); img.onload = ()=>{ closeCamera(); setSource(img); closeOnb(); }; img.src = c.toDataURL('image/jpeg', 0.95);
 }
 async function flipCamera(){ facing = facing==='environment' ? 'user' : 'environment'; try { await startStream(); } catch(e){} }
 document.getElementById('camX').onclick = closeCamera;
@@ -1641,9 +1648,19 @@ function positionFrame(){
 }
 function refreshCrop(){ const d = layoutCrop(); cf = frameForAR(d.w, d.h, cropAR); positionFrame(); }
 
+// подложка оверлея: тот же кадр в миниатюре, размытие делает CSS — стоит копейки
+function paintOvBg(id, src){
+  const c = document.getElementById(id);
+  if(!c || !src || !src.width) return;
+  const w = 48, h = Math.max(1, Math.round(w * src.height / src.width));
+  if(c.width !== w || c.height !== h){ c.width = w; c.height = h; }
+  c.getContext('2d').drawImage(src, 0, 0, w, h);
+}
+
 function openCrop(){
   if(!sourceCanvas) return;
   ensureTrap();
+  paintOvBg('cropBg', sourceCanvas);
   cropRotate = 0; cropAR = null;
   document.querySelectorAll('#cropRatios button').forEach(b=> b.classList.toggle('active', b.dataset.ar==='free'));
   cropEl.classList.add('open');
@@ -1734,6 +1751,7 @@ function layoutRetouch(){
 function openRetouch(){
   if(!sourceCanvas) return;
   ensureTrap();
+  paintOvBg('rtBg', sourceCanvas);
   rtCanvas.width = sourceCanvas.width; rtCanvas.height = sourceCanvas.height;
   rtCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);   // working copy of the original
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
