@@ -173,7 +173,7 @@
     text-transform:uppercase; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .chip.active .cn, .chip.active span{color:var(--china);}
 
-  .cam{position:fixed; inset:0; z-index:50; background:var(--bg-deep); display:none; flex-direction:column;}
+  .cam{position:fixed; inset:0; z-index:70;   /* выше стартового экрана — иначе камера открывается под ним */ background:var(--bg-deep); display:none; flex-direction:column;}
   .cam.open{display:flex;}
   .cam video{flex:1; width:100%; object-fit:cover; min-height:0; background:#000;}
   .cam-bar{display:flex; align-items:center; justify-content:space-between; padding:24px 34px; padding-bottom:calc(24px + env(safe-area-inset-bottom));
@@ -210,6 +210,15 @@
   .shutter svg{width:46px; height:46px;}
   .shutter:active{transform:scale(.94);}
   .cam-err{color:#fff; text-align:center; padding:40px 24px; font-size:14px; line-height:1.5;}
+  /* сообщение об отказе — поверх видоискателя, разметку камеры не трогает */
+  .cam-fail{position:absolute; inset:0; z-index:2; display:flex; flex-direction:column;   /* ниже шапки — крестик должен остаться доступен */
+    align-items:center; justify-content:center; gap:10px; text-align:center;
+    padding:40px 34px; background:var(--bg-deep);}
+  .cam-fail b{color:var(--text); font-size:15px; font-weight:600;}
+  .cam-fail span{color:var(--dim); font-size:12.5px; line-height:1.5; max-width:270px;}
+  .cam-fail .cam-err-why{font-family:var(--mono); font-size:10.5px; color:var(--faint);}
+  .cam-fail-btn{margin-top:8px; padding:13px 22px; border-radius:12px; border:0;
+    background:var(--gold); color:var(--gold-ink); font-size:13px; font-weight:700; cursor:pointer;}
 
   /* ── первый запуск ── */
   .onb{position:fixed; inset:0; z-index:60; background:var(--bg-deep); display:none;
@@ -672,6 +681,12 @@
     <span class="cam-look" id="camLook">ПЛЁНКА</span>
   </div>
   <video id="camVideo" playsinline autoplay muted></video>
+  <div class="cam-fail" id="camErr" style="display:none">
+    <b>Не удалось открыть камеру</b>
+    <span class="cam-err-why"></span>
+    <span>Разрешите доступ к камере — или возьмите снимок из галереи.</span>
+    <button class="cam-fail-btn" id="camErrPick">Открыть галерею</button>
+  </div>
   <div class="cam-grid" aria-hidden="true"><i class="v1"></i><i class="v2"></i><i class="h1"></i><i class="h2"></i></div>
   <span class="vfm tl"></span><span class="vfm tr"></span><span class="vfm bl"></span><span class="vfm br"></span>
   <div class="cam-bar">
@@ -1607,11 +1622,14 @@ async function startStream(){
 async function openCamera(){
   ensureTrap();
   cam.classList.add('open');
+  const err = document.getElementById('camErr');
+  err.style.display = 'none';                 // прошлая ошибка не должна висеть
   try { await startStream(); }
   catch(e){
-    cam.innerHTML = '<button class="cam-x" id="camX2">✕</button><div class="cam-err">Не удалось открыть камеру.<br>' + (e.message||e.name) +
-      '<br><br>Разрешите доступ к камере, либо возьмите фото через «Галерею».</div>';
-    document.getElementById('camX2').onclick = closeCamera;
+    // сообщение показываем ОТДЕЛЬНЫМ слоем: раньше здесь затиралась разметка
+    // камеры целиком, и после одного отказа она не открывалась уже никогда
+    err.querySelector('.cam-err-why').textContent = e.message || e.name || '';
+    err.style.display = 'flex';
   }
 }
 function closeCamera(){ if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; } cam.classList.remove('open'); }
@@ -1623,6 +1641,7 @@ function shoot(){
 }
 async function flipCamera(){ facing = facing==='environment' ? 'user' : 'environment'; try { await startStream(); } catch(e){} }
 document.getElementById('camX').onclick = closeCamera;
+document.getElementById('camErrPick').onclick = ()=>{ closeCamera(); document.getElementById('homePick').click(); };
 document.getElementById('shutter').onclick = shoot;
 document.getElementById('camFlip').onclick = flipCamera;
 
