@@ -923,25 +923,62 @@ function buildToneLUT(o){
   }
   return lut;
 }
-function applyLook(img, look){
+// Зерно — единственная часть движка, которая живёт в пикселях, а не в долях кадра.
+// На превью 1400 px зерно размером в пиксель выглядит как плёнка; на оригинале 6000 px
+// такой же пиксельный шум вчетверо мельче и после просмотра/печати просто пропадает.
+// Поэтому размер зернинки растёт вместе с кадром: на рабочей копии cell = 1 (ровно как
+// было), на оригинале — крупнее во столько же раз, во сколько кадр больше.
+const GRAIN_REF = 1400;
+function grainCell(bx, by){            // одно значение на зернинку, детерминированное:
+  let n = (bx*374761393 + by*668265263) | 0;   // одинаковое зерно на превью и в файле,
+  n = ((n ^ (n >> 13)) * 1274126177) | 0;      // и оно не «кипит» при каждой перерисовке
+  return (((n ^ (n >> 16)) >>> 0) / 4294967295) - 0.5;
+}
+// Горячий цикл всего приложения: на оригинале в 24 Мп он проходит 24 миллиона раз,
+// поэтому здесь всё развёрнуто в локальные переменные, идёт по строкам (y снаружи, x внутри
+// вместо деления с остатком на каждый пиксель) и не вызывает функций внутри.
+// mix/orig — необязательное смешивание с исходником по «силе»: делаем его прямо тут,
+// чтобы не гонять ещё один проход по всему массиву.
+function applyLook(img, look, mix, orig, y0, y1){
   const d = img.data, W = img.width, H = img.height;
   const lut = look._lut || (look._lut = buildToneLUT(look));
   const temp = look.temp||0, tint = look.tint||0;
-  const sh = look.shSplit||[0,0,0], hi = look.hiSplit||[0,0,0];
+  const shA = look.shSplit||[0,0,0], hiA = look.hiSplit||[0,0,0];
+  const sh0=shA[0], sh1=shA[1], sh2=shA[2], hi0=hiA[0], hi1=hiA[1], hi2=hiA[2];
   const sat = look.saturation==null?1:look.saturation, vib = look.vibrance||0;
-  const cx = W/2, cy = H/2, maxD = Math.hypot(cx,cy), vig = look.vignette||0, grain = look.grain||0;
-  for(let p=0, px=0; p<d.length; p+=4, px++){
-    let R = d[p], G = d[p+1], B = d[p+2];
-    R += temp;  B -= temp;  G += tint;
-    R = lut[clamp(R)|0]; G = lut[clamp(G)|0]; B = lut[clamp(B)|0];
-    const L = (LUM[0]*R + LUM[1]*G + LUM[2]*B) / 255, sw = 1 - L, hw = L;
-    R += sh[0]*sw + hi[0]*hw;  G += sh[1]*sw + hi[1]*hw;  B += sh[2]*sw + hi[2]*hw;
-    const avg = (R + G + B) / 3, cur = Math.max(R,G,B) - Math.min(R,G,B);
-    const s = sat + vib * (1 - clamp01(cur/160));
-    R = avg + (R-avg)*s;  G = avg + (G-avg)*s;  B = avg + (B-avg)*s;
-    if(vig){ const x = px % W, y = (px / W)|0; const dd = Math.hypot(x-cx, y-cy)/maxD; const f = 1 - vig*dd*dd; R*=f; G*=f; B*=f; }
-    if(grain){ const g = (Math.random()-0.5) * grain * 90; R+=g; G+=g; B+=g; }
-    d[p]=clamp(R); d[p+1]=clamp(G); d[p+2]=clamp(B);
+  const l0=LUM[0], l1=LUM[1], l2=LUM[2];
+  const cx = W/2, cy = H/2, vig = look.vignette||0, grain = look.grain||0;
+  const maxD2 = cx*cx + cy*cy;              // виньетка и так возводится в квадрат — корень не нужен
+  const cell = grain ? Math.max(1, Math.round(Math.max(W,H)/GRAIN_REF)) : 1;
+  const gAmp = grain*90;
+  const gRow = grain ? new Float32Array(Math.ceil(W/cell)) : null;   // зернинки строки — считаем раз на строку
+  const t = mix == null ? 1 : mix, inv = 1 - t;
+  const od = (orig && t < 1) ? orig.data : null;
+  // y0/y1 — какие строки кадра считаем. Важно: d содержит ТОЛЬКО эти строки (вызывающий
+  // передаёт срез), а H — высота всего кадра, потому что от неё зависят виньетка и зерно.
+  // Благодаря этому одна и та же функция считает и весь кадр, и полосу в рабочем потоке.
+  const yA = y0||0, yB = y1==null ? H : Math.min(H, y1);
+  let p = 0;
+  for(let y=yA; y<yB; y++){
+    const dy = y - cy, dy2 = dy*dy;
+    if(gRow){ const by = (y/cell)|0; for(let b=0;b<gRow.length;b++) gRow[b] = grainCell(b, by)*gAmp; }
+    for(let x=0; x<W; x++, p+=4){
+      let R = d[p], G = d[p+1], B = d[p+2];
+      R += temp;  B -= temp;  G += tint;
+      R = lut[(R<0?0:R>255?255:R)|0]; G = lut[(G<0?0:G>255?255:G)|0]; B = lut[(B<0?0:B>255?255:B)|0];
+      const L = (l0*R + l1*G + l2*B) / 255, sw = 1 - L;
+      R += sh0*sw + hi0*L;  G += sh1*sw + hi1*L;  B += sh2*sw + hi2*L;
+      const avg = (R + G + B) / 3;
+      const mx = R>G ? (R>B?R:B) : (G>B?G:B), mn = R<G ? (R<B?R:B) : (G<B?G:B);
+      let cur = (mx - mn)/160; if(cur > 1) cur = 1; else if(cur < 0) cur = 0;
+      const s = sat + vib*(1 - cur);
+      R = avg + (R-avg)*s;  G = avg + (G-avg)*s;  B = avg + (B-avg)*s;
+      if(vig){ const dx = x-cx; const f = 1 - vig*((dx*dx + dy2)/maxD2); R*=f; G*=f; B*=f; }
+      if(grain){ const g = gRow[(x/cell)|0]; R+=g; G+=g; B+=g; }
+      R = R<0?0:R>255?255:R; G = G<0?0:G>255?255:G; B = B<0?0:B>255?255:B;
+      if(od){ R = od[p]*inv + R*t; G = od[p+1]*inv + G*t; B = od[p+2]*inv + B*t; }
+      d[p]=R; d[p+1]=G; d[p+2]=B;
+    }
   }
   return img;
 }
@@ -966,7 +1003,7 @@ function applyBloom(canvas, amount, warm){
 }
 
 // Manual adjustments layered on top of the preset (all 0 = no-op). Ranges: exposure/contrast/temp/saturation -100..100, grain 0..100
-function applyAdjust(img, a){
+function applyAdjust(img, a, y0, y1){
   if(!(a.exposure||a.contrast||a.temp||a.saturation||a.grain)) return img;
   const d = img.data;
   const ex = 1 + a.exposure/100*0.5;   // 0.5..1.5 brightness multiplier
@@ -974,12 +1011,17 @@ function applyAdjust(img, a){
   const tp = a.temp/100*28;            // -28..28 warm/cool
   const sat = 1 + a.saturation/100;    // 0..2
   const gr = a.grain/100*80;           // 0..80 noise amplitude
-  for(let p=0; p<d.length; p+=4){
+  const W = img.width;                 // зерно того же размера, что и у пресета
+  const cell = gr ? Math.max(1, Math.round(Math.max(W, img.height)/GRAIN_REF)) : 1;
+  const yA = y0||0, yB = y1==null ? img.height : y1;      // d — срез этих строк; px абсолютный, чтобы зерно совпало
+  const pB = Math.min(d.length, (yB-yA)*W*4);
+  for(let p=0, px=yA*W; p<pB; p+=4, px++){
     let R = d[p]*ex, G = d[p+1]*ex, B = d[p+2]*ex;
     R += tp; B -= tp;
     if(c){ R=(R-128)*(1+c)+128; G=(G-128)*(1+c)+128; B=(B-128)*(1+c)+128; }
     if(sat!==1){ const avg=(R+G+B)/3; R=avg+(R-avg)*sat; G=avg+(G-avg)*sat; B=avg+(B-avg)*sat; }
-    if(gr){ const g=(Math.random()-0.5)*gr; R+=g; G+=g; B+=g; }
+    // смещаем сетку, чтобы ручное зерно не легло ровно поверх зерна пресета и не удвоило его
+    if(gr){ const g=grainCell((((px%W)/cell)|0)+9173, ((((px/W)|0)/cell)|0)+4271)*gr; R+=g; G+=g; B+=g; }
     d[p]=clamp(R); d[p+1]=clamp(G); d[p+2]=clamp(B);
   }
   return img;
@@ -1112,8 +1154,81 @@ let adjust = { exposure:0, contrast:0, temp:0, saturation:0, grain:0 };
 const stage = document.getElementById('stage');
 const sctx = stage.getContext('2d', { willReadFrequently:true });
 
+// ─── Full resolution ───
+// The screen only ever needs ~1400 px, and scrubbing a 24-megapixel image per frame would
+// crawl. So we keep two things: the untouched original at native size (fullSource) and a
+// small working copy that drives the whole interface. Every destructive edit (crop, heal,
+// shadows) is also written to editOps in RELATIVE coordinates, so on export we replay the
+// same edits onto the original and the photographer gets back every pixel they shot.
+const WORK_MAX = 1400;    // рабочая копия для экрана
+const FULL_MAX = 6000;    // потолок стороны: 24 Мп — выше телефонные canvas начинают падать
+let fullSource = null, editOps = [];
+
+function cloneCanvas(src){
+  const c = document.createElement('canvas');
+  c.width = src.width; c.height = src.height;
+  c.getContext('2d').drawImage(src, 0, 0);
+  return c;
+}
+function rotateCanvas(src, deg){
+  if(!deg) return src;
+  const c = document.createElement('canvas');
+  if(deg === 90 || deg === 270){ c.width = src.height; c.height = src.width; }
+  else { c.width = src.width; c.height = src.height; }
+  const x = c.getContext('2d');
+  x.translate(c.width/2, c.height/2); x.rotate(deg*Math.PI/180);
+  x.drawImage(src, -src.width/2, -src.height/2);
+  return c;
+}
+// Размер итогового кадра без единой пиксельной операции — нужен, чтобы показать
+// на экране экспорта честные «6000 × 4000» до того, как мы что-то посчитали.
+function fullDims(){
+  if(!fullSource) return { w:0, h:0 };
+  let w = fullSource.width, h = fullSource.height;
+  for(const op of editOps){
+    if(op.t !== 'crop') continue;
+    if(op.deg === 90 || op.deg === 270){ const t = w; w = h; h = t; }
+    w = Math.max(1, Math.round(op.w*w)); h = Math.max(1, Math.round(op.h*h));
+  }
+  return { w, h };
+}
+// Повтор журнала правок на оригинале. Порядок тот же, что нажимал пользователь,
+// а координаты относительные — поэтому кроп на превью и кроп на оригинале совпадают.
+function buildFullSource(){
+  if(!fullSource) return sourceCanvas;
+  let c = fullSource, cloned = false;
+  const own = ()=>{ if(!cloned){ c = cloneCanvas(c); cloned = true; } return c; };
+  for(const op of editOps){
+    if(op.t === 'crop'){
+      const rot = rotateCanvas(c, op.deg);
+      const rx = Math.max(0, Math.round(op.x*rot.width)), ry = Math.max(0, Math.round(op.y*rot.height));
+      const rw = Math.max(1, Math.min(rot.width - rx,  Math.round(op.w*rot.width)));
+      const rh = Math.max(1, Math.min(rot.height - ry, Math.round(op.h*rot.height)));
+      const out = document.createElement('canvas'); out.width = rw; out.height = rh;
+      out.getContext('2d').drawImage(rot, rx, ry, rw, rh, 0, 0, rw, rh);
+      c = out; cloned = true;
+    } else if(op.t === 'heal'){
+      const cv = own();
+      healSpot(cv, op.x*cv.width, op.y*cv.height, op.r*cv.width,
+               op.sx != null ? { x:op.sx*cv.width, y:op.sy*cv.height } : null,
+               { hardness:op.hardness, strength:op.strength });
+    } else if(op.t === 'bags'){
+      bagsRun(own(), op.faces, op.amount);
+    }
+  }
+  return c;   // без правок это сам оригинал — читаем из него, но не пишем в него
+}
+
 function setSource(img){
-  const max = 1400; let w = img.width, h = img.height;
+  // оригинал держим целиком — это то, что уйдёт в файл при сохранении
+  const fs = Math.min(1, FULL_MAX/Math.max(img.width, img.height));
+  fullSource = document.createElement('canvas');
+  fullSource.width  = Math.max(1, Math.round(img.width*fs));
+  fullSource.height = Math.max(1, Math.round(img.height*fs));
+  fullSource.getContext('2d').drawImage(img, 0, 0, fullSource.width, fullSource.height);
+  editOps = [];
+
+  const max = WORK_MAX; let w = img.width, h = img.height;
   const scale = Math.min(1, max/Math.max(w,h));
   w = Math.round(w*scale); h = Math.round(h*scale);
   sourceCanvas = document.createElement('canvas');
@@ -1167,11 +1282,7 @@ function processedData(src){
   const w = src.width, h = src.height;
   const orig = src.getContext('2d').getImageData(0,0,w,h);
   const proc = new ImageData(new Uint8ClampedArray(orig.data), w, h);
-  applyLook(proc, LOOKS[selected]);
-  const t = intensity/100, od = orig.data, pd = proc.data;
-  for(let i=0;i<pd.length;i+=4){
-    pd[i]=od[i]*(1-t)+pd[i]*t; pd[i+1]=od[i+1]*(1-t)+pd[i+1]*t; pd[i+2]=od[i+2]*(1-t)+pd[i+2]*t;
-  }
+  applyLook(proc, LOOKS[selected], intensity/100, orig);   // «сила» смешивается внутри цикла
   applyAdjust(proc, adjust);   // manual doctoring on top of the preset
   return proc;
 }
@@ -1484,10 +1595,13 @@ const expEl = document.getElementById('export');
 let expMax = 0;                                    // 0 = оригинал, иначе длинная сторона
 
 // готовый кадр с применённым луком, при желании уменьшенный
-function buildExport(maxDim){
+// base — холст, с которого печатаем. Для превью на экране экспорта это рабочая копия
+// (мгновенно), а для файла — оригинал со всеми повторёнными правками.
+function buildExport(maxDim, base){
+  const src = base || sourceCanvas;
   const full = document.createElement('canvas');
-  full.width = sourceCanvas.width; full.height = sourceCanvas.height;
-  full.getContext('2d').putImageData(processedData(), 0, 0);
+  full.width = src.width; full.height = src.height;
+  full.getContext('2d').putImageData(processedData(src), 0, 0);
   const bl = LOOKS[selected].bloom;
   if(bl) applyBloom(full, bl * (intensity/100), LOOKS[selected].bloomWarm);
   if(!maxDim || Math.max(full.width, full.height) <= maxDim) return full;
@@ -1496,26 +1610,205 @@ function buildExport(maxDim){
   out.width = Math.round(full.width * k); out.height = Math.round(full.height * k);
   const c = out.getContext('2d'); c.imageSmoothingQuality = 'high';
   c.drawImage(full, 0, 0, out.width, out.height);
+  if(full !== src){ full.width = 0; full.height = 0; }   // 24 Мп на телефоне — отпускаем сразу
   return out;
 }
-function expBlob(cb){ buildExport(expMax).toBlob(cb, 'image/jpeg', 0.95); }
+// Настоящий файл — с оригинала. 24 мегапикселя в обычном JS считаются несколько секунд,
+// и если сделать это одним куском, телефон на всё это время замирает (Android успевает
+// показать «приложение не отвечает»). Поэтому режем кадр на полосы строк: посчитали
+// полосу — отдали кадр браузеру — обновили процент. Приложение остаётся живым.
+const EXP_CHUNK_PX = 1200000;          // ~1.2 Мп на порцию: заметно быстрее 16 мс, но не залипает
+// Пауза между порциями. Тут две несовместимые задачи, и ни один способ по отдельности
+// их не решает: requestAnimationFrame даёт браузеру перерисовать проценты, но в свёрнутом
+// приложении кадры не идут вовсе, а цепочку setTimeout браузер душит до одной в секунду
+// и в фоне замораживает — сохранение так и застревало на середине (проверено).
+// Поэтому: на видимом экране ждём кадр (проценты реально меняются), в фоне отдаём
+// управление через MessageChannel, который под троттлинг не попадает. И если приложение
+// свернули ровно в момент ожидания кадра — ловим это событием и всё равно досчитываем.
+function nextFrame(){
+  return new Promise(r=>{
+    const ch = new MessageChannel();
+    ch.port1.onmessage = ()=> r();
+    const go = ()=> ch.port2.postMessage(0);
+    if(document.hidden) return go();
+    let fired = false;
+    const once = ()=>{ if(fired) return; fired = true;
+      document.removeEventListener('visibilitychange', once); go(); };
+    requestAnimationFrame(once);
+    document.addEventListener('visibilitychange', once);
+  });
+}
+
+// ─── Счёт на всех ядрах ───
+// Обработка кадра — это чистая арифметика над пикселями, строки друг от друга не зависят.
+// Значит их можно раздать по ядрам телефона: 24 мегапикселя в один поток считаются
+// десятки секунд, а на шести ядрах — в разы быстрее. Код движка при этом ОДИН: исходники
+// функций отдаются в рабочий поток как текст, поэтому вторая копия формул, которая
+// однажды разойдётся с первой, тут просто не может появиться.
+let expPool = null;
+function ensureWorkers(){
+  if(expPool !== null) return expPool;
+  expPool = false;
+  try{
+    const src = [
+      'const LUM=' + JSON.stringify(LUM) + ';',
+      'const GRAIN_REF=' + GRAIN_REF + ';',
+      'const clamp=' + String(clamp) + ';',
+      'const clamp01=' + String(clamp01) + ';',
+      String(grainCell), String(buildToneLUT), String(applyLook), String(applyAdjust),
+      'onmessage = e => { const m = e.data;',
+      '  const d = new Uint8ClampedArray(m.band);',
+      '  const img = { data:d, width:m.W, height:m.H };',
+      '  applyLook(img, m.look, m.mix, m.orig ? { data:new Uint8ClampedArray(m.orig) } : null, m.y0, m.y1);',
+      '  applyAdjust(img, m.adjust, m.y0, m.y1);',
+      '  postMessage({ id:m.id, y0:m.y0, band:d.buffer }, [d.buffer]); };'
+    ].join('\n');
+    const url = URL.createObjectURL(new Blob([src], { type:'application/javascript' }));
+    const n = Math.min(8, Math.max(2, (navigator.hardwareConcurrency || 4) - 1));
+    const pool = [];
+    for(let i=0;i<n;i++) pool.push(new Worker(url));
+    URL.revokeObjectURL(url);
+    // Прогрев. Пока рабочий поток не посчитал ни одного пикселя, его формулы
+    // выполняются интерпретатором — первое сохранение из-за этого было почти вдвое
+    // медленнее следующих. Гоняем крошечный кадр сразу, чтобы к моменту нажатия
+    // «Сохранить» код уже был скомпилирован.
+    const WU = 64, wuLook = LOOKS[1] || LOOKS[0];
+    const wuAdj = { exposure:1, contrast:1, temp:1, saturation:1, grain:1 };
+    for(const w of pool){
+      const buf = new Uint8ClampedArray(WU*WU*4).buffer;
+      w.postMessage({ id:-1, band:buf, orig:null, W:WU, H:WU, y0:0, y1:WU,
+                      look:wuLook, mix:1, adjust:wuAdj }, [buf]);
+    }
+    expPool = pool;
+  } catch(e){ expPool = false; }   // нет воркеров — считаем в основном потоке, как раньше
+  return expPool;
+}
+// Раздаём полосы очередью: освободившееся ядро сразу забирает следующую,
+// поэтому медленное ядро не держит остальные.
+function processParallel(proc, orig, look, mix, adj, W, H, onProgress){
+  const pool = ensureWorkers();
+  if(!pool) return null;
+  const rows = Math.max(1, Math.ceil(H / (pool.length * 2)));   // вдвое больше полос, чем ядер — ровнее загрузка
+  const queue = [];
+  for(let y=0; y<H; y+=rows) queue.push([y, Math.min(H, y+rows)]);
+  const total = queue.length;
+  let done = 0;
+  return new Promise((resolve, reject)=>{
+    let live = 0, failed = false;
+    const feed = w => {
+      const job = queue.shift();
+      if(!job){ if(--live === 0 && !failed) resolve(true); return; }
+      const [y0, y1] = job, off = y0*W*4, end = y1*W*4;
+      const band = proc.data.slice(off, end).buffer;
+      const og = mix < 1 ? orig.data.slice(off, end).buffer : null;
+      w.onmessage = ev => {
+        if(ev.data.id !== y0) return;   // это отклик прогрева, а не наша полоса
+        proc.data.set(new Uint8ClampedArray(ev.data.band), ev.data.y0*W*4);
+        if(onProgress) onProgress(++done / total * 0.9);
+        feed(w);
+      };
+      w.onerror = err => { failed = true; reject(err); };
+      w.postMessage({ id:y0, band, orig:og, W, H, y0, y1, look, mix, adjust:adj },
+                    og ? [band, og] : [band]);
+    };
+    for(const w of pool){ if(!queue.length) break; live++; feed(w); }
+    if(!live) resolve(true);
+  });
+}
+
+async function buildExportAsync(maxDim, base, onProgress){
+  const src = base || sourceCanvas;
+  const W = src.width, H = src.height;
+  const ctx = src.getContext('2d');
+  const orig = ctx.getImageData(0, 0, W, H);
+  const proc = new ImageData(new Uint8ClampedArray(orig.data), W, H);
+  const look = LOOKS[selected], mix = intensity/100;
+  let spread = null;
+  try{ spread = processParallel(proc, orig, look, mix, adjust, W, H, onProgress); }catch(e){}
+  if(spread){ try{ await spread; }catch(e){ spread = null; } }
+  if(!spread){
+    // одно ядро: режем на порции и отдаём управление между ними, чтобы не подвесить экран
+    const band = Math.max(1, Math.round(EXP_CHUNK_PX / W));
+    for(let y = 0; y < H; y += band){
+      const y1 = Math.min(H, y + band);
+      const sub = { data: proc.data.subarray(y*W*4, y1*W*4), width: W, height: H };
+      applyLook(sub, look, mix, { data: orig.data.subarray(y*W*4, y1*W*4) }, y, y1);
+      applyAdjust(sub, adjust, y, y1);
+      if(onProgress) onProgress(y1 / H * 0.9);
+      await nextFrame();
+    }
+  }
+  const full = document.createElement('canvas');
+  full.width = W; full.height = H;
+  full.getContext('2d').putImageData(proc, 0, 0);
+  const bl = look.bloom;
+  if(bl) applyBloom(full, bl * mix, look.bloomWarm);
+  if(onProgress) onProgress(0.95);
+  await nextFrame();
+  if(!maxDim || Math.max(W, H) <= maxDim) return full;
+  const k = maxDim / Math.max(W, H);
+  const out = document.createElement('canvas');
+  out.width = Math.round(W * k); out.height = Math.round(H * k);
+  const c = out.getContext('2d'); c.imageSmoothingQuality = 'high';
+  c.drawImage(full, 0, 0, out.width, out.height);
+  full.width = 0; full.height = 0;
+  return out;
+}
+
+let expBusy = false;
+async function expBlob(cb){
+  if(expBusy) return;
+  expBusy = true;
+  const save = document.getElementById('expSave'), share = document.getElementById('expShare');
+  const saveT = save.textContent, shareT = share.textContent;
+  save.disabled = share.disabled = true;
+  const show = p => { const s = 'Сохраняю ' + Math.round(p*100) + '%';
+                      save.textContent = share.textContent = s; };
+  show(0);
+  const done = ()=>{ expBusy = false; save.disabled = share.disabled = false;
+                     save.textContent = saveT; share.textContent = shareT; };
+  let c = null, base = null;
+  try{
+    base = buildFullSource();
+    c = await buildExportAsync(expMax, base, show);
+  } catch(err){
+    // не хватило памяти на оригинал — отдаём рабочую копию, чтобы человек не остался без файла
+    try{ c = await buildExportAsync(expMax, sourceCanvas, show); }
+    catch(e2){ done(); return; }
+  } finally {
+    if(base && base !== fullSource && base !== c){ base.width = 0; base.height = 0; }
+  }
+  c.toBlob(b=>{ done(); if(b) cb(b); }, 'image/jpeg', 0.95);
+}
 
 function expRefresh(){
-  const c = buildExport(expMax);
+  const c = buildExport(expMax);                   // превью считаем по рабочей копии — мгновенно
   const prev = document.getElementById('expCanvas');
   prev.width = c.width; prev.height = c.height;
   prev.getContext('2d').drawImage(c, 0, 0);
   document.getElementById('expLook').textContent = LOOKS[selected].name.toUpperCase();
   [...document.getElementById('expSizes').children].forEach(b=>
     b.classList.toggle('active', +b.dataset.max === expMax));
-  c.toBlob(b=>{                                    // вес показываем настоящий, а не на глаз
+  // размер — настоящий, с оригинала; вес прикидываем по превью, пересчитав на площадь
+  const fd = fullDims();
+  let ow = fd.w, oh = fd.h;
+  if(expMax && Math.max(ow, oh) > expMax){
+    const k = expMax/Math.max(ow, oh);
+    ow = Math.round(ow*k); oh = Math.round(oh*k);
+  }
+  c.toBlob(b=>{
+    const est = b.size * (ow*oh) / Math.max(1, c.width*c.height);
+    const approx = (ow*oh) === (c.width*c.height) ? ' · ' : ' · ≈ ';
     document.getElementById('expWeight').textContent =
-      c.width + '×' + c.height + ' · ' + (b.size/1048576).toFixed(1) + ' МБ';
+      ow + '×' + oh + approx + (est/1048576).toFixed(1) + ' МБ';
   }, 'image/jpeg', 0.95);
 }
 function openExport(){
-  const long = Math.max(sourceCanvas.width, sourceCanvas.height);
-  const opts = [{ max:0, name:'Оригинал', sub:sourceCanvas.width+'×'+sourceCanvas.height }];
+  if(!fullSource) return;
+  ensureWorkers();   // греем ядра, пока человек смотрит на превью — сохранение будет быстрее
+  const fd = fullDims();
+  const long = Math.max(fd.w, fd.h);
+  const opts = [{ max:0, name:'Оригинал', sub:fd.w+'×'+fd.h }];
   if(long > 2048) opts.push({ max:2048, name:'Крупный',      sub:'2048 px' });
   if(long > 1080) opts.push({ max:1080, name:'Для соцсетей', sub:'1080 px' });
   const host = document.getElementById('expSizes'); host.innerHTML = '';
@@ -1679,7 +1972,9 @@ let camStream = null, facing = 'environment';
 const cam = document.getElementById('cam'), camVideo = document.getElementById('camVideo');
 async function startStream(){
   if(camStream) camStream.getTracks().forEach(t=>t.stop());
-  camStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:facing, width:{ideal:1920}, height:{ideal:1080} }, audio:false });
+  // просим максимум, который отдаёт камера: браузер сам опустит запрос до реального
+  // потолка устройства, но при 1920 мы бы сами обрезали снимок вдвое-втрое
+  camStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:facing, width:{ideal:4096}, height:{ideal:3072} }, audio:false });
   camVideo.srcObject = camStream;
 }
 async function openCamera(){
@@ -1700,7 +1995,10 @@ function shoot(){
   if(!camVideo.videoWidth) return;
   const c = document.createElement('canvas'); c.width = camVideo.videoWidth; c.height = camVideo.videoHeight;
   c.getContext('2d').drawImage(camVideo, 0, 0);
-  const img = new Image(); img.onload = ()=>{ closeCamera(); setSource(img); closeOnb(); }; img.src = c.toDataURL('image/jpeg', 0.95);
+  // холст отдаём напрямую: раньше кадр гонялся через toDataURL('image/jpeg') и терял
+  // качество ещё до того, как человек что-то сделал — при том что сохранять его потом
+  // всё равно в JPEG. Одно сжатие вместо двух.
+  closeCamera(); setSource(c); closeOnb();
 }
 async function flipCamera(){ facing = facing==='environment' ? 'user' : 'environment'; try { await startStream(); } catch(e){} }
 document.getElementById('camX').onclick = closeCamera;
@@ -1776,6 +2074,10 @@ function applyCrop(){
   const rh = Math.min(cropBase.height - ry, Math.round(cf.h*scale));
   const out = document.createElement('canvas'); out.width = rw; out.height = rh;
   out.getContext('2d').drawImage(cropBase, rx, ry, rw, rh, 0, 0, rw, rh);
+  // тот же кадр в долях — повторим его на оригинале при сохранении
+  editOps.push({ t:'crop', deg:cropRotate,
+                 x:rx/cropBase.width, y:ry/cropBase.height,
+                 w:rw/cropBase.width, h:rh/cropBase.height });
   sourceCanvas = out; editedCanvas = null; makePreview();
   stage.width = rw; stage.height = rh;
   buildChips(); buildHomeLooks(); fitStage(); render();
@@ -1832,6 +2134,8 @@ document.querySelectorAll('#cropRatios button').forEach(b => b.onclick = ()=>{
 
 // ─── Retouch (spot heal: tap/drag over blemishes; works on a copy, applied to sourceCanvas before the look) ───
 let rtSize = 22, rtHard = 45, rtStr = 100, rtUndo = [], rtDrawing = false, rtLastE = null;
+// журнал текущего сеанса ретуши — уедет в editOps, когда нажмут «Применить»
+let rtOps = [], rtBagsOp = null, rtFaces = null;
 function rtOpts(){ return { hardness: rtHard/100, strength: rtStr/100 }; }
 const retouchEl = document.getElementById('retouch'), rtCanvas = document.getElementById('rtCanvas');
 function layoutRetouch(){
@@ -1852,6 +2156,7 @@ function openRetouch(){
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
+  rtOps = []; rtBagsOp = null; rtFaces = null;
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
   retouchEl.classList.add('open');
@@ -1867,7 +2172,15 @@ function openShadows(){
 function closeRetouch(){ retouchEl.classList.remove('open'); retouchEl.classList.remove('shadows-only'); }
 function rtBrushR(){ const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width; return rtSize * (rtCanvas.width/disp) * 0.5; }
 function rtAt(e){ const r = rtCanvas.getBoundingClientRect();
-  healSpot(rtCanvas, (e.clientX-r.left)*(rtCanvas.width/r.width), (e.clientY-r.top)*(rtCanvas.height/r.height), rtBrushR(), null, rtOpts()); }
+  const bx = (e.clientX-r.left)*(rtCanvas.width/r.width), by = (e.clientY-r.top)*(rtCanvas.height/r.height);
+  healSpot(rtCanvas, bx, by, rtBrushR(), null, rtOpts());
+  rtRecord(bx, by, rtBrushR(), null); }
+// Мазок в долях кадра: на оригинале то же место и тот же относительный радиус.
+function rtRecord(bx, by, r, src){
+  const W = rtCanvas.width, H = rtCanvas.height, o = rtOpts();
+  rtOps.push({ t:'heal', x:bx/W, y:by/H, r:r/W, hardness:o.hardness, strength:o.strength,
+               sx: src ? src.x/W : null, sy: src ? src.y/H : null });
+}
 const rtCursor = document.getElementById('rtCursor');
 function rtShowCursor(e){
   const ar = document.getElementById('rtArea').getBoundingClientRect();
@@ -1960,6 +2273,7 @@ rtCanvas.addEventListener('wheel', e=>{
 document.getElementById('rtUndo').onclick = ()=>{
   if(!rtUndo.length) return;
   rtCanvas.getContext('2d').putImageData(rtUndo.pop(), 0, 0);
+  rtOps.pop();   // снимок и запись в журнале идут парой
   document.getElementById('rtUndo').disabled = rtUndo.length === 0;
 };
 document.getElementById('rtSize').oninput = e=>{
@@ -2020,7 +2334,9 @@ document.getElementById('rtStampApply').onclick = ()=>{
   rtUndo.push(rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height));
   if(rtUndo.length>10) rtUndo.shift();
   document.getElementById('rtUndo').disabled=false;
-  healSpot(rtCanvas, t.x, t.y, rtSize*(rtCanvas.width/c.width)*0.5, {x:s.x, y:s.y}, rtOpts());
+  const sr = rtSize*(rtCanvas.width/c.width)*0.5;
+  healSpot(rtCanvas, t.x, t.y, sr, {x:s.x, y:s.y}, rtOpts());
+  rtRecord(t.x, t.y, sr, s);
 };
 
 // ─── «Синяки»: MediaPipe Face Landmarker (детект 1 раз) + слайдер в реальном времени ───
@@ -2079,8 +2395,9 @@ function bagsRegions(lms, W, H){
   return regs;
 }
 // сборщик зоны из геометрии региона
-function bagsBuildZone(r){
-  const W = rtCanvas.width, H = rtCanvas.height, ctx = rtCanvas.getContext('2d');
+function bagsBuildZone(r, cv){
+  cv = cv || rtCanvas;
+  const W = cv.width, H = cv.height, ctx = cv.getContext('2d');
   const eyeW = r.eyeW, pad = eyeW*0.9;
   const xs = r.poly.map(p=>p.x).concat(r.eyePoly ? r.eyePoly.map(p=>p.x) : []);
   const ys = r.poly.map(p=>p.y).concat(r.eyePoly ? r.eyePoly.map(p=>p.y) : []);
@@ -2112,7 +2429,7 @@ function bagsBuildZone(r){
   const lc = document.createElement('canvas'); lc.width=bw; lc.height=bh;
   const lctx = lc.getContext('2d');
   lctx.filter = 'blur(' + Math.max(2, Math.round(eyeW*0.16)) + 'px)';
-  lctx.drawImage(rtCanvas, bx, by, bw, bh, 0, 0, bw, bh);
+  lctx.drawImage(cv, bx, by, bw, bh, 0, 0, bw, bh);
   const low = lctx.getImageData(0,0,bw,bh).data;
   // отдельная, СИЛЬНО размытая карта темноты — крупные пятна текстуры/пор гасятся, остаётся только
   // общая форма тени; по ней сила реагирует локально (темнее в ядре круга — сильнее эффект именно там),
@@ -2120,7 +2437,7 @@ function bagsBuildZone(r){
   const dc = document.createElement('canvas'); dc.width=bw; dc.height=bh;
   const dctx = dc.getContext('2d');
   dctx.filter = 'blur(' + Math.max(4, Math.round(eyeW*0.38)) + 'px)';
-  dctx.drawImage(rtCanvas, bx, by, bw, bh, 0, 0, bw, bh);
+  dctx.drawImage(cv, bx, by, bw, bh, 0, 0, bw, bh);
   const darkMap = dctx.getImageData(0,0,bw,bh).data;
   // центр глаза в координатах бокса (для эталона щеки и попадания в геометрию)
   const srcPts = r.eyePoly || r.poly;
@@ -2143,19 +2460,22 @@ function bagsBuildZone(r){
   if(cheekLum < 0){ cheekR=cheekG=cheekB=150; cheekLum=150; }
   return {bx, by, bw, bh, orig, low, mask, darkMap, cheekR, cheekG, cheekB, cheekLum};
 }
-function bagsPrepare(faces){
-  const W = rtCanvas.width, H = rtCanvas.height;
+function bagsPrepare(faces, cv){
+  cv = cv || rtCanvas;
+  const W = cv.width, H = cv.height;
   const regs = [];
   for(const lms of (faces||[])) for(const r of bagsRegions(lms, W, H)){
-    const z = bagsBuildZone(r); if(z) regs.push(z);
+    const z = bagsBuildZone(r, cv); if(z) regs.push(z);
   }
+  if(cv !== rtCanvas) return regs.length ? {regs} : null;
   bagsData = regs.length ? {regs} : null;
   return regs.length;
 }
-function bagsApply(t){
-  if(!bagsData) return;
-  const ctx = rtCanvas.getContext('2d');
-  for(const r of bagsData.regs){
+function bagsApply(t, cv, data){
+  cv = cv || rtCanvas; data = data || bagsData;
+  if(!data) return;
+  const ctx = cv.getContext('2d');
+  for(const r of data.regs){
     // база — ТЕКУЩЕЕ содержимое канваса, а не застывший снимок r.orig: у широких эллипсов
     // соседних глаз боксы теперь могут пересекаться у переносицы, и если писать полным
     // прямоугольником снимок «до», пиксели без своего эффекта (alpha=0) стирали бы обратно
@@ -2187,6 +2507,13 @@ function bagsApply(t){
     ctx.putImageData(out, r.bx, r.by);
   }
 }
+// Повтор «теней» на любом холсте: точки лица нормированные (0..1), поэтому те же
+// зоны строятся хоть на 1400 px, хоть на оригинале — без пересчёта детектором.
+function bagsRun(cv, faces, amount){
+  if(!faces || !faces.length || !amount) return;
+  const data = bagsPrepare(faces, cv);
+  if(data) bagsApply(amount, cv, data);
+}
 async function bagsEnter(){
   const slider = document.getElementById('rtBags'), top = document.getElementById('rtTop');
   slider.value = 0; document.getElementById('rtBagsV').textContent = '0'; slider.disabled = true;
@@ -2205,6 +2532,7 @@ async function bagsEnter(){
       t.getContext('2d').drawImage(rtCanvas, 0, 0, t.width, t.height);
       res = kit.detect(t); faces = (res && res.faceLandmarks) || [];
     }
+    rtFaces = faces;
     if(!faces.length || !bagsPrepare(faces)){
       top.textContent = 'Лицо не найдено';
       bagsBusy = false; return;
@@ -2220,6 +2548,7 @@ document.getElementById('rtBags').oninput = e=>{
   const v = +e.target.value;
   document.getElementById('rtBagsV').textContent = v;
   bagsApply(v/100);
+  rtBagsOp = v ? { t:'bags', faces:rtFaces, amount:v/100 } : null;
 };
 
 // before/after: hold to see the pristine original, release for the retouched result
@@ -2240,6 +2569,8 @@ rtCompareBtn.addEventListener('pointerleave', rtCompareRestore);
 document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
   sourceCanvas.getContext('2d').drawImage(rtCanvas, 0, 0);   // bake retouch into the source
+  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp);   // те же правки повторим на оригинале
+  rtOps = []; rtBagsOp = null;
   editedCanvas = null; makePreview(); buildChips(); buildHomeLooks(); render();
   closeRetouch(); goEditor();
 };
