@@ -31,7 +31,11 @@
   body{background:var(--bg-deep); color:var(--text);
     /* плоский уголь без подсветки — как отпечаток на столе в проявочной */
     font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden;
+    /* Высоту берём ИЗМЕРЕННУЮ из JS (--vh). На Android в установленной PWA 100dvh
+       временами оказывается больше реально видимой области, и низ приложения уходит
+       под край экрана — у Артура так срезало нижний ряд кадров. 100dvh остаётся
+       запасным значением на случай, если скрипт почему-то не отработал. */
+    display:flex; flex-direction:column; height:100vh; height:100dvh; height:var(--vh, 100dvh); overflow:hidden;
     padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);}
 
   /* плёночное зерно поверх всего — то, что делает интерфейс «плёнкой», а не просто тёмной темой */
@@ -96,7 +100,11 @@
     background:rgba(255,255,255,.18); position:relative; overflow:hidden;}
   .int-gauge .igfill{position:absolute; left:0; right:0; bottom:0; background:var(--gold); border-radius:2px;}
 
-  .dock{position:relative; z-index:2; display:none;
+  /* Док НЕ сжимается. По умолчанию flex-shrink:1, а у main flex-basis:0 — значит при
+     нехватке высоты вся усадка достаётся именно доку, и нижний ряд кадров уезжает за
+     экран (Артур ловил это дважды). Пусть лучше уменьшится фото: оно и так вписывается
+     по месту, а обрезанные подписи кадров — это потеря управления. */
+  .dock{flex:0 0 auto; position:relative; z-index:2; display:none;
     background:var(--glass);
     -webkit-backdrop-filter:blur(20px) saturate(1.3); backdrop-filter:blur(20px) saturate(1.3);
     border-top:1px solid var(--glass-line); border-radius:22px 22px 0 0;
@@ -189,7 +197,7 @@
   /* ── лента плёнки: перфорация по краю + кадры с номерами ── */
   .perf{display:flex; gap:25px; padding:9px 14px 0; overflow:hidden;}
   .perf i{width:16px; height:9px; border-radius:2px; background:#1B160F; flex:0 0 auto;}
-  footer{position:relative; z-index:2; display:flex; gap:8px; padding:9px 14px calc(14px + env(safe-area-inset-bottom)); overflow-x:auto; scrollbar-width:none;}
+  footer{flex:0 0 auto; position:relative; z-index:2; display:flex; gap:8px; padding:9px 14px calc(14px + env(safe-area-inset-bottom)); overflow-x:auto; scrollbar-width:none;}
   footer::-webkit-scrollbar{display:none;}
   .chip{display:flex; flex-direction:column; gap:0; cursor:pointer; flex:0 0 auto; width:62px;}
   .chip canvas{width:62px; height:76px; border-radius:3px; background:var(--panel);
@@ -1427,7 +1435,9 @@ function makePreview(){
   previewSrc = document.createElement('canvas');
   previewSrc.width = Math.round(sourceCanvas.width*s);
   previewSrc.height = Math.round(sourceCanvas.height*s);
-  previewSrc.getContext('2d').drawImage(sourceCanvas, 0, 0, previewSrc.width, previewSrc.height);
+  const pctx = previewSrc.getContext('2d');
+  pctx.imageSmoothingQuality = 'high';
+  pctx.drawImage(sourceCanvas, 0, 0, previewSrc.width, previewSrc.height);
 }
 let raf = 0;
 // заголовок редактора — номер и имя текущего лука, как подпись кадра на плёнке
@@ -1477,12 +1487,31 @@ function renderNow(){
   if(!scrubbing) paintStageBg();
 }
 
+// Миниатюры надо считать в ТОЧКАХ ЭКРАНА, а не в CSS-пикселях. Кадр ленты показывается
+// на 62 CSS-px, но у телефона 3 точки на пиксель — значит нужно 186 настоящих точек.
+// Раньше рисовали 93 и растягивали втрое: трава и листва превращались в мыло, и по такой
+// миниатюре нельзя выбрать плёнку. Потолок 3 — выше разницы уже не видно, а работы вчетверо.
+// Реальная высота видимой области. 100dvh на Android в установленной PWA иногда
+// больше того, что видно, и нижний край приложения (ряд кадров) уезжает за экран.
+// Меряем сами и обновляем при повороте/смене размера.
+function fitViewport(){
+  const h = window.innerHeight;
+  if(h) document.documentElement.style.setProperty('--vh', h + 'px');
+  if(typeof fitStage === 'function' && sourceCanvas) fitStage();
+}
+fitViewport();
+addEventListener('resize', fitViewport);
+addEventListener('orientationchange', ()=> setTimeout(fitViewport, 120));
+
+const THUMB_DPR = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
 function buildChips(){
   const chips = document.getElementById('chips'); chips.innerHTML = '';
-  // кадры ленты — 3:4, как настоящие кадры на плёнке
-  const tw = 93, th = 114, far = tw/th, ar = sourceCanvas.width/sourceCanvas.height;
+  // кадры ленты — 3:4, как настоящие кадры на плёнке; 62×76 CSS × плотность экрана
+  const tw = Math.round(62 * THUMB_DPR), th = Math.round(76 * THUMB_DPR);
+  const far = tw/th, ar = sourceCanvas.width/sourceCanvas.height;
   const t = document.createElement('canvas'); t.width = tw; t.height = th;
   const tctx = t.getContext('2d');
+  tctx.imageSmoothingQuality = 'high';   // уменьшаем в 5-6 раз: на качестве по умолчанию это даёт ступеньки
   let sw=sourceCanvas.width, sh=sourceCanvas.height, sx=0, sy=0;
   if(ar>far){ sw=Math.round(sh*far); sx=(sourceCanvas.width-sw)>>1; }
   else { sh=Math.round(sw/far); sy=(sourceCanvas.height-sh)>>1; }
@@ -1578,12 +1607,26 @@ function buildHomeLooks(){
   // не растягиваем — иначе на групповых фото люди уезжают из кадра
   const srcAr = sourceCanvas.width / sourceCanvas.height;
   const ar = srcAr > 1.15 ? 4/3 : 3/4;       // горизонтальный кадр — лежачий, всё остальное — стоячий
-  const tw = 189, th = Math.round(tw / ar);
+  // ширину кадра берём с настоящей сетки (она зависит от ширины экрана) и умножаем на
+  // плотность точек — иначе контактный лист показывает размытые кадры, по которым
+  // невозможно судить о плёнке. Потолок 420 точек, чтобы лист собирался быстро.
+  const colW = (()=>{
+    // ширину колонки берём как её посчитал сам грид — деление «ширина минус зазоры на три»
+    // промахивалось (200 точек вместо нужных 236), и кадры оставались чуть мягкими
+    const cs = getComputedStyle(host);
+    const cols = (cs.gridTemplateColumns || '').split(/\s+/).map(parseFloat).filter(n=> n > 0);
+    if(cols.length) return Math.max.apply(null, cols);
+    const w = host.clientWidth;
+    return w ? w/3 : 118;                    // главная скрыта — проектная ширина колонки
+  })();
+  const tw = Math.round(Math.min(420, colW * THUMB_DPR)), th = Math.round(tw / ar);
   let sw = sourceCanvas.width, sh = sourceCanvas.height, sx = 0, sy = 0;
   if(sw/sh > ar){ sw = Math.round(sh*ar); sx = (sourceCanvas.width - sw) >> 1; }
   else { sh = Math.round(sw/ar); sy = (sourceCanvas.height - sh) >> 1; }
   const base = document.createElement('canvas'); base.width = tw; base.height = th;
-  base.getContext('2d').drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, tw, th);
+  const bctx = base.getContext('2d');
+  bctx.imageSmoothingQuality = 'high';
+  bctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, tw, th);
   const bd = base.getContext('2d').getImageData(0, 0, tw, th);
   const frames = frameList();                 // встроенные луки + свои пресеты
   const total = frames.length;
@@ -1642,12 +1685,11 @@ function hlSchedule(fn){
   ch.port1.onmessage = ()=> fn();
   ch.port2.postMessage(0);
 }
-document.getElementById('intensity').oninput = e=>{
-  intensity = +e.target.value;
+// тот же приём, что и у ползунков коррекции — см. bindSlider ниже
+bindSlider(document.getElementById('intensity'), ()=>{
+  intensity = +document.getElementById('intensity').value;
   document.getElementById('intensityVal').textContent = intensity;
-  scrubbing = true; render();
-};
-document.getElementById('intensity').onchange = ()=>{ scrubbing = false; render(); };
+});
 
 // ─── Tabs (presets / adjust) + manual adjustment sliders ───
 let curTab = 'presets';
@@ -1676,14 +1718,35 @@ function updateAdjDot(){
   const on = ADJ_KEYS.some(k=> adjust[k]!==0);
   document.querySelector('.tab[data-tab="adjust"]').classList.toggle('has-adj', on);
 }
+// Пока палец ведёт ползунок, считаем уменьшенное превью; полный кадр — когда палец
+// остановился. Раньше полный пересчёт вешался на onchange, но у range-инпутов на Android
+// это событие приходит НА КАЖДОМ шаге перетаскивания, а не один раз в конце: каждый шаг
+// запускал полуторасекундный пересчёт полного кадра, очередь забивалась, и на экране
+// висел старый кадр — выглядело так, будто правка «пропала» при отпускании.
+// Поэтому не полагаемся на событие вовсе: ждём тишины и отпущенного пальца.
+let adjDragging = false, adjSettleT = 0;
+function settleRender(){
+  clearTimeout(adjSettleT);
+  adjSettleT = setTimeout(()=>{
+    if(adjDragging) return settleRender();     // палец ещё на ползунке — ждём дальше
+    scrubbing = false; render();
+  }, 140);
+}
+function bindSlider(el, onInput){
+  el.addEventListener('pointerdown', ()=>{ adjDragging = true; });
+  const up = ()=>{ adjDragging = false; settleRender(); };
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+  el.addEventListener('input', ()=>{ onInput(); scrubbing = true; render(); settleRender(); });
+  el.addEventListener('change', settleRender);
+}
 ADJ_KEYS.forEach(k=>{
   const el = document.getElementById('adj-'+k), out = document.getElementById('val-'+k);
-  el.oninput = ()=>{
+  bindSlider(el, ()=>{
     adjust[k] = +el.value;
     out.textContent = (k!=='grain' && adjust[k]>0 ? '+' : '') + adjust[k];
-    updateAdjDot(); scrubbing = true; render();
-  };
-  el.onchange = ()=>{ scrubbing = false; render(); };
+    updateAdjDot();
+  });
 });
 function syncAdjustUI(){
   ADJ_KEYS.forEach(k=>{
