@@ -1463,7 +1463,21 @@ function updateHdrTitle(){
   const cl = document.getElementById('camLook');   // видоискатель подписан текущим луком
   if(cl) cl.textContent = name.toUpperCase();
 }
-function render(){ if(!sourceCanvas) return; updateHdrTitle(); cancelAnimationFrame(raf); raf = requestAnimationFrame(renderNow); }
+// Кадры не идут в свёрнутом приложении, поэтому запрошенная отрисовка могла никогда
+// не случиться — а холст к тому моменту уже очищен под новый размер. В фоне рисуем
+// через MessageChannel (он не троттлится), см. тот же приём в nextFrame()/hlSchedule().
+function render(){
+  if(!sourceCanvas) return;
+  updateHdrTitle();
+  cancelAnimationFrame(raf);
+  if(document.hidden){
+    const ch = new MessageChannel();
+    ch.port1.onmessage = ()=> renderNow();
+    ch.port2.postMessage(0);
+    return;
+  }
+  raf = requestAnimationFrame(renderNow);
+}
 // Размытая подложка под кадром. Рисуем в крошечный холст (48px) — растянет и размоет уже CSS,
 // поэтому стоит копейки. Во время протяжки ползунка не трогаем, чтобы не грузить телефон.
 const stageBg = document.getElementById('stageBg');
@@ -1480,8 +1494,13 @@ function paintStageBg(){
 function renderNow(){
   if(compareMode){ buildEdited(); drawCompare(); return; }
   const src = (scrubbing && previewSrc) ? previewSrc : sourceCanvas;
+  // СНАЧАЛА считаем, и только потом трогаем видимый холст. Смена stage.width стирает
+  // канвас мгновенно, а расчёт полного кадра занимает секунду с лишним — если между
+  // этими двумя шагами что-то прервётся, на экране остаётся ПУСТОТА вместо фото.
+  // Именно так «всё пропадало» при отпускании ползунка.
+  const data = processedData(src);
   if(stage.width !== src.width || stage.height !== src.height){ stage.width = src.width; stage.height = src.height; }
-  sctx.putImageData(processedData(src), 0, 0);
+  sctx.putImageData(data, 0, 0);
   const bl = LOOKS[selected].bloom;
   if(bl) applyBloom(stage, bl * (intensity/100), LOOKS[selected].bloomWarm);
   if(!scrubbing) paintStageBg();
