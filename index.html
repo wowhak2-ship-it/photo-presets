@@ -325,9 +325,11 @@
     padding:calc(72px + env(safe-area-inset-top)) 20px 16px;}
   .exp-preview canvas{max-width:100%; max-height:100%; border-radius:2px;
     box-shadow:0 18px 44px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.08);}
-  .exp-dock{padding:16px 20px calc(20px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:13px;}
-  .exp-cap{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:10px;
-    letter-spacing:.1em; color:var(--dim);}
+  .exp-dock{display:flex; flex-direction:column; gap:13px;}
+  /* Подпись длинная («ЗОЛОТОЙ ЧАС · JPEG · 3456×4608 · ≈ 7.7 МБ»), а лук может быть
+     с ещё более длинным именем — пусть лучше переносится на вторую строку, чем упирается в край. */
+  .exp-cap{display:flex; align-items:center; flex-wrap:wrap; gap:8px; row-gap:4px;
+    font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--dim);}
   .exp-cap b{color:var(--gold); font-weight:500;}
   .exp-cap i{width:3px; height:3px; border-radius:50%; background:var(--faint);}
   .exp-lab{font-family:var(--mono); font-size:10px; letter-spacing:.2em; color:var(--dim);}
@@ -494,6 +496,11 @@
     -webkit-backdrop-filter:blur(20px) saturate(1.3); backdrop-filter:blur(20px) saturate(1.3);
     border-top:1px solid var(--glass-line); border-radius:22px 22px 0 0;
     box-shadow:0 -0.5px 0 rgba(255,255,255,.07) inset, 0 -18px 48px rgba(0,0,0,.45); padding:6px 0 calc(18px + env(safe-area-inset-bottom));}
+  /* У Ретуши и Кадра боковые отступы задают контролы внутри, поэтому здесь по бокам 0.
+     Экрану экспорта содержимое отступов не даёт — без этой строки .ov-dock перебивал
+     .exp-dock (объявлен выше, та же специфичность), подписи прижимались вплотную к краю
+     экрана и первая буква срезалась. Поймано Артуром на телефоне. */
+  .ov-dock.exp-dock{padding:16px 20px calc(20px + env(safe-area-inset-bottom));}
 
   /* on phones the header has 3 left buttons + Save — the centred "PRESETS" title
      collides with the crop button, and the bottom "ПРЕСЕТЫ" tab already covers it */
