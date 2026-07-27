@@ -361,6 +361,69 @@
   .adj-reset{align-self:center; margin-top:5px; background:transparent; border:1px solid var(--line); color:var(--dim);
     font-size:11px; font-weight:600; letter-spacing:.08em; padding:8px 18px; border-radius:20px; cursor:pointer; text-transform:uppercase;}
   .adj-reset:active{transform:scale(.97);}
+  .adj-acts{display:flex; gap:8px; justify-content:center; margin-top:5px; flex-wrap:wrap;}
+  .adj-acts .adj-reset{margin-top:0;}
+  .adj-keep{border-color:var(--line-2); color:var(--gold);}
+
+  /* ─── Свои пресеты ───
+     Фотограф отмечает свои кадры чинографом — красным карандашом. Свои пресеты
+     несут короткий штрих этим карандашом перед именем. Красный НОМЕР для этого не
+     годится: им уже помечен выбранный кадр (.look-card.on .no), и один цвет означал
+     бы сразу две разные вещи. Так метки не спорят: кольцо + красный номер = выбран,
+     штрих у имени = твой. */
+  .chip.mine span::before, .look-card.mine .nm::before{
+    content:""; display:inline-block; width:6px; height:1.5px; border-radius:1px;
+    background:var(--china); vertical-align:middle; margin-right:5px; flex:0 0 auto;}
+
+  /* Диалог сохранения = подпись к катушке: строка, на которой пишут имя плёнки,
+     и рядом уже проставленная дата — как на краевой маркировке. */
+  /* Карточка держится в ВЕРХНЕЙ трети, а не по центру: как только человек касается
+     поля, выезжает клавиатура и забирает нижнюю половину экрана — по центру кнопка
+     «Сохранить пресет» оказалась бы прямо под ней. */
+  .pdlg{position:fixed; inset:0; z-index:80; display:none; align-items:flex-start; justify-content:center;
+    padding:14vh 24px 24px; overflow-y:auto;
+    background:rgba(8,7,6,.72); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);}
+  .pdlg.open{display:flex;}
+  .pdlg-card{width:100%; max-width:340px; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:20px; box-shadow:0 24px 60px rgba(0,0,0,.6);}
+  .pdlg-t{font-family:var(--mono); font-size:10px; letter-spacing:.2em; color:var(--dim);}
+  .pdlg-line{display:flex; align-items:baseline; gap:10px; margin-top:16px;
+    border-bottom:1px solid var(--line-2); padding-bottom:7px;}
+  .pdlg-line input{flex:1; min-width:0; background:transparent; border:0; outline:none;
+    color:var(--text); font-family:inherit; font-size:16px; padding:0;}
+  .pdlg-line input::placeholder{color:var(--faint);}
+  .pdlg-date{font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--faint); flex:0 0 auto;}
+  .pdlg-recipe{margin-top:12px; font-family:var(--mono); font-size:10px; line-height:1.6;
+    letter-spacing:.06em; color:var(--faint);}
+  .pdlg-btns{display:flex; gap:8px; margin-top:20px;}
+  .pdlg-btns button{flex:1; padding:12px 0; border-radius:11px; font-size:13px; font-weight:600; cursor:pointer;
+    background:transparent; border:1px solid var(--line-2); color:var(--dim);}
+  .pdlg-btns .go{background:var(--gold); border-color:transparent; color:var(--gold-ink);}
+  .pdlg-btns button:disabled{opacity:.4;}
+  .pdlg-btns button:active{transform:scale(.98);}
+
+  /* Список своих пресетов в настройках: имя + рецепт, чтобы было видно,
+     что именно этот пресет делает, а не только как он называется */
+  .myp{display:flex; align-items:center; gap:10px; padding:11px 14px; border-radius:12px;
+    background:var(--panel); border:1px solid var(--line); margin-bottom:6px;}
+  .myp-n{font-family:var(--mono); font-size:9px; font-weight:600; color:var(--dim); flex:0 0 auto;}
+  .myp-tx{flex:1; min-width:0;}
+  .myp-tx b{display:block; font-size:14px; font-weight:500; color:var(--text);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .myp-tx s{display:block; text-decoration:none; font-family:var(--mono); font-size:9.5px;
+    letter-spacing:.05em; color:var(--faint); margin-top:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .myp-x{flex:0 0 auto; background:transparent; border:0; color:var(--faint); cursor:pointer;
+    font-size:12px; padding:6px 4px; letter-spacing:.06em;}
+  .myp-x:active{color:var(--china);}
+  .myp-empty{font-size:13px; line-height:1.5; color:var(--faint); padding:2px 2px 4px;}
+
+  .toast{position:fixed; left:50%; bottom:calc(28px + env(safe-area-inset-bottom)); transform:translate(-50%,10px);
+    z-index:90; padding:10px 18px; border-radius:20px; background:var(--glass); border:1px solid var(--glass-line);
+    -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); color:var(--text);
+    font-size:13px; letter-spacing:.02em; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s;}
+  .toast.on{opacity:1; transform:translate(-50%,0);}
+  @media (prefers-reduced-motion:reduce){ .toast{transition:none;} }
 
   /* crop overlay */
   .crop{position:fixed; inset:0; z-index:60; background:var(--bg-deep);
@@ -711,7 +774,10 @@
   <div class="adj-row"><span class="albl">Тепло</span><input type="range" id="adj-temp" min="-100" max="100" value="0"><span class="aval" id="val-temp">0</span></div>
   <div class="adj-row"><span class="albl">Насыщенность</span><input type="range" id="adj-saturation" min="-100" max="100" value="0"><span class="aval" id="val-saturation">0</span></div>
   <div class="adj-row"><span class="albl">Зерно</span><input type="range" id="adj-grain" min="0" max="100" value="0"><span class="aval" id="val-grain">0</span></div>
-  <button class="adj-reset" id="adjReset">Сбросить</button>
+  <div class="adj-acts">
+    <button class="adj-reset" id="adjReset">Сбросить</button>
+    <button class="adj-reset adj-keep" id="adjKeep">Сохранить как пресет</button>
+  </div>
 </div>
 </div><!-- /dock -->
 
@@ -746,6 +812,22 @@
     <button class="cam-flip" id="camFlip" aria-label="Сменить камеру">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0 0 20.5 15"/></svg>
     </button>
+  </div>
+</div>
+
+<div class="pdlg" id="pdlg">
+  <div class="pdlg-card">
+    <div class="pdlg-t" id="pdlgT">НОВЫЙ ПРЕСЕТ</div>
+    <div class="pdlg-line">
+      <input id="pdlgName" type="text" maxlength="24" placeholder="Тёплый портрет"
+             autocomplete="off" autocapitalize="sentences" spellcheck="false">
+      <span class="pdlg-date" id="pdlgDate">27.07</span>
+    </div>
+    <div class="pdlg-recipe" id="pdlgRecipe"></div>
+    <div class="pdlg-btns">
+      <button id="pdlgX">Отмена</button>
+      <button class="go" id="pdlgOk">Сохранить пресет</button>
+    </div>
   </div>
 </div>
 
@@ -785,6 +867,11 @@
         <s>Работает офлайн, открывается с рабочего стола</s>
       </div>
       <button class="pwa-go" id="pwaInstall">УСТАНОВИТЬ</button>
+    </div>
+
+    <div class="set-group">
+      <div class="set-gl">МОИ ПРЕСЕТЫ</div>
+      <div id="mypList"></div>
     </div>
 
     <div class="set-group">
@@ -1344,13 +1431,27 @@ function makePreview(){
 }
 let raf = 0;
 // заголовок редактора — номер и имя текущего лука, как подпись кадра на плёнке
+// Как называется то, что человек СЕЙЧАС применил: свой пресет, если он выбран,
+// иначе встроенный лук. Одно место на шапку редактора, видоискатель и экран экспорта —
+// иначе экспорт подписывался базовым луком, хотя выбирали пресет.
+function currentFrame(){
+  if(myActive){
+    const list = MYP.all(), k = list.findIndex(p=> p.id === myActive);
+    if(k >= 0) return { no: LOOKS.length + k + 1, name: list[k].name };
+    myActive = null;                      // пресет удалили — возвращаемся к базовому луку
+  }
+  return { no: selected + 1, name: LOOKS[selected].name };
+}
 function updateHdrTitle(){
   const look = LOOKS[selected];
   if(!look) return;
   const el = document.getElementById('hdrTitle');
-  if(el) el.textContent = String(selected+1).padStart(2,'0') + ' · ' + look.name;
+  // если работаем из своего пресета — в шапке его имя и его номер в ленте,
+  // а не базовый лук: человек выбирал «Тёплый портрет», а не «Плёнку»
+  const cur = currentFrame(), no = cur.no, name = cur.name;
+  if(el) el.textContent = String(no).padStart(2,'0') + ' · ' + name;
   const cl = document.getElementById('camLook');   // видоискатель подписан текущим луком
-  if(cl) cl.textContent = look.name.toUpperCase();
+  if(cl) cl.textContent = name.toUpperCase();
 }
 function render(){ if(!sourceCanvas) return; updateHdrTitle(); cancelAnimationFrame(raf); raf = requestAnimationFrame(renderNow); }
 // Размытая подложка под кадром. Рисуем в крошечный холст (48px) — растянет и размоет уже CSS,
@@ -1390,26 +1491,45 @@ function buildChips(){
   // перфорация по ширине ленты
   const perf = document.getElementById('perf');
   if(perf){ perf.innerHTML = ''; for(let k=0;k<9;k++) perf.appendChild(document.createElement('i')); }
-  LOOKS.forEach((look, i)=>{
+  // заводская плёнка, следом свои катушки — одной лентой, сквозной нумерацией
+  frameList().forEach((e, i)=>{
     const chip = document.createElement('div');
-    chip.className = 'chip' + (i===selected?' active':'');
+    chip.className = 'chip' + (frameActive(e, i) ? ' active' : '') + (e.mine ? ' mine' : '');
     const c = document.createElement('canvas'); c.width=tw; c.height=th;
     const id = new ImageData(new Uint8ClampedArray(thumb.data), tw, th);
-    applyLook(id, look);
+    if(e.mine) myRender(id, e.p, thumb); else applyLook(id, e.look);
     c.getContext('2d').putImageData(id, 0, 0);
     const num = document.createElement('div'); num.className = 'cn';
     num.textContent = String(i+1).padStart(2,'0');
-    const label = document.createElement('span'); label.textContent = look.name;
+    const label = document.createElement('span');
+    label.textContent = e.mine ? e.p.name : e.look.name;
     chip.appendChild(c); chip.appendChild(num); chip.appendChild(label);
     chip.onclick = ()=>{
-      selected = i; intensity = 100;
-      document.getElementById('intensity').value = 100;
-      document.getElementById('intensityVal').textContent = '100';
+      pickFrame(e, i);
       [...chips.children].forEach((el,idx)=> el.classList.toggle('active', idx===i));
       render();
     };
     chips.appendChild(chip);
   });
+}
+// Единый список кадров для ленты и контактного листа: встроенные луки, затем свои пресеты.
+function frameList(){
+  return LOOKS.map(l=>({ mine:false, look:l }))
+              .concat(MYP.all().map(p=>({ mine:true, p })));
+}
+function frameActive(e, i){
+  return e.mine ? myActive === e.p.id : (!myActive && i === selected);
+}
+function pickFrame(e){
+  if(e.mine){ applyMyPreset(e.p); return; }
+  // Уходим со своего пресета на встроенный лук — снимаем и правки, которые пришли
+  // ИЗ пресета. Иначе человек тапает «Ч/Б», думает что видит чистую плёнку, а на ней
+  // молча висит чужая экспозиция +18. Между обычными луками правки, как и раньше,
+  // сохраняются: они там свои, руками наведённые.
+  if(myActive){ ADJ_KEYS.forEach(k=> adjust[k] = 0); syncAdjustUI(); }
+  myActive = null;
+  selected = LOOKS.indexOf(e.look);
+  setIntensity(100);
 }
 
 document.getElementById('file').onchange = e=>{
@@ -1465,10 +1585,14 @@ function buildHomeLooks(){
   const base = document.createElement('canvas'); base.width = tw; base.height = th;
   base.getContext('2d').drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, tw, th);
   const bd = base.getContext('2d').getImageData(0, 0, tw, th);
-  const total = LOOKS.length;
+  const frames = frameList();                 // встроенные луки + свои пресеты
+  const total = frames.length;
+  const mine = frames.length - LOOKS.length;
   const counter = document.getElementById('edgeCount');
   const roll = document.getElementById('rollInfo');
-  if(roll) roll.textContent = total + ' ЛУКОВ';
+  // «1 СВОЙ», но «2 СВОИХ» — без согласования подпись читается как машинная
+  if(roll) roll.textContent = total + ' ЛУКОВ'
+    + (mine ? ' · ' + mine + (mine % 10 === 1 && mine % 100 !== 11 ? ' СВОЙ' : ' СВОИХ') : '');
   const edgeTxt = document.getElementById('edgeTxt');   // маркировка по краю плёнки — с датой съёмки листа
   if(edgeTxt){
     const d = new Date();
@@ -1478,27 +1602,27 @@ function buildHomeLooks(){
   let i = 0;                                   // «Оригинал» — кадр 01 контактного листа
   const step = ()=>{
     if(token !== hlToken || i >= total) return;
-    const look = LOOKS[i], idx = i; i++;
+    const e = frames[i], idx = i; i++;
+    const look = e.mine ? LOOKS[myBase(e.p)] : e.look;
     const card = document.createElement('button');
-    card.className = 'look-card' + (idx === selected ? ' on' : '');
+    card.className = 'look-card' + (frameActive(e, idx) ? ' on' : '') + (e.mine ? ' mine' : '');
     const wrap = document.createElement('div'); wrap.className = 'thumb';
     const c = document.createElement('canvas'); c.width = tw; c.height = th;
     const id = new ImageData(new Uint8ClampedArray(bd.data), tw, th);
-    applyLook(id, look);
+    if(e.mine) myRender(id, e.p, bd); else applyLook(id, look);
     c.getContext('2d').putImageData(id, 0, 0);
-    if(look.bloom) applyBloom(c, look.bloom, look.bloomWarm);
+    // свечение у своего пресета — той же силы, что и сам лук в нём
+    if(look.bloom) applyBloom(c, look.bloom * (e.mine ? (e.p.intensity == null ? 100 : e.p.intensity)/100 : 1), look.bloomWarm);
     wrap.appendChild(c);
     const meta = document.createElement('div'); meta.className = 'meta';
     const no = document.createElement('span'); no.className = 'no';
     no.textContent = String(idx + 1).padStart(2, '0');
     const nm = document.createElement('span'); nm.className = 'nm';
-    nm.textContent = look.name;
+    nm.textContent = e.mine ? e.p.name : look.name;
     meta.appendChild(no); meta.appendChild(nm);
     card.appendChild(wrap); card.appendChild(meta);
     card.onclick = ()=>{
-      selected = idx; intensity = 100;
-      document.getElementById('intensity').value = 100;
-      document.getElementById('intensityVal').textContent = '100';
+      pickFrame(e, idx);
       buildChips();
       goEditor(); setTab('presets'); render();
     };
@@ -1508,8 +1632,16 @@ function buildHomeLooks(){
   };
   hlSchedule(step);
 }
-// rAF замирает в скрытой вкладке/при погасшем экране — тогда строим через setTimeout
-function hlSchedule(fn){ document.hidden ? setTimeout(fn, 16) : requestAnimationFrame(fn); }
+// На видимом экране строим по кадру — лист проявляется плавно. В свёрнутом приложении
+// кадров нет, а ЦЕПОЧКУ setTimeout браузер душит до одной в секунду и в фоне морозит —
+// лист так и застревал недостроенным (13 кадров собирались минуту). MessageChannel под
+// троттлинг не попадает, поэтому в фоне лист досчитывается сразу. См. тот же приём в nextFrame().
+function hlSchedule(fn){
+  if(!document.hidden) return requestAnimationFrame(fn);
+  const ch = new MessageChannel();
+  ch.port1.onmessage = ()=> fn();
+  ch.port2.postMessage(0);
+}
 document.getElementById('intensity').oninput = e=>{
   intensity = +e.target.value;
   document.getElementById('intensityVal').textContent = intensity;
@@ -1553,12 +1685,139 @@ ADJ_KEYS.forEach(k=>{
   };
   el.onchange = ()=>{ scrubbing = false; render(); };
 });
+function syncAdjustUI(){
+  ADJ_KEYS.forEach(k=>{
+    document.getElementById('adj-'+k).value = adjust[k];
+    document.getElementById('val-'+k).textContent = (k!=='grain' && adjust[k]>0 ? '+' : '') + adjust[k];
+  });
+  updateAdjDot();
+}
 document.getElementById('adjReset').onclick = ()=>{
-  ADJ_KEYS.forEach(k=>{ adjust[k]=0;
-    document.getElementById('adj-'+k).value = 0;
-    document.getElementById('val-'+k).textContent = '0'; });
-  updateAdjDot(); render();
+  ADJ_KEYS.forEach(k=> adjust[k]=0);
+  syncAdjustUI(); render();
 };
+
+// ─── Свои пресеты ───
+// Пресет — это РЕЦЕПТ: базовый лук, его сила и ручные правки. Свернуть три части
+// в один набор коэффициентов нельзя: «сила» — это смешивание результата с оригиналом,
+// а правки идут отдельным проходом ПОВЕРХ лука. Поэтому храним рецепт целиком и
+// прогоняем ту же цепочку, что и в редакторе — иначе сохранённое не совпало бы с виденным.
+const MYP = {
+  all(){ try{ const v = JSON.parse(localStorage.getItem('myPresets') || '[]');
+               return Array.isArray(v) ? v : []; }catch(_){ return []; } },
+  write(l){ try{ localStorage.setItem('myPresets', JSON.stringify(l)); }catch(_){} return l; },
+  add(name){
+    return this.write(this.all().concat({
+      id: 'p' + Date.now(),
+      name,
+      base: LOOKS[selected].name,          // ИМЯ, не номер: см. myBase()
+      intensity,
+      adjust: Object.assign({}, adjust),
+      date: Date.now()
+    }));
+  },
+  remove(id){ return this.write(this.all().filter(p=> p.id !== id)); }
+};
+// Базовый лук ищем ПО ИМЕНИ. Если список встроенных когда-нибудь изменится или
+// перетасуется, сохранённый пресет не начнёт молча показывать чужую плёнку.
+function myBase(p){ const i = LOOKS.findIndex(l=> l.name === p.base); return i < 0 ? 0 : i; }
+const ZERO_ADJ = { exposure:0, contrast:0, temp:0, saturation:0, grain:0 };
+// Отрисовка пресета в миниатюру: тот же порядок, что в processedData.
+function myRender(id, p, orig){
+  applyLook(id, LOOKS[myBase(p)], (p.intensity == null ? 100 : p.intensity)/100, orig);
+  applyAdjust(id, p.adjust || ZERO_ADJ);
+}
+// Короткая расшифровка рецепта — и в диалоге, и в списке настроек человек видит,
+// что пресет реально делает, а не только как он называется.
+const ADJ_RU = { exposure:'экспозиция', contrast:'контраст', temp:'тепло', saturation:'насыщенность', grain:'зерно' };
+function myRecipeText(p){
+  const parts = [ (p.base || LOOKS[0].name).toUpperCase() ];
+  const inten = p.intensity == null ? 100 : p.intensity;
+  if(inten !== 100) parts.push('сила ' + inten + '%');
+  ADJ_KEYS.forEach(k=>{
+    const v = (p.adjust || {})[k] || 0;
+    if(v) parts.push(ADJ_RU[k] + ' ' + (v > 0 && k !== 'grain' ? '+' : '') + v);
+  });
+  return parts.join(' · ');
+}
+let myActive = null;                        // id выбранного своего пресета, иначе null
+function applyMyPreset(p){
+  selected = myBase(p);
+  ADJ_KEYS.forEach(k=> adjust[k] = (p.adjust || ZERO_ADJ)[k] || 0);
+  syncAdjustUI();
+  setIntensity(p.intensity == null ? 100 : p.intensity);
+  myActive = p.id;
+}
+
+// ─── Диалог: подписать свою катушку ───
+const pdlg = document.getElementById('pdlg'), pdlgName = document.getElementById('pdlgName');
+function openSavePreset(){
+  if(!sourceCanvas) return;
+  const d = new Date();
+  document.getElementById('pdlgDate').textContent =
+    String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0');
+  document.getElementById('pdlgRecipe').textContent =
+    myRecipeText({ base:LOOKS[selected].name, intensity, adjust });
+  pdlgName.value = '';
+  document.getElementById('pdlgOk').disabled = true;
+  pdlg.classList.add('open');
+  setTimeout(()=> pdlgName.focus(), 60);
+}
+function closeSavePreset(){ pdlg.classList.remove('open'); pdlgName.blur(); }
+pdlgName.oninput = ()=>{
+  document.getElementById('pdlgOk').disabled = !pdlgName.value.trim();
+};
+pdlgName.onkeydown = e=>{ if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('pdlgOk').click(); } };
+document.getElementById('pdlgX').onclick = closeSavePreset;
+document.getElementById('adjKeep').onclick = openSavePreset;
+document.getElementById('pdlgOk').onclick = ()=>{
+  const name = pdlgName.value.trim();
+  if(!name) return;
+  const list = MYP.add(name);
+  myActive = list[list.length-1].id;      // сразу работаем из только что сохранённого
+  closeSavePreset();
+  buildChips(); buildHomeLooks(); renderMyList(); updateHdrTitle();
+  toast('Пресет сохранён');
+};
+// короткое подтверждение действия — тем же языком, что и кнопка
+let toastT = 0;
+function toast(text){
+  let el = document.getElementById('toast');
+  if(!el){ el = document.createElement('div'); el.id = 'toast'; el.className = 'toast'; document.body.appendChild(el); }
+  el.textContent = text; el.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(()=> el.classList.remove('on'), 1800);
+}
+
+// ─── Список своих пресетов в настройках ───
+function renderMyList(){
+  const host = document.getElementById('mypList');
+  if(!host) return;
+  const list = MYP.all();
+  host.innerHTML = '';
+  if(!list.length){
+    const e = document.createElement('div'); e.className = 'myp-empty';
+    e.textContent = 'Пока пусто. Настройте фото в редакторе и сохраните обработку как пресет — она встанет кадром в ленту.';
+    host.appendChild(e); return;
+  }
+  list.forEach((p, i)=>{
+    const row = document.createElement('div'); row.className = 'myp';
+    const no = document.createElement('span'); no.className = 'myp-n';
+    no.textContent = String(LOOKS.length + i + 1).padStart(2,'0');
+    const tx = document.createElement('div'); tx.className = 'myp-tx';
+    const b = document.createElement('b'); b.textContent = p.name;
+    const s = document.createElement('s'); s.textContent = myRecipeText(p);
+    tx.appendChild(b); tx.appendChild(s);
+    const x = document.createElement('button'); x.className = 'myp-x'; x.textContent = 'Удалить';
+    x.onclick = ()=>{
+      if(!confirm('Удалить пресет «' + p.name + '»?')) return;
+      MYP.remove(p.id);
+      if(myActive === p.id) myActive = null;
+      renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
+    };
+    row.appendChild(no); row.appendChild(tx); row.appendChild(x);
+    host.appendChild(row);
+  });
+}
 // ─── Настройки приложения: только то, что действительно на что-то влияет ───
 const SET = {
   get(k, d){ try{ const v = localStorage.getItem('set_'+k); return v === null ? d : JSON.parse(v); }catch(_){ return d; } },
@@ -1580,7 +1839,7 @@ document.getElementById('openSettings').onclick = ()=>{
   document.getElementById('settings').classList.add('open');
   // карточку установки показываем, только если браузер реально предложил установку
   document.getElementById('pwaCard').style.display = deferredPrompt ? 'flex' : 'none';
-  applyCamGrid(); applyDefSize();
+  applyCamGrid(); applyDefSize(); renderMyList();
 };
 document.getElementById('setClose').onclick = ()=> document.getElementById('settings').classList.remove('open');
 document.getElementById('rowGrid').onclick = ()=>{
@@ -1793,7 +2052,7 @@ function expRefresh(){
   const prev = document.getElementById('expCanvas');
   prev.width = c.width; prev.height = c.height;
   prev.getContext('2d').drawImage(c, 0, 0);
-  document.getElementById('expLook').textContent = LOOKS[selected].name.toUpperCase();
+  document.getElementById('expLook').textContent = currentFrame().name.toUpperCase();
   [...document.getElementById('expSizes').children].forEach(b=>
     b.classList.toggle('active', +b.dataset.max === expMax));
   // размер — настоящий, с оригинала; вес прикидываем по превью, пересчитав на площадь
