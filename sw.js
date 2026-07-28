@@ -1,5 +1,5 @@
 // Service worker — offline cache for the Photo Presets PWA
-const CACHE = 'photo-presets-v32';
+const CACHE = 'photo-presets-v33';
 const ASSETS = [
   './',
   './index.html',
@@ -27,10 +27,35 @@ self.addEventListener('activate', e => {
   );
 });
 
+// Android отдаёт «поделиться» POST-запросом с файлом внутри. Страница такой запрос
+// прочитать не может — его перехватывает воркер: кладёт снимок в кэш и отправляет
+// приложение на обычный адрес, откуда оно этот снимок уже забирает.
+const SHARE_CACHE = 'photo-presets-share';
+const SHARE_KEY = './shared-photo';
+
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
   const req = e.request;
   const url = new URL(req.url);
+
+  if (req.method === 'POST' && url.searchParams.has('share')) {
+    e.respondWith((async () => {
+      try {
+        const form = await req.formData();
+        const file = form.get('photo');
+        if (file && file.size) {
+          const c = await caches.open(SHARE_CACHE);
+          await c.put(SHARE_KEY, new Response(file, {
+            headers: { 'content-type': file.type || 'image/jpeg' }
+          }));
+        }
+      } catch (err) {}
+      // 303 обязателен: иначе браузер повторит POST при обновлении страницы
+      return Response.redirect('./index.html?shared=1', 303);
+    })());
+    return;
+  }
+
+  if (req.method !== 'GET') return;
   const isHTML = req.mode === 'navigate' || req.destination === 'document' ||
                  url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
 

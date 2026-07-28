@@ -462,7 +462,7 @@
   .cv-pad{flex:0 0 auto; width:100%; max-width:min(340px, 44vh); min-width:200px; aspect-ratio:1/1; position:relative;}
   .cv-pad canvas{width:100%; height:100%; display:block; border-radius:4px;
     background:var(--panel); box-shadow:0 0 0 1px var(--line) inset; touch-action:none;}
-  .cv-dock{padding-left:20px; padding-right:20px;}
+  /* отступы задаются ниже составным селектором — .ov-dock обнуляет боковые */
   .cv-chans{display:flex; gap:6px; margin:2px 0 10px;}
   .cv-chans button{flex:1; padding:9px 0; border-radius:10px; cursor:pointer;
     background:transparent; border:1px solid var(--line); color:var(--dim);
@@ -491,7 +491,7 @@
     font-size:8px; letter-spacing:.08em; color:var(--dim); background:linear-gradient(transparent, rgba(0,0,0,.72));}
   .bi.done .bs{color:var(--gold);}
   .bi.fail .bs{color:var(--china);}
-  .batch-dock{padding-left:20px; padding-right:20px;}
+  /* отступы задаются ниже составным селектором — .ov-dock обнуляет боковые */
   .batch-status{font-size:12.5px; color:var(--dim); text-align:center; margin:4px 0 10px; min-height:16px;}
   .batch-btns{display:flex; gap:8px;}
   .batch-btns .crop-btn{flex:1;}
@@ -651,6 +651,10 @@
      .exp-dock (объявлен выше, та же специфичность), подписи прижимались вплотную к краю
      экрана и первая буква срезалась. Поймано Артуром на телефоне. */
   .ov-dock.exp-dock{padding:16px 20px calc(20px + env(safe-area-inset-bottom));}
+  /* Те же составные селекторы и по той же причине: .ov-dock объявлен НИЖЕ этих экранов
+     и при равной специфичности перебивал их боковые отступы — кнопки упирались в край
+     панели. У пачки это было с самого начала, поймано Артуром на кривой. */
+  .ov-dock.cv-dock, .ov-dock.batch-dock{padding-left:20px; padding-right:20px;}
 
   /* on phones the header has 3 left buttons + Save — the centred "PRESETS" title
      collides with the crop button, and the bottom "ПРЕСЕТЫ" tab already covers it */
@@ -1650,6 +1654,41 @@ document.getElementById('onbPick').onclick = ()=> document.getElementById('homeP
 document.getElementById('onbCam').onclick  = ()=> document.getElementById('homeCam').click();
 onbEl.classList.add('open');
 
+// Снимок прислали через «Поделиться» — воркер положил его в кэш, забираем и открываем.
+(function(){
+  if(!new URLSearchParams(location.search).has('shared')) return;
+  history.replaceState(null, '', appBase());
+  (async ()=>{
+    try{
+      const c = await caches.open('photo-presets-share');
+      const r = await c.match('./shared-photo');
+      if(!r) return loadDemo(true);   // делиться передумали — открываем как обычно
+      const blob = await r.blob();
+      await c.delete('./shared-photo');        // забрали — больше не показываем
+      sourceExif = await fileExif(blob);
+      const img = new Image();
+      img.onload = ()=>{ setSource(img); closeOnb(); goEditor(); };
+      img.onerror = ()=>{ toast('Снимок не открылся'); loadDemo(true); };
+      img.src = URL.createObjectURL(blob);
+    }catch(_){ loadDemo(true); }
+  })();
+})();
+
+// Пресет пришёл ссылкой — показываем, ЧТО именно предлагают, и даём переименовать.
+// Адрес чистим сразу, чтобы обновление страницы не предлагало то же самое повторно.
+(function(){
+  const code = new URLSearchParams(location.search).get('p');
+  if(!code) return;
+  history.replaceState(null, '', appBase());
+  const p = presetFromLink(code);
+  if(!p) return setTimeout(()=> toast('Ссылка на пресет не читается'), 400);
+  setTimeout(()=>{
+    closeOnb();
+    pdlgOpen('ПРЕСЕТ ПО ССЫЛКЕ', dayMonth(), myRecipeText(p), p.name, 'Добавить к себе');
+    pdlgIncoming = p;
+  }, 300);
+})();
+
 function processedData(src){
   src = src || sourceCanvas;
   const w = src.width, h = src.height;
@@ -2252,6 +2291,45 @@ MYP.importFrom = function(text){
   this.write(list);
   return { added };
 };
+// ─── Пресет ссылкой ───
+// Файлом делиться плохо: мессенджер показывает .json безымянным документом, а открыть
+// его в приложении получатель не может. Пресет — это имя и семь чисел, они спокойно
+// помещаются в адрес. Ссылка работает в любом мессенджере, а тап по ней открывает
+// установленное приложение, потому что адрес лежит внутри его области.
+function appBase(){
+  return location.origin + location.pathname.replace(/[^/]*$/, '');
+}
+function presetToLink(p){
+  const body = { n:p.name, b:p.base, i:p.intensity, a:ADJ_KEYS.map(k=> (p.adjust||{})[k] || 0) };
+  const bytes = new TextEncoder().encode(JSON.stringify(body));
+  let bin = '';
+  for(const b of bytes) bin += String.fromCharCode(b);
+  const b64 = btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  return appBase() + '?p=' + b64;
+}
+function presetFromLink(code){
+  try{
+    const b64 = code.replace(/-/g,'+').replace(/_/g,'/');
+    const bin = atob(b64 + '==='.slice((b64.length + 3) % 4));
+    const bytes = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+    const o = JSON.parse(new TextDecoder().decode(bytes));
+    const adjust = {};
+    ADJ_KEYS.forEach((k,i)=> adjust[k] = Array.isArray(o.a) ? o.a[i] : 0);
+    return sanitizePreset({ name:o.n, base:o.b, intensity:o.i, adjust });
+  }catch(_){ return null; }
+}
+async function sharePresetLink(p){
+  const url = presetToLink(p);
+  const text = 'Пресет «' + p.name + '» для приложения «Пресеты»';
+  if(navigator.share){
+    try{ await navigator.share({ title:p.name, text, url }); return; }
+    catch(e){ if(e && e.name === 'AbortError') return; }
+  }
+  try{ await navigator.clipboard.writeText(url); toast('Ссылка скопирована'); }
+  catch(_){ prompt('Скопируйте ссылку на пресет:', url); }
+}
+
 function presetBlob(list){
   const body = { app:'presety', v:1, presets: list.map(p=>({
     name:p.name, base:p.base, intensity:p.intensity, adjust:p.adjust })) };
@@ -2309,9 +2387,9 @@ function applyMyPreset(p){
 
 // ─── Диалог: подписать свою катушку ───
 const pdlg = document.getElementById('pdlg'), pdlgName = document.getElementById('pdlgName');
-let pdlgMode = null;                          // null — новый пресет, иначе id переименовываемого
+let pdlgMode = null, pdlgIncoming = null;     // null — новый пресет; id — переименование; объект — пришёл по ссылке
 function pdlgOpen(title, date, recipe, value, okText){
-  pdlgMode = null;
+  pdlgMode = null; pdlgIncoming = null;
   document.getElementById('pdlgT').textContent = title;
   document.getElementById('pdlgDate').textContent = date;
   document.getElementById('pdlgRecipe').textContent = recipe;
@@ -2343,6 +2421,20 @@ document.getElementById('adjKeep').onclick = openSavePreset;
 document.getElementById('pdlgOk').onclick = ()=>{
   const name = pdlgName.value.trim();
   if(!name) return;
+  if(pdlgIncoming){
+    const p = Object.assign({}, pdlgIncoming, { name });
+    const taken = new Set(MYP.all().map(x=> x.name.toLowerCase()));
+    let nm = name, n = 2;
+    while(taken.has(nm.toLowerCase())) nm = name + ' ' + (n++);
+    const list = MYP.write(MYP.all().concat({
+      id:'p'+Date.now(), name:nm, base:p.base, intensity:p.intensity, adjust:p.adjust, date:Date.now() }));
+    myActive = list[list.length-1].id;
+    if(sourceCanvas) applyMyPreset(list[list.length-1]);
+    closeSavePreset();
+    buildChips(); buildHomeLooks(); renderMyList(); updateHdrTitle(); render();
+    toast('Пресет добавлен');
+    return;
+  }
   if(pdlgMode){
     MYP.rename(pdlgMode, name);
     closeSavePreset();
@@ -2390,7 +2482,7 @@ function renderMyList(){
     const s = document.createElement('s'); s.textContent = myRecipeText(p);
     tx.appendChild(b); tx.appendChild(s);
     const sh = document.createElement('button'); sh.className = 'myp-x'; sh.textContent = 'Поделиться';
-    sh.onclick = ()=> sharePresets([p], fileSlug(p.name));
+    sh.onclick = ()=> sharePresetLink(p);
     const x = document.createElement('button'); x.className = 'myp-x'; x.textContent = 'Удалить';
     x.onclick = ()=>{
       if(!confirm('Удалить пресет «' + p.name + '»?')) return;
@@ -2842,10 +2934,12 @@ cvBoard.addEventListener('pointermove', e=>{
   if(!cvDrag) return;
   e.preventDefault();
   const pts = curve[cvChan], i = cvDrag.i, p = cvPoint(e);
+  // Крайние точки двигаются и вбок — это чёрная и белая точка: тянешь нижнюю вправо и
+  // поднимаешь порог чёрного, верхнюю влево — опускаешь белое. Всё, что левее первой
+  // точки, кривая держит на её уровне, правее последней — на уровне последней.
   const lo = i === 0 ? 0 : pts[i-1][0] + 1;
   const hi = i === pts.length-1 ? 255 : pts[i+1][0] - 1;
-  // крайние точки ездят только по вертикали — иначе кривая перестаёт покрывать весь диапазон
-  pts[i][0] = (i === 0) ? 0 : (i === pts.length-1) ? 255 : Math.round(Math.max(lo, Math.min(hi, p[0])));
+  pts[i][0] = Math.round(Math.max(lo, Math.min(hi, p[0])));
   pts[i][1] = Math.round(p[1]);
   cvDrag.moved = true;
   cvCommit(); render();
@@ -3181,7 +3275,12 @@ function makeDemoPhoto(){
   const img = new Image(); img.onload = ()=> setSource(img); img.src = c.toDataURL();
 }
 // start on the real demo photo; fall back to the synthetic gradient if it can't load
-function loadDemo(){
+// Присланный снимок важнее демонстрационного. Демо лежит рядом и грузится за миг,
+// а присланный идёт через кэш воркера и приходит позже — без этой проверки демо
+// успевало перебить то, чем человек только что поделился.
+const sharedPending = new URLSearchParams(location.search).has('shared');
+function loadDemo(force){
+  if(sharedPending && !force) return;
   const img = new Image();
   img.onload = ()=> setSource(img);
   img.onerror = ()=> makeDemoPhoto();
