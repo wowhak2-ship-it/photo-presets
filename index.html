@@ -458,6 +458,19 @@
     padding:calc(58px + env(safe-area-inset-top)) 20px 10px;}
   .hs-body canvas{max-width:100%; max-height:100%; border-radius:2px; display:block;
     box-shadow:0 10px 26px rgba(0,0,0,.5);}
+  /* «До/После» держим НА фото, а не в панели: там уже тесно, а тут кнопка на виду
+     и рядом с тем, что она показывает. Работает по удержанию, как в Ретуши. */
+  /* Обёртка сжимается ровно по снимку, поэтому кнопка сидит в его углу, а не висит
+     в пустоте между фото и панелью. */
+  .ov-frame{position:relative; display:flex; min-width:0; min-height:0; max-width:100%; max-height:100%;}
+  .ov-frame canvas{max-width:100%; max-height:100%; display:block;}
+  /* НИЗ, а не верх: сверху уже лежит «Готово» в шапке оверлея, и кнопки налезали друг
+     на друга — поймано Артуром. Снизу свободно и ближе к пальцу. */
+  .ov-cmp{position:absolute; bottom:8px; right:8px; z-index:3; padding:7px 12px; border-radius:16px;
+    background:rgba(18,14,9,.66); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+    border:1px solid var(--glass-line); color:var(--text); font-size:11px; letter-spacing:.02em;
+    cursor:pointer; user-select:none; -webkit-user-select:none; touch-action:none;}
+  .ov-cmp.active{background:var(--gold); color:var(--gold-ink); border-color:transparent; font-weight:600;}
   .hs-bands{display:flex; gap:6px; margin:2px 0 8px;}
   .hs-bands button{flex:1; height:34px; border-radius:9px; cursor:pointer; border:1px solid transparent;
     position:relative; padding:0;}
@@ -954,7 +967,7 @@
     <span class="crop-top">Цвета</span>
     <button class="ov-act gold" id="hsApply">Готово</button>
   </div>
-  <div class="hs-body"><canvas id="hsShot"></canvas></div>
+  <div class="hs-body"><div class="ov-frame"><canvas id="hsShot"></canvas><button class="ov-cmp" id="hsCmp">До/После</button></div></div>
   <div class="ov-dock hs-dock">
     <div class="hs-bands" id="hsBands"></div>
     <div class="hs-name" id="hsName">Красный</div>
@@ -977,7 +990,7 @@
     <button class="ov-act gold" id="cvApply">Готово</button>
   </div>
   <div class="cv-body">
-    <div class="cv-shot"><canvas id="cvShot"></canvas></div>
+    <div class="cv-shot"><div class="ov-frame"><canvas id="cvShot"></canvas><button class="ov-cmp" id="cvCmp">До/После</button></div></div>
     <div class="cv-pad"><canvas id="cvBoard"></canvas></div>
   </div>
   <div class="ov-dock cv-dock">
@@ -1439,7 +1452,12 @@ function buildHslTables(){
     const A = hsl[HSL_BANDS[i].key], B = hsl[HSL_BANDS[next].key];
     hue[h] = (A.hue*wA + B.hue*wB)/100 * 30;                  // ±30° — как в Lightroom
     sat[h] = 1 + (A.sat*wA + B.sat*wB)/100;                   // +100 → вдвое, −100 → в серый
-    lum[h] = 1 + (A.lum*wA + B.lum*wB)/100 * 0.6;             // яркость чувствительнее, ход мягче
+    // Яркость — СТЕПЕНЬ, а не множитель. Умножение давало неровный ход: тёмная листва
+    // в тени почти не отзывалась (+0.05), а светлая на солнце уходила в пересвет (+0.23).
+    // Степенная кривая двигает весь диапазон соразмерно и не может выбить света: ноль
+    // остаётся нулём, единица — единицей.
+    const la = (A.lum*wA + B.lum*wB)/100;                      // −1..1
+    lum[h] = la >= 0 ? 1/(1 + la*0.85) : 1 + (-la)*0.85;
   }
   hslTables = { hue, sat, lum };
   return hslTables;
@@ -1469,7 +1487,7 @@ function applyHsl(img, T, y0, y1){
     let S = den > 0.0001 ? (dl/255)/den : 0;
     h += dh; if(h < 0) h += 360; else if(h >= 360) h -= 360;
     S *= ms; if(S > 1) S = 1; else if(S < 0) S = 0;
-    L *= ml; if(L > 1) L = 1; else if(L < 0) L = 0;
+    if(ml !== 1) L = Math.pow(L, ml);
     const C = (1 - Math.abs(2*L - 1)) * S;
     const seg = h/60;
     const X = C * (1 - Math.abs((seg % 2) - 1));
@@ -2984,6 +3002,11 @@ function hsSync(){
   });
   const band = HSL_BANDS.find(b=> b.key === hsBand);
   document.getElementById('hsName').textContent = band.name;
+  hsMarkBands();
+}
+// Метки «здесь накручено» обновляем и во время протяжки ползунка: иначе точка под
+// цветом появлялась только после переключения полосы, и человек не видел, что уже тронул.
+function hsMarkBands(){
   document.querySelectorAll('#hsBands button').forEach(el=>{
     const s = hsl[el.dataset.band];
     el.classList.toggle('on', el.dataset.band === hsBand);
@@ -2991,6 +3014,21 @@ function hsSync(){
   });
 }
 function hsCommit(){ buildHslTables(); editedCanvas = null; hsDrawShot(); hsSync(); }
+// Удержание кнопки показывает кадр БЕЗ текущего инструмента — так видно, что именно
+// ты сделал, а не «стало ли лучше вообще». Гасим только свой слой, остальное остаётся.
+function holdCompare(btn, off, redraw){
+  const down = e=>{ e.preventDefault();
+    try{ btn.setPointerCapture(e.pointerId); }catch(_){}
+    btn.classList.add('active'); off(true); redraw(); };
+  const up = ()=>{ if(!btn.classList.contains('active')) return;
+    btn.classList.remove('active'); off(false); redraw(); };
+  btn.addEventListener('pointerdown', down);
+  btn.addEventListener('pointerup', up);
+  btn.addEventListener('pointercancel', up);
+  btn.addEventListener('pointerleave', up);
+}
+holdCompare(document.getElementById('hsCmp'),
+  on=>{ hslTables = on ? null : buildHslTables(); }, ()=> hsDrawShot());
 document.getElementById('hsBands').onclick = e=>{
   const b = e.target.closest('button'); if(!b) return;
   hsBand = b.dataset.band; hsSync();
@@ -3000,7 +3038,7 @@ HSL_PARTS.forEach(k=>{
     hsl[hsBand][k] = +document.getElementById('hs-'+k).value;
     document.getElementById('hsv-'+k).textContent =
       (hsl[hsBand][k] > 0 ? '+' : '') + hsl[hsBand][k];
-    buildHslTables(); editedCanvas = null; hsDrawShot();
+    buildHslTables(); editedCanvas = null; hsMarkBands(); hsDrawShot();
   });
 });
 document.getElementById('hsResetOne').onclick = ()=>{
@@ -3121,6 +3159,8 @@ function cvCommit(){
   buildCurveLuts(); editedCanvas = null;
   cvDrawShot(); cvDraw();
 }
+holdCompare(document.getElementById('cvCmp'),
+  on=>{ curveLuts = on ? null : buildCurveLuts(); }, ()=> cvDrawShot());
 cvBoard.addEventListener('pointerdown', e=>{
   e.preventDefault();
   try{ cvBoard.setPointerCapture(e.pointerId); }catch(_){}
