@@ -184,11 +184,14 @@
   input[type=range]::-moz-range-thumb{width:6px; height:26px; border:none; border-radius:3px; background:var(--gold);}
 
   /* инструменты — кнопки с рамкой, как в макете; ряд отделён от ленты плёнки */
-  .toolbar{position:relative; z-index:2; display:none; align-items:center;
-    justify-content:space-between; gap:6px; padding:13px 12px 12px;
+  /* Инструментов стало семь, и в одну строку на 360 px они уже не помещались — подписи
+     слипались, крайняя кнопка упиралась в край. Раскладываем сеткой в две строки и
+     группируем по смыслу: сверху работа с кадром и лицом, снизу работа с цветом. */
+  .toolbar{position:relative; z-index:2; display:none;
+    grid-template-columns:repeat(4, 1fr); gap:7px; padding:13px 12px 12px;
     border-bottom:1px solid rgba(255,255,255,.06);}
-  /* пять кнопок на узком экране: иконка над подписью — в строку они не помещаются */
-  .tool{flex:1; display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+  .toolbar.on{display:grid;}
+  .tool{display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
     background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); color:var(--text);
     font-size:9.5px; font-weight:500; letter-spacing:.01em; cursor:pointer;
     padding:9px 2px; border-radius:11px;
@@ -448,6 +451,23 @@
     padding:12px 0; border-radius:11px; cursor:pointer;}
   .exp-batch:active{transform:scale(.98);}
 
+  /* ─── Работа с отдельными цветами ─── */
+  .hsl{position:fixed; inset:0; z-index:58; background:var(--bg-deep); display:none; flex-direction:column;}
+  .hsl.open{display:flex;}
+  .hs-body{flex:1; min-height:0; display:flex; align-items:center; justify-content:center;
+    padding:calc(58px + env(safe-area-inset-top)) 20px 10px;}
+  .hs-body canvas{max-width:100%; max-height:100%; border-radius:2px; display:block;
+    box-shadow:0 10px 26px rgba(0,0,0,.5);}
+  .hs-bands{display:flex; gap:6px; margin:2px 0 8px;}
+  .hs-bands button{flex:1; height:34px; border-radius:9px; cursor:pointer; border:1px solid transparent;
+    position:relative; padding:0;}
+  .hs-bands button.on{border-color:var(--text); transform:scale(1.06);}
+  /* точка снизу = у этого цвета что-то накручено, видно не открывая его */
+  .hs-bands button.set::after{content:""; position:absolute; left:50%; bottom:-6px; width:4px; height:4px;
+    margin-left:-2px; border-radius:50%; background:var(--china);}
+  .hs-name{font-family:var(--mono); font-size:10px; letter-spacing:.16em; color:var(--dim);
+    text-align:center; margin:6px 0 2px; text-transform:uppercase;}
+
   /* ─── Кривая ─── */
   .curve{position:fixed; inset:0; z-index:58; background:var(--bg-deep); display:none; flex-direction:column;}
   .curve.open{display:flex;}
@@ -654,7 +674,7 @@
   /* Те же составные селекторы и по той же причине: .ov-dock объявлен НИЖЕ этих экранов
      и при равной специфичности перебивал их боковые отступы — кнопки упирались в край
      панели. У пачки это было с самого начала, поймано Артуром на кривой. */
-  .ov-dock.cv-dock, .ov-dock.batch-dock{padding-left:20px; padding-right:20px;}
+  .ov-dock.cv-dock, .ov-dock.batch-dock, .ov-dock.hs-dock{padding-left:20px; padding-right:20px;}
 
   /* on phones the header has 3 left buttons + Save — the centred "PRESETS" title
      collides with the crop button, and the bottom "ПРЕСЕТЫ" tab already covers it */
@@ -840,13 +860,17 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5s3.6-5 9-5 9 5 9 5-3.6 5-9 5-9-5-9-5z"/><circle cx="12" cy="10.5" r="2.3" fill="currentColor" stroke="none"/><path d="M7 17.6c1.8 1.5 8.2 1.5 10 0"/></svg>
     Тени
   </button>
+  <button class="tool" data-go="crop">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
+    Кадр
+  </button>
   <button class="tool" data-go="curve">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V3M3 21h18"/><path d="M3 18c5 0 6-11 11-11 3 0 4 3 7 3"/></svg>
     Кривая
   </button>
-  <button class="tool" data-go="crop">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
-    Кадр
+  <button class="tool" data-go="hsl">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 3.6v16.8M3.6 12h16.8M6 6l12 12M18 6L6 18"/></svg>
+    Цвета
   </button>
   <button class="tool" id="tabAdjust">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15.5" cy="16" r="2.6"/></svg>
@@ -919,6 +943,28 @@
     <button class="cam-flip" id="camFlip" aria-label="Сменить камеру">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0 0 20.5 15"/></svg>
     </button>
+  </div>
+</div>
+
+<div class="hsl" id="hsl">
+  <div class="ov-top">
+    <button class="ov-back" id="hsCancel" aria-label="Отмена">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <span class="crop-top">Цвета</span>
+    <button class="ov-act gold" id="hsApply">Готово</button>
+  </div>
+  <div class="hs-body"><canvas id="hsShot"></canvas></div>
+  <div class="ov-dock hs-dock">
+    <div class="hs-bands" id="hsBands"></div>
+    <div class="hs-name" id="hsName">Красный</div>
+    <div class="adj-row"><span class="albl">Тон</span><input type="range" id="hs-hue" min="-100" max="100" value="0"><span class="aval" id="hsv-hue">0</span></div>
+    <div class="adj-row"><span class="albl">Насыщенность</span><input type="range" id="hs-sat" min="-100" max="100" value="0"><span class="aval" id="hsv-sat">0</span></div>
+    <div class="adj-row"><span class="albl">Яркость</span><input type="range" id="hs-lum" min="-100" max="100" value="0"><span class="aval" id="hsv-lum">0</span></div>
+    <div class="cv-acts">
+      <button class="adj-reset" id="hsResetOne">Сбросить цвет</button>
+      <button class="adj-reset" id="hsResetAll">Сбросить всё</button>
+    </div>
   </div>
 </div>
 
@@ -1329,8 +1375,13 @@ const CURVE_KEYS = ['rgb','r','g','b'];
 const flatCurve = ()=> [[0,0],[255,255]];
 let curve = { rgb:flatCurve(), r:flatCurve(), g:flatCurve(), b:flatCurve() };
 let curveLuts = null;
-function curveTouched(){ return CURVE_KEYS.some(k=> curve[k].length !== 2
-  || curve[k][0][1] !== 0 || curve[k][1][1] !== 255); }
+// Сравниваем с прямой ЦЕЛИКОМ, включая X. Раньше смотрели только на высоту крайних
+// точек — и сдвиг чёрной точки вправо по низу (высота остаётся 0) считался «ничего не
+// трогали», кривая просто не применялась. Артур поймал: «веду по низу — не меняется».
+function curveIsFlat(c){
+  return c.length === 2 && c[0][0] === 0 && c[0][1] === 0 && c[1][0] === 255 && c[1][1] === 255;
+}
+function curveTouched(){ return CURVE_KEYS.some(k=> !curveIsFlat(curve[k])); }
 // Четыре кривые схлопываются в ТРИ таблицы: общая применяется первой, канальная поверх.
 // Дальше это один просмотр таблицы на канал — цена та же, что у тонировки пресета.
 function buildCurveLuts(){
@@ -1349,6 +1400,91 @@ function applyCurve(img, luts, y0, y1){
   const end = Math.min(d.length, (yB-yA)*W*4);
   const R = luts.r, G = luts.g, B = luts.b;
   for(let p=0; p<end; p+=4){ d[p] = R[d[p]]; d[p+1] = G[d[p+1]]; d[p+2] = B[d[p+2]]; }
+  return img;
+}
+
+// ─── Работа с отдельными цветами ───
+// Восемь полос, как в Lightroom. Каждый оттенок принадлежит ДВУМ соседним полосам с
+// плавными весами: на резких границах листва у края полосы менялась бы скачком, и на
+// снимке это видно как цветной шов поперёк ровного неба или травы.
+const HSL_BANDS = [
+  { key:'red',    name:'Красный',    c:0,   sw:'#d24a3a' },
+  { key:'orange', name:'Оранжевый',  c:30,  sw:'#d9853a' },
+  { key:'yellow', name:'Жёлтый',     c:60,  sw:'#cfc04a' },
+  { key:'green',  name:'Зелёный',    c:120, sw:'#5aa85e' },
+  { key:'aqua',   name:'Бирюзовый',  c:180, sw:'#4aa8a8' },
+  { key:'blue',   name:'Синий',      c:240, sw:'#4a72c0' },
+  { key:'purple', name:'Фиолетовый', c:270, sw:'#7a5ac0' },
+  { key:'magenta',name:'Пурпурный',  c:300, sw:'#c04a92' }
+];
+const HSL_PARTS = ['hue','sat','lum'];
+let hsl = {};
+HSL_BANDS.forEach(b=> hsl[b.key] = { hue:0, sat:0, lum:0 });
+let hslTables = null;
+function hslTouched(){ return HSL_BANDS.some(b=> HSL_PARTS.some(k=> hsl[b.key][k] !== 0)); }
+function buildHslTables(){
+  if(!hslTouched()){ hslTables = null; return null; }
+  const hue = new Float32Array(360), sat = new Float32Array(360), lum = new Float32Array(360);
+  for(let h=0; h<360; h++){
+    // ищем участок между двумя соседними центрами и раскладываем оттенок на них
+    let i = 0;
+    for(let k=0;k<HSL_BANDS.length;k++){
+      const a = HSL_BANDS[k].c, b = (k+1 < HSL_BANDS.length) ? HSL_BANDS[k+1].c : 360;
+      if(h >= a && h < b){ i = k; break; }
+    }
+    const a = HSL_BANDS[i].c, next = (i+1) % HSL_BANDS.length;
+    const b = (i+1 < HSL_BANDS.length) ? HSL_BANDS[i+1].c : 360;
+    const t = b === a ? 0 : (h - a)/(b - a);
+    const wA = (1 + Math.cos(Math.PI*t))/2, wB = 1 - wA;      // косинусный переход, без ступеньки
+    const A = hsl[HSL_BANDS[i].key], B = hsl[HSL_BANDS[next].key];
+    hue[h] = (A.hue*wA + B.hue*wB)/100 * 30;                  // ±30° — как в Lightroom
+    sat[h] = 1 + (A.sat*wA + B.sat*wB)/100;                   // +100 → вдвое, −100 → в серый
+    lum[h] = 1 + (A.lum*wA + B.lum*wB)/100 * 0.6;             // яркость чувствительнее, ход мягче
+  }
+  hslTables = { hue, sat, lum };
+  return hslTables;
+}
+function applyHsl(img, T, y0, y1){
+  if(!T) return img;
+  const d = img.data, W = img.width;
+  const yA = y0||0, yB = y1==null ? img.height : y1;
+  const end = Math.min(d.length, (yB-yA)*W*4);
+  const HS = T.hue, SS = T.sat, LS = T.lum;
+  for(let p=0; p<end; p+=4){
+    const r = d[p], g = d[p+1], b = d[p+2];
+    const mx = r>g ? (r>b?r:b) : (g>b?g:b);
+    const mn = r<g ? (r<b?r:b) : (g<b?g:b);
+    const dl = mx - mn;
+    if(!dl) continue;                                        // серый — оттенка нет, трогать нечего
+    let h;
+    if(mx === r) h = (g - b)/dl;
+    else if(mx === g) h = (b - r)/dl + 2;
+    else h = (r - g)/dl + 4;
+    h *= 60; if(h < 0) h += 360; else if(h >= 360) h -= 360;
+    const i = h | 0;
+    const dh = HS[i], ms = SS[i], ml = LS[i];
+    if(dh === 0 && ms === 1 && ml === 1) continue;
+    let L = (mx + mn)/510;
+    const den = 1 - Math.abs(2*L - 1);
+    let S = den > 0.0001 ? (dl/255)/den : 0;
+    h += dh; if(h < 0) h += 360; else if(h >= 360) h -= 360;
+    S *= ms; if(S > 1) S = 1; else if(S < 0) S = 0;
+    L *= ml; if(L > 1) L = 1; else if(L < 0) L = 0;
+    const C = (1 - Math.abs(2*L - 1)) * S;
+    const seg = h/60;
+    const X = C * (1 - Math.abs((seg % 2) - 1));
+    const m2 = L - C/2;
+    let R, G, B;
+    if(seg < 1){ R=C; G=X; B=0; }
+    else if(seg < 2){ R=X; G=C; B=0; }
+    else if(seg < 3){ R=0; G=C; B=X; }
+    else if(seg < 4){ R=0; G=X; B=C; }
+    else if(seg < 5){ R=X; G=0; B=C; }
+    else { R=C; G=0; B=X; }
+    d[p]   = (R + m2)*255;
+    d[p+1] = (G + m2)*255;
+    d[p+2] = (B + m2)*255;
+  }
   return img;
 }
 
@@ -1612,7 +1748,7 @@ function setSource(img){
   stage.style.display = 'block';
   document.getElementById('save').style.display = 'inline-flex';
   document.getElementById('dock').classList.add('on');
-  document.getElementById('toolbar').style.display = 'flex';
+  document.getElementById('toolbar').classList.add('on');   // сетка, не строка — см. .toolbar.on
   // строка вкладок скрыта: переключение живёт в кнопке «Настройки» в ряду инструментов
   setTab('presets');
   // Кадр на экран СРАЗУ, до сборки миниатюр. Выше мы поменяли размер stage — он очищен,
@@ -1695,6 +1831,7 @@ function processedData(src){
   const orig = src.getContext('2d').getImageData(0,0,w,h);
   const proc = new ImageData(new Uint8ClampedArray(orig.data), w, h);
   applyLook(proc, LOOKS[selected], intensity/100, orig);   // «сила» смешивается внутри цикла
+  applyHsl(proc, hslTables);                              // отдельные цвета
   applyCurve(proc, curveLuts);                            // кривая — последней, как в Lightroom
   applyAdjust(proc, adjust);   // manual doctoring on top of the preset
   return proc;
@@ -1924,6 +2061,7 @@ function applyPendingTool(){
   if(t==='shadows'){ openShadows(); return; }
   if(t==='crop'){ openCrop(); return; }
   if(t==='curve'){ openCurve(); return; }
+  if(t==='hsl'){ openHsl(); return; }
   if(!t) return;   // выбрали фото просто через «Галерея»/«Камера» — остаёмся на главной, фото уже подхвачено лентой луков
   goEditor();
   setTab(t==='adjust' ? 'adjust' : 'presets');
@@ -2625,12 +2763,13 @@ function ensureWorkers(){
       'const GRAIN_ACROSS=' + GRAIN_ACROSS + ';',
       'const clamp=' + String(clamp) + ';',
       'const clamp01=' + String(clamp01) + ';',
-      String(grainCell), String(grainAt), String(buildToneLUT), String(applyLook), String(applyAdjust), String(applyCurve),
+      String(grainCell), String(grainAt), String(buildToneLUT), String(applyLook), String(applyAdjust), String(applyHsl), String(applyCurve),
       'onmessage = e => { const m = e.data;',
       '  const d = new Uint8ClampedArray(m.band);',
       '  const img = { data:d, width:m.W, height:m.H };',
       '  applyLook(img, m.look, m.mix, m.orig ? { data:new Uint8ClampedArray(m.orig) } : null, m.y0, m.y1);',
       '  applyAdjust(img, m.adjust, m.y0, m.y1);',
+      '  applyHsl(img, m.hsl, m.y0, m.y1);',
       '  applyCurve(img, m.curve, m.y0, m.y1);',
       '  postMessage({ id:m.id, y0:m.y0, band:d.buffer }, [d.buffer]); };'
     ].join('\n');
@@ -2679,7 +2818,7 @@ function processParallel(proc, orig, look, mix, adj, W, H, onProgress){
         feed(w);
       };
       w.onerror = err => { failed = true; reject(err); };
-      w.postMessage({ id:y0, band, orig:og, W, H, y0, y1, look, mix, adjust:adj, curve:curveLuts },
+      w.postMessage({ id:y0, band, orig:og, W, H, y0, y1, look, mix, adjust:adj, hsl:hslTables, curve:curveLuts },
                     og ? [band, og] : [band]);
     };
     for(const w of pool){ if(!queue.length) break; live++; feed(w); }
@@ -2705,6 +2844,7 @@ async function buildExportAsync(maxDim, base, onProgress){
       const sub = { data: proc.data.subarray(y*W*4, y1*W*4), width: W, height: H };
       applyLook(sub, look, mix, { data: orig.data.subarray(y*W*4, y1*W*4) }, y, y1);
       applyAdjust(sub, adjust, y, y1);
+      applyHsl(sub, hslTables, y, y1);
       applyCurve(sub, curveLuts, y, y1);
       if(onProgress) onProgress(y1 / H * 0.9);
       await nextFrame();
@@ -2819,6 +2959,70 @@ document.getElementById('expShare').onclick = ()=> expBlob(async b=>{
   }
 });
 
+// ─── Экран работы с цветами ───
+const hsEl = document.getElementById('hsl'), hsShot = document.getElementById('hsShot');
+let hsBand = HSL_BANDS[0].key, hsBackup = null;
+(function buildBandChips(){
+  const host = document.getElementById('hsBands');
+  HSL_BANDS.forEach(b=>{
+    const el = document.createElement('button');
+    el.dataset.band = b.key; el.style.background = b.sw; el.title = b.name;
+    host.appendChild(el);
+  });
+})();
+function hsDrawShot(){
+  const src = previewSrc || sourceCanvas;
+  if(!src) return;
+  if(hsShot.width !== src.width){ hsShot.width = src.width; hsShot.height = src.height; }
+  hsShot.getContext('2d').putImageData(processedData(src), 0, 0);
+}
+function hsSync(){
+  const v = hsl[hsBand];
+  HSL_PARTS.forEach(k=>{
+    document.getElementById('hs-'+k).value = v[k];
+    document.getElementById('hsv-'+k).textContent = (v[k] > 0 ? '+' : '') + v[k];
+  });
+  const band = HSL_BANDS.find(b=> b.key === hsBand);
+  document.getElementById('hsName').textContent = band.name;
+  document.querySelectorAll('#hsBands button').forEach(el=>{
+    const s = hsl[el.dataset.band];
+    el.classList.toggle('on', el.dataset.band === hsBand);
+    el.classList.toggle('set', HSL_PARTS.some(k=> s[k] !== 0));
+  });
+}
+function hsCommit(){ buildHslTables(); editedCanvas = null; hsDrawShot(); hsSync(); }
+document.getElementById('hsBands').onclick = e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  hsBand = b.dataset.band; hsSync();
+};
+HSL_PARTS.forEach(k=>{
+  bindSlider(document.getElementById('hs-'+k), ()=>{
+    hsl[hsBand][k] = +document.getElementById('hs-'+k).value;
+    document.getElementById('hsv-'+k).textContent =
+      (hsl[hsBand][k] > 0 ? '+' : '') + hsl[hsBand][k];
+    buildHslTables(); editedCanvas = null; hsDrawShot();
+  });
+});
+document.getElementById('hsResetOne').onclick = ()=>{
+  HSL_PARTS.forEach(k=> hsl[hsBand][k] = 0); hsCommit(); render();
+};
+document.getElementById('hsResetAll').onclick = ()=>{
+  HSL_BANDS.forEach(b=> HSL_PARTS.forEach(k=> hsl[b.key][k] = 0)); hsCommit(); render();
+};
+function openHsl(){
+  if(!sourceCanvas) return;
+  ensureTrap();
+  hsBackup = JSON.parse(JSON.stringify(hsl));
+  hsEl.classList.add('open');
+  requestAnimationFrame(()=>{ hsDrawShot(); hsSync(); });
+}
+function closeHsl(){ hsEl.classList.remove('open'); }
+document.getElementById('hsCancel').onclick = ()=>{
+  if(hsBackup) hsl = hsBackup;
+  buildHslTables(); editedCanvas = null; closeHsl(); render();
+};
+document.getElementById('hsApply').onclick = ()=>{ closeHsl(); goEditor(); };
+
 // ─── Экран кривой ───
 // Под кривой рисуем гистограмму ТЕКУЩЕГО кадра — иначе тянешь вслепую и не видишь,
 // где на самом деле лежат тени и света именно этого снимка.
@@ -2888,7 +3092,7 @@ function cvDraw(){
   // какие каналы тронуты — видно прямо на переключателе
   document.querySelectorAll('#cvChans button').forEach(b=>{
     const c = curve[b.dataset.ch];
-    b.classList.toggle('set', c.length !== 2 || c[0][1] !== 0 || c[1][1] !== 255);
+    b.classList.toggle('set', !curveIsFlat(c));
     b.classList.toggle('on', b.dataset.ch === cvChan);
   });
 }
