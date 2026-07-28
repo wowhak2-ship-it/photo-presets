@@ -441,9 +441,12 @@
     font-size:12px; padding:6px 4px; letter-spacing:.06em;}
   .myp-x:active{color:var(--china);}
   .myp-empty{font-size:13px; line-height:1.5; color:var(--faint); padding:2px 2px 4px;}
-  .exp-batch{width:100%; margin-top:2px; background:transparent; border:0; color:var(--gold);
-    font-size:12.5px; letter-spacing:.02em; padding:10px 0 2px; cursor:pointer;}
-  .exp-batch:active{opacity:.7;}
+  /* Была голой строчкой текста внизу — Артур её просто не нашёл. Теперь такая же
+     кнопка, как соседние, только тише по цвету. */
+  .exp-batch{width:100%; margin-top:8px; background:transparent; border:1px solid var(--line-2);
+    color:var(--gold); font-size:13px; font-weight:600; letter-spacing:.02em;
+    padding:12px 0; border-radius:11px; cursor:pointer;}
+  .exp-batch:active{transform:scale(.98);}
 
   /* ─── Пачка: тот же вид на всю съёмку ─── */
   .batch{position:fixed; inset:0; z-index:58; background:var(--bg-deep); display:none; flex-direction:column;}
@@ -663,6 +666,7 @@
 
   /* действия внизу — всегда под рукой */
   /* обычным потоком под краевой маркировкой: sticky перекрывал её собой */
+  .home-batch{width:100%; margin-bottom:8px; border-color:var(--line-2); color:var(--gold);}
   .home-actions{display:flex; gap:10px; align-items:center; padding:4px 0 2px;}
   .ghost-btn{flex:1; padding:14px; border-radius:999px; border:1px solid var(--line);
     background:transparent; color:var(--text); font-size:11px; letter-spacing:.14em; cursor:pointer;}
@@ -752,6 +756,7 @@
     <span class="em-n" id="edgeCount">00/12</span>
   </div>
 
+  <button class="ghost-btn home-batch" id="homeBatch">ОБРАБОТАТЬ НЕСКОЛЬКО ФОТО</button>
   <div class="home-actions">
     <button class="ghost-btn" id="homePick">ВЫБРАТЬ ДРУГОЕ ФОТО</button>
     <button class="solid-btn" id="homeCam">СНЯТЬ</button>
@@ -2522,6 +2527,9 @@ function renderBatch(){
   const go = document.getElementById('batchGo'), pick = document.getElementById('batchPick');
   const done = batchItems.length && batchItems.every(i=> i.blob || i.failed);
   const ok = batchItems.filter(i=> i.blob).length;
+  // Если вид не выбран (кадр 01 на полной силе и ползунки в нуле), снимки уйдут как есть —
+  // лучше сказать это прямо, чем дать человеку прогнать съёмку впустую.
+  const noLook = !myActive && selected === 0 && intensity === 100 && ADJ_KEYS.every(k=> !adjust[k]);
   go.disabled = batchBusy || !batchItems.length;
   pick.disabled = batchBusy;
   if(batchBusy) return;
@@ -2532,9 +2540,11 @@ function renderBatch(){
   } else {
     go.textContent = 'Обработать';
     pick.textContent = batchItems.length ? 'Добавить ещё' : 'Выбрать снимки';
-    batchStatus(batchItems.length
-      ? ('Выбрано ' + batchItems.length + ' — тап по кадру убирает его')
-      : 'Выберите снимки — к ним ляжет тот же вид. Можно добавлять по одному');
+    batchStatus(noLook
+      ? 'Вид не выбран — снимки сохранятся как есть. Откройте фото и выберите плёнку'
+      : (batchItems.length
+          ? ('Выбрано ' + batchItems.length + ' — тап по кадру убирает его')
+          : 'Выберите снимки — к ним ляжет тот же вид. Можно добавлять по одному'));
   }
 }
 // Снимок в холст: полный размер под тем же потолком, что и у обычного экспорта
@@ -2616,6 +2626,10 @@ function batchSaveEach(){
   batchStatus('Сохраняю ' + files.length + ' снимков…');
 }
 document.getElementById('expBatch').onclick = ()=>{ expEl.classList.remove('open'); openBatch(); };
+document.getElementById('homeBatch').onclick = ()=>{
+  if(!sourceCanvas) return document.getElementById('homePick').click();
+  openBatch();
+};
 document.getElementById('batchClose').onclick = closeBatch;
 document.getElementById('batchPick').onclick = ()=>{
   const done = batchItems.length && batchItems.every(i=> i.blob || i.failed);
