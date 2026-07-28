@@ -2511,6 +2511,12 @@ function renderBatch(){
     const s = document.createElement('div'); s.className = 'bs';
     s.textContent = it.failed ? 'не вышло' : (it.blob ? String(i+1).padStart(2,'0') + ' · готово' : String(i+1).padStart(2,'0'));
     d.appendChild(s);
+    // до счёта тапом можно убрать лишний кадр — иначе за ошибку в выборе пришлось бы
+    // закрывать экран и набирать съёмку заново
+    if(!batchBusy && !it.blob){
+      d.style.cursor = 'pointer'; d.title = 'Убрать из пачки';
+      d.onclick = ()=>{ batchItems = batchItems.filter(x=> x !== it); renderBatch(); };
+    }
     it.el = d; grid.appendChild(d);
   });
   const go = document.getElementById('batchGo'), pick = document.getElementById('batchPick');
@@ -2525,9 +2531,10 @@ function renderBatch(){
     batchStatus('Готово ' + ok + ' из ' + batchItems.length);
   } else {
     go.textContent = 'Обработать';
-    pick.textContent = 'Выбрать снимки';
-    batchStatus(batchItems.length ? ('Выбрано ' + batchItems.length + ' — вид ляжет на каждый')
-                                  : 'Выберите снимки — к ним ляжет тот же вид');
+    pick.textContent = batchItems.length ? 'Добавить ещё' : 'Выбрать снимки';
+    batchStatus(batchItems.length
+      ? ('Выбрано ' + batchItems.length + ' — тап по кадру убирает его')
+      : 'Выберите снимки — к ним ляжет тот же вид. Можно добавлять по одному');
   }
 }
 // Снимок в холст: полный размер под тем же потолком, что и у обычного экспорта
@@ -2621,14 +2628,26 @@ document.getElementById('batchGo').onclick = ()=>{
   batchRun();
 };
 document.getElementById('batchFile').onchange = async e=>{
-  const files = [...e.target.files].slice(0, BATCH_LIMIT);
+  const picked = [...e.target.files];
   e.target.value = '';
-  if(!files.length) return;
-  batchItems = files.map(f=>({ file:f, blob:null, failed:false }));
+  if(!picked.length) return;
+  // ДОБАВЛЯЕМ к уже выбранному, а не заменяем. Выборщик Android часто отдаёт по одному
+  // снимку за раз (несколько — только через долгое нажатие, а где-то и вовсе никак),
+  // и при замене набрать съёмку было физически невозможно: каждый выбор стирал прошлый.
+  const seen = new Set(batchItems.map(i=> i.file.name + '|' + i.file.size + '|' + i.file.lastModified));
+  const fresh = [];
+  for(const f of picked){
+    const key = f.name + '|' + f.size + '|' + f.lastModified;
+    if(seen.has(key)) continue;               // тот же снимок дважды не берём
+    if(batchItems.length + fresh.length >= BATCH_LIMIT) break;
+    seen.add(key); fresh.push({ file:f, blob:null, failed:false });
+  }
+  if(!fresh.length){ renderBatch(); return toast('Эти снимки уже выбраны'); }
+  batchItems = batchItems.concat(fresh);
   renderBatch();
-  batchStatus('Готовлю ' + files.length + '…');
+  batchStatus('Готовлю ' + fresh.length + '…');
   // мелкие превью, чтобы было видно, ЧТО именно обрабатывается; полные кадры не держим
-  for(const it of batchItems){
+  for(const it of fresh){
     try{
       const cv = await fileToCanvas(it.file);
       const t = document.createElement('canvas');
