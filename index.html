@@ -448,6 +448,33 @@
     padding:12px 0; border-radius:11px; cursor:pointer;}
   .exp-batch:active{transform:scale(.98);}
 
+  /* ─── Кривая ─── */
+  .curve{position:fixed; inset:0; z-index:58; background:var(--bg-deep); display:none; flex-direction:column;}
+  .curve.open{display:flex;}
+  /* Фото ОБЯЗАТЕЛЬНО на экране: тянуть кривую вслепую бессмысленно, ты правишь снимок,
+     а не график. Кадр сверху, поле кривой снизу; поле сжимается на низких экранах,
+     но не мельче 200 px, иначе точку пальцем не поймать. */
+  .cv-body{flex:1; min-height:0; display:flex; flex-direction:column; align-items:center;
+    gap:12px; padding:calc(58px + env(safe-area-inset-top)) 20px 10px;}
+  .cv-shot{flex:1 1 auto; min-height:0; width:100%; display:flex; align-items:center; justify-content:center;}
+  .cv-shot canvas{max-width:100%; max-height:100%; border-radius:2px; display:block;
+    box-shadow:0 10px 26px rgba(0,0,0,.5);}
+  .cv-pad{flex:0 0 auto; width:100%; max-width:min(340px, 44vh); min-width:200px; aspect-ratio:1/1; position:relative;}
+  .cv-pad canvas{width:100%; height:100%; display:block; border-radius:4px;
+    background:var(--panel); box-shadow:0 0 0 1px var(--line) inset; touch-action:none;}
+  .cv-dock{padding-left:20px; padding-right:20px;}
+  .cv-chans{display:flex; gap:6px; margin:2px 0 10px;}
+  .cv-chans button{flex:1; padding:9px 0; border-radius:10px; cursor:pointer;
+    background:transparent; border:1px solid var(--line); color:var(--dim);
+    font-family:var(--mono); font-size:11px; letter-spacing:.1em;}
+  .cv-chans button.on{background:var(--gold); border-color:transparent; color:var(--gold-ink); font-weight:600;}
+  .cv-chans button.set{border-color:var(--china); color:var(--text);}
+  .cv-chans button.on.set{border-color:transparent;}
+  .cv-hint{font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; color:var(--faint);
+    text-align:center; margin-bottom:10px;}
+  .cv-acts{display:flex; gap:8px; justify-content:center;}
+  .cv-acts .adj-reset{margin-top:0;}
+
   /* ─── Пачка: тот же вид на всю съёмку ─── */
   .batch{position:fixed; inset:0; z-index:58; background:var(--bg-deep); display:none; flex-direction:column;}
   .batch.open{display:flex;}
@@ -809,6 +836,10 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5s3.6-5 9-5 9 5 9 5-3.6 5-9 5-9-5-9-5z"/><circle cx="12" cy="10.5" r="2.3" fill="currentColor" stroke="none"/><path d="M7 17.6c1.8 1.5 8.2 1.5 10 0"/></svg>
     Тени
   </button>
+  <button class="tool" data-go="curve">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V3M3 21h18"/><path d="M3 18c5 0 6-11 11-11 3 0 4 3 7 3"/></svg>
+    Кривая
+  </button>
   <button class="tool" data-go="crop">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
     Кадр
@@ -884,6 +915,33 @@
     <button class="cam-flip" id="camFlip" aria-label="Сменить камеру">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0 0 20.5 15"/></svg>
     </button>
+  </div>
+</div>
+
+<div class="curve" id="curve">
+  <div class="ov-top">
+    <button class="ov-back" id="cvCancel" aria-label="Отмена">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <span class="crop-top">Кривая</span>
+    <button class="ov-act gold" id="cvApply">Готово</button>
+  </div>
+  <div class="cv-body">
+    <div class="cv-shot"><canvas id="cvShot"></canvas></div>
+    <div class="cv-pad"><canvas id="cvBoard"></canvas></div>
+  </div>
+  <div class="ov-dock cv-dock">
+    <div class="cv-chans" id="cvChans">
+      <button data-ch="rgb" class="on">RGB</button>
+      <button data-ch="r">R</button>
+      <button data-ch="g">G</button>
+      <button data-ch="b">B</button>
+    </div>
+    <div class="cv-hint" id="cvHint">Тап по полю — новая точка, тап по точке — убрать</div>
+    <div class="cv-acts">
+      <button class="adj-reset" id="cvResetCh">Сбросить канал</button>
+      <button class="adj-reset" id="cvResetAll">Сбросить всё</button>
+    </div>
   </div>
 </div>
 
@@ -1235,6 +1293,61 @@ function applyBloom(canvas, amount, warm){
   ctx.drawImage(tmp, 0, 0); ctx.restore();
 }
 
+// ─── Кривая ───
+// Точки задаются в 0..255 по обеим осям. Интерполяция МОНОТОННАЯ (Фрич–Карлсон):
+// обычный сплайн между близко стоящими точками выгибается за их пределы, и на снимке
+// это видно как паразитная петля — света вдруг темнеют там, где кривая идёт вверх.
+function curveLUT(pts){
+  const lut = new Uint8ClampedArray(256);
+  const n = pts.length;
+  if(n < 2){ for(let i=0;i<256;i++) lut[i] = i; return lut; }
+  const xs = pts.map(p=>p[0]), ys = pts.map(p=>p[1]);
+  const d = [], m = [];
+  for(let i=0;i<n-1;i++){ const h = xs[i+1]-xs[i]; d[i] = h ? (ys[i+1]-ys[i])/h : 0; }
+  m[0] = d[0]; m[n-1] = d[n-2];
+  for(let i=1;i<n-1;i++) m[i] = (d[i-1]*d[i] <= 0) ? 0 : (d[i-1]+d[i])/2;
+  for(let i=0;i<n-1;i++){
+    if(d[i] === 0){ m[i] = 0; m[i+1] = 0; continue; }
+    const a = m[i]/d[i], b = m[i+1]/d[i], s = a*a + b*b;
+    if(s > 9){ const t = 3/Math.sqrt(s); m[i] = t*a*d[i]; m[i+1] = t*b*d[i]; }
+  }
+  let k = 0;
+  for(let x=0;x<256;x++){
+    while(k < n-2 && x > xs[k+1]) k++;
+    if(x <= xs[0]){ lut[x] = ys[0]; continue; }
+    if(x >= xs[n-1]){ lut[x] = ys[n-1]; continue; }
+    const h = xs[k+1]-xs[k], t = h ? (x-xs[k])/h : 0, t2 = t*t, t3 = t2*t;
+    lut[x] = (2*t3-3*t2+1)*ys[k] + (t3-2*t2+t)*h*m[k] + (-2*t3+3*t2)*ys[k+1] + (t3-t2)*h*m[k+1];
+  }
+  return lut;
+}
+const CURVE_KEYS = ['rgb','r','g','b'];
+const flatCurve = ()=> [[0,0],[255,255]];
+let curve = { rgb:flatCurve(), r:flatCurve(), g:flatCurve(), b:flatCurve() };
+let curveLuts = null;
+function curveTouched(){ return CURVE_KEYS.some(k=> curve[k].length !== 2
+  || curve[k][0][1] !== 0 || curve[k][1][1] !== 255); }
+// Четыре кривые схлопываются в ТРИ таблицы: общая применяется первой, канальная поверх.
+// Дальше это один просмотр таблицы на канал — цена та же, что у тонировки пресета.
+function buildCurveLuts(){
+  if(!curveTouched()){ curveLuts = null; return null; }
+  const base = curveLUT(curve.rgb);
+  const out = { r:new Uint8ClampedArray(256), g:new Uint8ClampedArray(256), b:new Uint8ClampedArray(256) };
+  const ch = { r:curveLUT(curve.r), g:curveLUT(curve.g), b:curveLUT(curve.b) };
+  for(let i=0;i<256;i++){ const v = base[i]; out.r[i] = ch.r[v]; out.g[i] = ch.g[v]; out.b[i] = ch.b[v]; }
+  curveLuts = out;
+  return out;
+}
+function applyCurve(img, luts, y0, y1){
+  if(!luts) return img;
+  const d = img.data, W = img.width;
+  const yA = y0||0, yB = y1==null ? img.height : y1;
+  const end = Math.min(d.length, (yB-yA)*W*4);
+  const R = luts.r, G = luts.g, B = luts.b;
+  for(let p=0; p<end; p+=4){ d[p] = R[d[p]]; d[p+1] = G[d[p+1]]; d[p+2] = B[d[p+2]]; }
+  return img;
+}
+
 // Manual adjustments layered on top of the preset (all 0 = no-op). Ranges: exposure/contrast/temp/saturation -100..100, grain 0..100
 function applyAdjust(img, a, y0, y1){
   if(!(a.exposure||a.contrast||a.temp||a.saturation||a.grain)) return img;
@@ -1543,6 +1656,7 @@ function processedData(src){
   const orig = src.getContext('2d').getImageData(0,0,w,h);
   const proc = new ImageData(new Uint8ClampedArray(orig.data), w, h);
   applyLook(proc, LOOKS[selected], intensity/100, orig);   // «сила» смешивается внутри цикла
+  applyCurve(proc, curveLuts);                            // кривая — последней, как в Lightroom
   applyAdjust(proc, adjust);   // manual doctoring on top of the preset
   return proc;
 }
@@ -1770,6 +1884,7 @@ function applyPendingTool(){
   if(t==='retouch'){ openRetouch(); return; }
   if(t==='shadows'){ openShadows(); return; }
   if(t==='crop'){ openCrop(); return; }
+  if(t==='curve'){ openCurve(); return; }
   if(!t) return;   // выбрали фото просто через «Галерея»/«Камера» — остаёмся на главной, фото уже подхвачено лентой луков
   goEditor();
   setTab(t==='adjust' ? 'adjust' : 'presets');
@@ -2418,12 +2533,13 @@ function ensureWorkers(){
       'const GRAIN_ACROSS=' + GRAIN_ACROSS + ';',
       'const clamp=' + String(clamp) + ';',
       'const clamp01=' + String(clamp01) + ';',
-      String(grainCell), String(grainAt), String(buildToneLUT), String(applyLook), String(applyAdjust),
+      String(grainCell), String(grainAt), String(buildToneLUT), String(applyLook), String(applyAdjust), String(applyCurve),
       'onmessage = e => { const m = e.data;',
       '  const d = new Uint8ClampedArray(m.band);',
       '  const img = { data:d, width:m.W, height:m.H };',
       '  applyLook(img, m.look, m.mix, m.orig ? { data:new Uint8ClampedArray(m.orig) } : null, m.y0, m.y1);',
       '  applyAdjust(img, m.adjust, m.y0, m.y1);',
+      '  applyCurve(img, m.curve, m.y0, m.y1);',
       '  postMessage({ id:m.id, y0:m.y0, band:d.buffer }, [d.buffer]); };'
     ].join('\n');
     const url = URL.createObjectURL(new Blob([src], { type:'application/javascript' }));
@@ -2471,7 +2587,7 @@ function processParallel(proc, orig, look, mix, adj, W, H, onProgress){
         feed(w);
       };
       w.onerror = err => { failed = true; reject(err); };
-      w.postMessage({ id:y0, band, orig:og, W, H, y0, y1, look, mix, adjust:adj },
+      w.postMessage({ id:y0, band, orig:og, W, H, y0, y1, look, mix, adjust:adj, curve:curveLuts },
                     og ? [band, og] : [band]);
     };
     for(const w of pool){ if(!queue.length) break; live++; feed(w); }
@@ -2497,6 +2613,7 @@ async function buildExportAsync(maxDim, base, onProgress){
       const sub = { data: proc.data.subarray(y*W*4, y1*W*4), width: W, height: H };
       applyLook(sub, look, mix, { data: orig.data.subarray(y*W*4, y1*W*4) }, y, y1);
       applyAdjust(sub, adjust, y, y1);
+      applyCurve(sub, curveLuts, y, y1);
       if(onProgress) onProgress(y1 / H * 0.9);
       await nextFrame();
     }
@@ -2609,6 +2726,163 @@ document.getElementById('expShare').onclick = ()=> expBlob(async b=>{
     document.getElementById('expShare').textContent = 'Недоступно — сохраните в галерею';
   }
 });
+
+// ─── Экран кривой ───
+// Под кривой рисуем гистограмму ТЕКУЩЕГО кадра — иначе тянешь вслепую и не видишь,
+// где на самом деле лежат тени и света именно этого снимка.
+const cvEl = document.getElementById('curve'), cvBoard = document.getElementById('cvBoard');
+const cvCtx = cvBoard.getContext('2d');
+let cvChan = 'rgb', cvHist = null, cvDrag = null, cvBackup = null;
+const CV_PAD = 14;                              // поле вокруг сетки, чтобы точку у края было чем взять
+
+function cvSize(){
+  const r = cvBoard.getBoundingClientRect();
+  const dpr = Math.min(3, Math.max(1, devicePixelRatio || 1));
+  const w = Math.max(1, Math.round(r.width * dpr));
+  if(cvBoard.width !== w){ cvBoard.width = w; cvBoard.height = w; }
+  return w;
+}
+function cvBuildHist(){
+  cvHist = null;
+  const src = previewSrc || sourceCanvas;
+  if(!src) return;
+  const d = processedData(src).data;             // гистограмма по тому, что видно сейчас
+  const h = new Float32Array(256);
+  for(let p=0;p<d.length;p+=4) h[(d[p]*0.299 + d[p+1]*0.587 + d[p+2]*0.114) | 0]++;
+  let max = 0;
+  for(let i=1;i<255;i++) if(h[i] > max) max = h[i];   // края часто упираются в клип — не по ним нормируем
+  if(max > 0) for(let i=0;i<256;i++) h[i] = Math.min(1, h[i]/max);
+  cvHist = h;
+}
+function cvDraw(){
+  const S = cvSize(), pad = CV_PAD * (S/340), in_ = S - pad*2;
+  const X = v => pad + v/255*in_, Y = v => pad + (1 - v/255)*in_;
+  cvCtx.clearRect(0,0,S,S);
+  // гистограмма
+  if(cvHist){
+    cvCtx.fillStyle = 'rgba(244,239,229,.13)';
+    cvCtx.beginPath(); cvCtx.moveTo(X(0), Y(0));
+    for(let i=0;i<256;i++) cvCtx.lineTo(X(i), Y(cvHist[i]*255));
+    cvCtx.lineTo(X(255), Y(0)); cvCtx.closePath(); cvCtx.fill();
+  }
+  // сетка по четвертям
+  cvCtx.strokeStyle = 'rgba(224,162,74,.13)'; cvCtx.lineWidth = Math.max(1, S/340);
+  for(let i=0;i<=4;i++){
+    const v = i*255/4;
+    cvCtx.beginPath(); cvCtx.moveTo(X(v), Y(0)); cvCtx.lineTo(X(v), Y(255)); cvCtx.stroke();
+    cvCtx.beginPath(); cvCtx.moveTo(X(0), Y(v)); cvCtx.lineTo(X(255), Y(v)); cvCtx.stroke();
+  }
+  // диагональ «ничего не меняем»
+  cvCtx.strokeStyle = 'rgba(244,239,229,.16)';
+  cvCtx.setLineDash([4*S/340, 4*S/340]);
+  cvCtx.beginPath(); cvCtx.moveTo(X(0), Y(0)); cvCtx.lineTo(X(255), Y(255)); cvCtx.stroke();
+  cvCtx.setLineDash([]);
+  // сама кривая
+  const lut = curveLUT(curve[cvChan]);
+  const col = cvChan === 'r' ? '#e06a5a' : cvChan === 'g' ? '#7fc08a' : cvChan === 'b' ? '#6f9fe0' : '#F4EFE5';
+  cvCtx.strokeStyle = col; cvCtx.lineWidth = Math.max(1.6, 2*S/340);
+  cvCtx.beginPath();
+  for(let i=0;i<256;i++){ const x = X(i), y = Y(lut[i]); i ? cvCtx.lineTo(x,y) : cvCtx.moveTo(x,y); }
+  cvCtx.stroke();
+  // точки
+  const r = Math.max(4, 5.5*S/340);
+  curve[cvChan].forEach((pt, i)=>{
+    cvCtx.beginPath(); cvCtx.arc(X(pt[0]), Y(pt[1]), r, 0, 7);
+    cvCtx.fillStyle = (cvDrag && cvDrag.i === i) ? 'var(--china)' : col;
+    cvCtx.fillStyle = (cvDrag && cvDrag.i === i) ? '#D2422E' : col;
+    cvCtx.fill();
+    cvCtx.strokeStyle = 'rgba(16,14,11,.85)'; cvCtx.lineWidth = Math.max(1, 1.5*S/340); cvCtx.stroke();
+  });
+  // какие каналы тронуты — видно прямо на переключателе
+  document.querySelectorAll('#cvChans button').forEach(b=>{
+    const c = curve[b.dataset.ch];
+    b.classList.toggle('set', c.length !== 2 || c[0][1] !== 0 || c[1][1] !== 255);
+    b.classList.toggle('on', b.dataset.ch === cvChan);
+  });
+}
+function cvPoint(e){
+  const r = cvBoard.getBoundingClientRect(), pad = CV_PAD, in_ = 340 - pad*2;
+  const k = 340/r.width;
+  const x = ((e.clientX - r.left)*k - pad)/in_*255;
+  const y = (1 - ((e.clientY - r.top)*k - pad)/in_)*255;
+  return [Math.max(0, Math.min(255, x)), Math.max(0, Math.min(255, y))];
+}
+function cvNear(p){
+  const pts = curve[cvChan];
+  let best = -1, bd = 20;                        // 20 единиц ≈ палец
+  pts.forEach((pt,i)=>{ const d = Math.hypot(pt[0]-p[0], pt[1]-p[1]); if(d < bd){ bd = d; best = i; } });
+  return best;
+}
+// Живое превью: считаем по уменьшенной копии, поэтому кривую можно тянуть непрерывно.
+const cvShot = document.getElementById('cvShot');
+function cvDrawShot(){
+  const src = previewSrc || sourceCanvas;
+  if(!src) return;
+  if(cvShot.width !== src.width){ cvShot.width = src.width; cvShot.height = src.height; }
+  cvShot.getContext('2d').putImageData(processedData(src), 0, 0);
+}
+function cvCommit(){
+  buildCurveLuts(); editedCanvas = null;
+  cvDrawShot(); cvDraw();
+}
+cvBoard.addEventListener('pointerdown', e=>{
+  e.preventDefault();
+  try{ cvBoard.setPointerCapture(e.pointerId); }catch(_){}
+  const p = cvPoint(e), i = cvNear(p), pts = curve[cvChan];
+  if(i >= 0){ cvDrag = { i, moved:false }; cvDraw(); return; }
+  // новая точка — вставляем по порядку x
+  let k = pts.findIndex(pt=> pt[0] > p[0]);
+  if(k < 0) k = pts.length;
+  if(pts.length >= 8) return;                    // больше восьми точек рукой не поставить осмысленно
+  pts.splice(k, 0, [Math.round(p[0]), Math.round(p[1])]);
+  cvDrag = { i:k, moved:true };
+  cvCommit(); render();
+});
+cvBoard.addEventListener('pointermove', e=>{
+  if(!cvDrag) return;
+  e.preventDefault();
+  const pts = curve[cvChan], i = cvDrag.i, p = cvPoint(e);
+  const lo = i === 0 ? 0 : pts[i-1][0] + 1;
+  const hi = i === pts.length-1 ? 255 : pts[i+1][0] - 1;
+  // крайние точки ездят только по вертикали — иначе кривая перестаёт покрывать весь диапазон
+  pts[i][0] = (i === 0) ? 0 : (i === pts.length-1) ? 255 : Math.round(Math.max(lo, Math.min(hi, p[0])));
+  pts[i][1] = Math.round(p[1]);
+  cvDrag.moved = true;
+  cvCommit(); render();
+});
+function cvEnd(e){
+  if(!cvDrag) return;
+  const pts = curve[cvChan], i = cvDrag.i;
+  // тап по точке без движения — убрать её (крайние не трогаем)
+  if(!cvDrag.moved && i > 0 && i < pts.length-1) pts.splice(i, 1);
+  cvDrag = null;
+  cvCommit(); render();
+}
+cvBoard.addEventListener('pointerup', cvEnd);
+cvBoard.addEventListener('pointercancel', cvEnd);
+document.getElementById('cvChans').onclick = e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  cvChan = b.dataset.ch; cvDraw();
+};
+document.getElementById('cvResetCh').onclick = ()=>{ curve[cvChan] = flatCurve(); cvCommit(); render(); };
+document.getElementById('cvResetAll').onclick = ()=>{
+  CURVE_KEYS.forEach(k=> curve[k] = flatCurve()); cvCommit(); render();
+};
+function openCurve(){
+  if(!sourceCanvas) return;
+  ensureTrap();
+  cvBackup = JSON.parse(JSON.stringify(curve));  // «Отмена» должна честно возвращать как было
+  cvChan = 'rgb'; cvDrag = null;
+  cvEl.classList.add('open');
+  requestAnimationFrame(()=>{ cvBuildHist(); cvDrawShot(); cvDraw(); });
+}
+function closeCurve(){ cvEl.classList.remove('open'); }
+document.getElementById('cvCancel').onclick = ()=>{
+  curve = cvBackup || { rgb:flatCurve(), r:flatCurve(), g:flatCurve(), b:flatCurve() };
+  buildCurveLuts(); editedCanvas = null; closeCurve(); render();
+};
+document.getElementById('cvApply').onclick = ()=>{ closeCurve(); goEditor(); };
+addEventListener('resize', ()=>{ if(cvEl.classList.contains('open')) cvDraw(); });
 
 // ─── Пачка: тот же вид на всю съёмку ───
 // Съёмка — это всегда серия, а не один кадр, поэтому найденный вид должен ложиться
