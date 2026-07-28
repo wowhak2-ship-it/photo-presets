@@ -469,6 +469,10 @@
   .batch-btns{display:flex; gap:8px;}
   .batch-btns .crop-btn{flex:1;}
 
+  .set-input input{flex:0 1 150px; min-width:0; text-align:right; background:transparent; border:0;
+    outline:none; color:var(--gold); font-family:inherit; font-size:14px; padding:0;}
+  .set-input input::placeholder{color:var(--faint); font-size:13px;}
+  .set-note{font-size:11.5px; line-height:1.5; color:var(--faint); padding:6px 2px 0;}
   .myp-acts{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;}
   .myp-io{flex:1 1 140px; background:transparent; border:1px solid var(--line-2); color:var(--dim);
     font-size:12px; font-weight:600; letter-spacing:.04em; padding:10px 12px; border-radius:11px; cursor:pointer;}
@@ -666,7 +670,12 @@
 
   /* действия внизу — всегда под рукой */
   /* обычным потоком под краевой маркировкой: sticky перекрывал её собой */
-  .home-batch{width:100%; margin-bottom:8px; border-color:var(--line-2); color:var(--gold);}
+  /* Селектор СОСТАВНОЙ, и это не украшательство: .ghost-btn объявлен ниже и несёт flex:1
+     для горизонтального ряда. При равной специфичности выигрывает он, и кнопка в
+     вертикальной колонке растягивалась на всю оставшуюся высоту — Артур прислал скриншот
+     с обводкой во пол-экрана. Та же ловушка, что была с доком экспорта. */
+  .ghost-btn.home-batch{flex:0 0 auto; width:100%; margin-bottom:8px; border-radius:999px;
+    border-color:var(--line-2); color:var(--gold);}
   .home-actions{display:flex; gap:10px; align-items:center; padding:4px 0 2px;}
   .ghost-btn{flex:1; padding:14px; border-radius:999px; border:1px solid var(--line);
     background:transparent; color:var(--text); font-size:11px; letter-spacing:.14em; cursor:pointer;}
@@ -966,6 +975,12 @@
         <span class="set-name">Размер по умолчанию</span>
         <span class="set-val" id="setSizeVal">Оригинал<i>›</i></span>
       </button>
+      <div class="set-row set-input">
+        <span class="set-name">Ваше имя в файле</span>
+        <input id="setAuthor" type="text" maxlength="48" placeholder="не указано"
+               autocomplete="name" spellcheck="false">
+      </div>
+      <div class="set-note">Уйдёт в поле авторства сохранённого снимка. Дата съёмки, камера, выдержка и ISO переносятся из исходника сами.</div>
     </div>
 
     <div class="set-group">
@@ -1729,8 +1744,9 @@ function pickFrame(e){
   setIntensity(100);
 }
 
-document.getElementById('file').onchange = e=>{
+document.getElementById('file').onchange = async e=>{
   const f = e.target.files[0]; if(!f) return;
+  sourceExif = await fileExif(f);             // данные съёмки берём до того, как файл станет картинкой
   const img = new Image();
   img.onload = ()=>{ setSource(img); closeOnb(); applyPendingTool(); };
   img.src = URL.createObjectURL(f);
@@ -1964,6 +1980,113 @@ const MYP = {
   remove(id){ return this.write(this.all().filter(p=> p.id !== id)); },
   rename(id, name){ const l = this.all(), p = l.find(x=> x.id === id); if(p) p.name = name; return this.write(l); }
 };
+
+// ─── Данные съёмки ───
+// Браузер отдаёт с холста чистый JPEG: ни даты съёмки, ни камеры, ни выдержки с ISO.
+// Для фотографа это значит, что обработанные кадры приходят в каталог с датой обработки
+// и без авторства — по такому архиву не отсортировать и не доказать, что снимок твой.
+// Поэтому вырезаем блок EXIF из исходного файла и вставляем его в готовый.
+// Библиотек не берём: приложение офлайновое, а работы здесь на сотню строк.
+function exifOf(u8){                          // блок APP1 «Exif» из исходного файла
+  if(!u8 || u8.length < 4 || u8[0] !== 0xFF || u8[1] !== 0xD8) return null;
+  let p = 2;
+  while(p + 4 <= u8.length){
+    if(u8[p] !== 0xFF) break;
+    const m = u8[p+1];
+    if(m === 0x01 || (m >= 0xD0 && m <= 0xD9)){ p += 2; continue; }
+    if(m === 0xDA) break;                     // пошли данные картинки — дальше искать нечего
+    const len = (u8[p+2] << 8) | u8[p+3];
+    if(len < 2) break;
+    if(m === 0xE1 && u8[p+4] === 0x45 && u8[p+5] === 0x78 && u8[p+6] === 0x69 && u8[p+7] === 0x66)
+      return u8.slice(p, p + 2 + len);
+    p += 2 + len;
+  }
+  return null;
+}
+// Правим то, что после обработки перестало быть правдой.
+function patchExif(app1, w, h){
+  const t = 10;                               // FFE1 + длина + «Exif\0\0» → начало TIFF
+  if(!app1 || app1.length < t + 8) return app1;
+  const le = app1[t] === 0x49;
+  const u16 = o => le ? app1[o] | (app1[o+1] << 8) : (app1[o] << 8) | app1[o+1];
+  const u32 = o => (le ? (app1[o] | (app1[o+1]<<8) | (app1[o+2]<<16) | (app1[o+3]<<24))
+                       : (app1[o]<<24) | (app1[o+1]<<16) | (app1[o+2]<<8) | app1[o+3]) >>> 0;
+  const w16 = (o,v) => { if(le){ app1[o]=v&255; app1[o+1]=(v>>8)&255; } else { app1[o]=(v>>8)&255; app1[o+1]=v&255; } };
+  const w32 = (o,v) => { if(le){ app1[o]=v&255; app1[o+1]=(v>>8)&255; app1[o+2]=(v>>16)&255; app1[o+3]=(v>>24)&255; }
+                         else { app1[o]=(v>>24)&255; app1[o+1]=(v>>16)&255; app1[o+2]=(v>>8)&255; app1[o+3]=v&255; } };
+  const setVal = (e, v) => { const type = u16(e+2); if(type === 3) w16(e+8, v); else w32(e+8, v); };
+  const walk = (ifd, fn) => {
+    if(ifd + 2 > app1.length) return -1;
+    const n = u16(ifd);
+    for(let i=0;i<n;i++){ const e = ifd + 2 + i*12; if(e + 12 > app1.length) break; fn(u16(e), e); }
+    return ifd + 2 + n*12;
+  };
+  let exifIfd = 0;
+  const end = walk(t + u32(t+4), (tag, e)=>{
+    if(tag === 0x0112) setVal(e, 1);          // поворот: браузер уже развернул кадр при открытии,
+                                              // оставить старое значение — развернуть второй раз
+    if(tag === 0x8769) exifIfd = t + u32(e+8);
+  });
+  if(end > 0 && end + 4 <= app1.length) w32(end, 0);   // отвязываем миниатюру: она от НЕобработанного кадра
+  if(exifIfd) walk(exifIfd, (tag, e)=>{
+    if(tag === 0xA002) setVal(e, w);          // размеры могли измениться кадрированием
+    if(tag === 0xA003) setVal(e, h);
+  });
+  return app1;
+}
+// Авторство пишем отдельным блоком XMP — это обычный XML, без пересчёта смещений внутри
+// EXIF. Его читают Lightroom, Bridge и проводник Windows.
+function xmpApp1(author){
+  const esc = s => String(s).replace(/[<>&]/g, c=> ({'<':'&lt;','>':'&gt;','&':'&amp;'})[c]);
+  const a = esc(author);
+  const xml = '<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>'
+    + '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+    + '<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/">'
+    + '<dc:creator><rdf:Seq><rdf:li>' + a + '</rdf:li></rdf:Seq></dc:creator>'
+    + '<dc:rights><rdf:Alt><rdf:li xml:lang="x-default">© ' + a + '</rdf:li></rdf:Alt></dc:rights>'
+    + '</rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>';
+  const body = new TextEncoder().encode('http://ns.adobe.com/xap/1.0/\0' + xml);
+  const len = body.length + 2;
+  if(len > 65535) return null;
+  const out = new Uint8Array(body.length + 4);
+  out[0] = 0xFF; out[1] = 0xE1; out[2] = (len >> 8) & 255; out[3] = len & 255;
+  out.set(body, 4);
+  return out;
+}
+// Собираем готовый файл: SOI, служебный APP0 кодировщика, наши блоки, дальше как было.
+function jpegWithMeta(u8, blocks){
+  if(!blocks.length || u8[0] !== 0xFF || u8[1] !== 0xD8) return u8;
+  let p = 2;
+  const keep = [];
+  while(p + 4 <= u8.length && u8[p] === 0xFF && (u8[p+1] === 0xE0 || u8[p+1] === 0xE1)){
+    const len = (u8[p+2] << 8) | u8[p+3];
+    if(len < 2) break;
+    if(u8[p+1] === 0xE0) keep.push(u8.subarray(p, p + 2 + len));   // JFIF оставляем, чужой APP1 выкидываем
+    p += 2 + len;
+  }
+  const parts = [u8.subarray(0, 2)].concat(keep, blocks, [u8.subarray(p)]);
+  const total = parts.reduce((s, a)=> s + a.length, 0);
+  const out = new Uint8Array(total);
+  let o = 0;
+  for(const a of parts){ out.set(a, o); o += a.length; }
+  return out;
+}
+let sourceExif = null;                        // EXIF открытого сейчас снимка
+async function fileExif(file){
+  try{ return exifOf(new Uint8Array(await file.arrayBuffer())); }catch(_){ return null; }
+}
+// Готовый JPEG + данные съёмки. exif — блок исходника (может отсутствовать: снято камерой приложения).
+async function withMeta(blob, exif, w, h){
+  const author = (SET.get('author', '') || '').trim();
+  if(!exif && !author) return blob;
+  try{
+    const u8 = new Uint8Array(await blob.arrayBuffer());
+    const blocks = [];
+    if(exif) blocks.push(patchExif(exif.slice(), w, h));
+    if(author){ const x = xmpApp1(author); if(x) blocks.push(x); }
+    return new Blob([jpegWithMeta(u8, blocks)], { type:'image/jpeg' });
+  }catch(_){ return blob; }                   // что-то пошло не так — отдаём файл как есть
+}
 
 // ─── Обмен пресетами файлом ───
 // Файл приходит извне — от коллеги, из мессенджера, со старого телефона. Всё, что в нём
@@ -2212,7 +2335,9 @@ document.getElementById('openSettings').onclick = ()=>{
   // карточку установки показываем, только если браузер реально предложил установку
   document.getElementById('pwaCard').style.display = deferredPrompt ? 'flex' : 'none';
   applyCamGrid(); applyDefSize(); renderMyList();
+  document.getElementById('setAuthor').value = SET.get('author', '');
 };
+document.getElementById('setAuthor').oninput = e=>{ SET.set('author', e.target.value.trim().slice(0,48)); };
 document.getElementById('setClose').onclick = ()=> document.getElementById('settings').classList.remove('open');
 document.getElementById('rowGrid').onclick = ()=>{
   SET.set('camGrid', !SET.get('camGrid', true)); applyCamGrid();
@@ -2416,7 +2541,10 @@ async function expBlob(cb){
   } finally {
     if(base && base !== fullSource && base !== c){ base.width = 0; base.height = 0; }
   }
-  c.toBlob(b=>{ done(); if(b) cb(b); }, 'image/jpeg', 0.95);
+  c.toBlob(async b=>{
+    const withData = b ? await withMeta(b, sourceExif, c.width, c.height) : b;
+    done(); if(withData) cb(withData);
+  }, 'image/jpeg', 0.95);
 }
 
 function expRefresh(){
@@ -2577,7 +2705,8 @@ async function batchRun(){
     try{
       const src = await fileToCanvas(it.file);
       const out = await buildExportAsync(expMax, src);
-      it.blob = await new Promise(r=> out.toBlob(r, 'image/jpeg', 0.95));
+      const raw = await new Promise(r=> out.toBlob(r, 'image/jpeg', 0.95));
+      it.blob = await withMeta(raw, await fileExif(it.file), out.width, out.height);
       if(src !== out){ src.width = 0; src.height = 0; }
       out.width = 0; out.height = 0;           // холсты отпускаем сразу, иначе память кончится
       // подменяем превью результатом: иначе кадр помечен «готово», а показывает исходник
@@ -2835,6 +2964,7 @@ function closeCamera(){
   camZoomCaps = null; camZoomEl.style.display = 'none';
 }
 function useShot(c){
+  sourceExif = null;                          // снято камерой приложения — EXIF брать неоткуда
   // холст отдаём напрямую: раньше кадр гонялся через toDataURL('image/jpeg') и терял
   // качество ещё до того, как человек что-то сделал — при том что сохранять его потом
   // всё равно в JPEG. Одно сжатие вместо двух.
