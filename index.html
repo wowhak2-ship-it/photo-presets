@@ -2756,9 +2756,11 @@ let camStream = null, facing = 'environment';
 const cam = document.getElementById('cam'), camVideo = document.getElementById('camVideo');
 async function startStream(){
   if(camStream) camStream.getTracks().forEach(t=>t.stop());
-  // просим максимум, который отдаёт камера: браузер сам опустит запрос до реального
-  // потолка устройства, но при 1920 мы бы сами обрезали снимок вдвое-втрое
-  camStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:facing, width:{ideal:4096}, height:{ideal:3072} }, audio:false });
+  // Видоискателю просим обычные 1920. Это «сшитый» режим сенсора — картинка чистая.
+  // Когда я просил максимум (4096), телефон переключался в режим полного разрешения
+  // БЕЗ объединения пикселей, и видоискатель становился зернистым — Артур это поймал.
+  // Крупный кадр берём не из видеопотока, а фото-конвейером в момент спуска (см. shoot).
+  camStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:facing, width:{ideal:1920}, height:{ideal:1080} }, audio:false });
   camVideo.srcObject = camStream;
 }
 async function openCamera(){
@@ -2775,14 +2777,33 @@ async function openCamera(){
   }
 }
 function closeCamera(){ if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; } cam.classList.remove('open'); }
-function shoot(){
-  if(!camVideo.videoWidth) return;
-  const c = document.createElement('canvas'); c.width = camVideo.videoWidth; c.height = camVideo.videoHeight;
-  c.getContext('2d').drawImage(camVideo, 0, 0);
+function useShot(c){
   // холст отдаём напрямую: раньше кадр гонялся через toDataURL('image/jpeg') и терял
   // качество ещё до того, как человек что-то сделал — при том что сохранять его потом
   // всё равно в JPEG. Одно сжатие вместо двух.
   closeCamera(); setSource(c); closeOnb();
+}
+async function shoot(){
+  if(!camVideo.videoWidth) return;
+  const track = camStream && camStream.getVideoTracks()[0];
+  // Спуск через ImageCapture — это ФОТО-конвейер камеры: полное разрешение сенсора и
+  // штатное шумоподавление, а не выхваченный кадр видеопотока. Именно так снимок
+  // получается и крупным, и чистым; поток при этом остаётся спокойными 1920.
+  if(track && window.ImageCapture){
+    try{
+      const shot = await new ImageCapture(track).takePhoto();
+      const bmp = await createImageBitmap(shot);
+      const c = document.createElement('canvas');
+      c.width = bmp.width; c.height = bmp.height;
+      c.getContext('2d').drawImage(bmp, 0, 0);
+      if(bmp.close) bmp.close();
+      return useShot(c);
+    } catch(_){}                              // нет поддержки или камера отказала — берём кадр потока
+  }
+  const c = document.createElement('canvas');
+  c.width = camVideo.videoWidth; c.height = camVideo.videoHeight;
+  c.getContext('2d').drawImage(camVideo, 0, 0);
+  useShot(c);
 }
 async function flipCamera(){ facing = facing==='environment' ? 'user' : 'environment'; try { await startStream(); } catch(e){} }
 document.getElementById('camX').onclick = closeCamera;
