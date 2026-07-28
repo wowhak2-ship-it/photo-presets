@@ -200,6 +200,7 @@
   footer{flex:0 0 auto; position:relative; z-index:2; display:flex; gap:8px; padding:9px 14px calc(14px + env(safe-area-inset-bottom)); overflow-x:auto; scrollbar-width:none;}
   footer::-webkit-scrollbar{display:none;}
   .chip{display:flex; flex-direction:column; gap:0; cursor:pointer; flex:0 0 auto; width:62px;}
+  /* высота кадра ленты ставится из JS по форме снимка — см. buildChips */
   .chip canvas{width:62px; height:76px; border-radius:3px; background:var(--panel);
     outline:2.5px solid transparent; outline-offset:1px;
     box-shadow:0 0 0 1px rgba(255,255,255,.07) inset; transition:outline-color .15s, transform .15s;}
@@ -1645,9 +1646,14 @@ addEventListener('orientationchange', ()=> setTimeout(fitViewport, 120));
 const THUMB_DPR = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
 function buildChips(){
   const chips = document.getElementById('chips'); chips.innerHTML = '';
-  // кадры ленты — 3:4, как настоящие кадры на плёнке; 62×76 CSS × плотность экрана
-  const tw = Math.round(62 * THUMB_DPR), th = Math.round(76 * THUMB_DPR);
-  const far = tw/th, ar = sourceCanvas.width/sourceCanvas.height;
+  // Кадр ленты ПОВТОРЯЕТ ФОРМУ СНИМКА, как и в контактном листе. Раньше он был жёстко
+  // вертикальным (3:4), и у горизонтального снимка срезались края — в ленте была видна
+  // середина кадра, а не то, что человек видит на экране. Артур это поймал на речном
+  // снимке: катер у левого берега в миниатюру не попадал вовсе.
+  const ar = sourceCanvas.width/sourceCanvas.height;
+  const far = ar > 1.15 ? 4/3 : 3/4;          // горизонтальный — лежачий кадр, иначе стоячий
+  const cssW = 62, cssH = Math.round(cssW/far);
+  const tw = Math.round(cssW * THUMB_DPR), th = Math.round(cssH * THUMB_DPR);
   const t = document.createElement('canvas'); t.width = tw; t.height = th;
   const tctx = t.getContext('2d');
   tctx.imageSmoothingQuality = 'high';   // уменьшаем в 5-6 раз: на качестве по умолчанию это даёт ступеньки
@@ -1664,6 +1670,7 @@ function buildChips(){
     const chip = document.createElement('div');
     chip.className = 'chip' + (frameActive(e, i) ? ' active' : '') + (e.mine ? ' mine' : '');
     const c = document.createElement('canvas'); c.width=tw; c.height=th;
+    c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
     const id = new ImageData(new Uint8ClampedArray(thumb.data), tw, th);
     if(e.mine) myRender(id, e.p, thumb); else applyLook(id, e.look);
     c.getContext('2d').putImageData(id, 0, 0);
@@ -1712,6 +1719,10 @@ let pendingTool = null;
 function goEditor(){ ensureTrap(); document.body.classList.add('editing'); resetSwipeDemo(); fitStage(); render(); }
 function goHome(){
   document.body.classList.remove('editing');
+  // Лист мог собраться при скрытой главной — например, сразу после сохранения пресета
+  // из редактора. Тогда он посчитан под запасную ширину; пересобираем под настоящую,
+  // как только главная снова на экране. Заодно это чинит поворот телефона.
+  if(sourceCanvas && Math.abs(sheetColW() - hlBuiltFor) > 8) setTimeout(buildHomeLooks, 0);
   if(compareMode){ compareMode = false; compareBtn.classList.remove('active'); cmpOverlay.classList.remove('on'); render(); }
 }
 function applyPendingTool(){
@@ -1737,6 +1748,23 @@ document.getElementById('backBtn').onclick = goHome;
 // look cards: live previews rendered by the real engine from the current photo.
 // Chunked — ОДНА карточка за кадр, чтобы главный поток не подвисал на старте (лаг на телефоне)
 let hlToken = 0;
+// Ширина кадра контактного листа. ВАЖНО: getComputedStyle отдаёт пиксели только у
+// ВИДИМОГО элемента. У скрытого (мы в редакторе) вернётся исходное «repeat(3, 1fr)»,
+// из которого parseFloat вытаскивал единицу — и кадры рисовались шириной в ОДИН пиксель,
+// а потом растягивались на всю ячейку. Лист превращался в кашу ровно после сохранения
+// пресета из редактора, потому что там лист пересобирается при скрытой главной.
+let hlBuiltFor = 0;
+function sheetColW(){
+  const host = document.getElementById('homeLooks');
+  if(!host) return 118;
+  const gtc = getComputedStyle(host).gridTemplateColumns || '';
+  const cols = gtc.indexOf('px') >= 0
+    ? gtc.split(/\s+/).filter(v=> v.slice(-2) === 'px').map(parseFloat).filter(n=> n > 4)
+    : [];
+  if(cols.length) return Math.max.apply(null, cols);
+  const w = host.clientWidth;
+  return w > 12 ? w/3 : 118;                 // главная скрыта — проектная ширина колонки
+}
 function buildHomeLooks(){
   const host = document.getElementById('homeLooks');
   if(!host || !sourceCanvas) return;
@@ -1749,16 +1777,9 @@ function buildHomeLooks(){
   // ширину кадра берём с настоящей сетки (она зависит от ширины экрана) и умножаем на
   // плотность точек — иначе контактный лист показывает размытые кадры, по которым
   // невозможно судить о плёнке. Потолок 420 точек, чтобы лист собирался быстро.
-  const colW = (()=>{
-    // ширину колонки берём как её посчитал сам грид — деление «ширина минус зазоры на три»
-    // промахивалось (200 точек вместо нужных 236), и кадры оставались чуть мягкими
-    const cs = getComputedStyle(host);
-    const cols = (cs.gridTemplateColumns || '').split(/\s+/).map(parseFloat).filter(n=> n > 0);
-    if(cols.length) return Math.max.apply(null, cols);
-    const w = host.clientWidth;
-    return w ? w/3 : 118;                    // главная скрыта — проектная ширина колонки
-  })();
-  const tw = Math.round(Math.min(420, colW * THUMB_DPR)), th = Math.round(tw / ar);
+  const colW = sheetColW();
+  hlBuiltFor = colW;
+  const tw = Math.round(Math.min(420, Math.max(100, colW) * THUMB_DPR)), th = Math.round(tw / ar);
   let sw = sourceCanvas.width, sh = sourceCanvas.height, sx = 0, sy = 0;
   if(sw/sh > ar){ sw = Math.round(sh*ar); sx = (sourceCanvas.width - sw) >> 1; }
   else { sh = Math.round(sw/ar); sy = (sourceCanvas.height - sh) >> 1; }
