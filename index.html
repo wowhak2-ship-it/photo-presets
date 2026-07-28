@@ -39,6 +39,9 @@
     padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);}
 
   /* плёночное зерно поверх всего — то, что делает интерфейс «плёнкой», а не просто тёмной темой */
+  /* В видоискателе зерна быть не должно: оно ложится на ЖИВУЮ картинку и мешает
+     оценить сцену — снимок-то выйдет чистым. Артур принял это за шум камеры. */
+  body.shooting .filmgrain{display:none;}
   .filmgrain{position:fixed; inset:0; pointer-events:none; z-index:9999;
     opacity:.14; mix-blend-mode:overlay;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='.55'/></svg>");}
@@ -215,6 +218,15 @@
   .cam{position:fixed; inset:0; z-index:70;   /* выше стартового экрана — иначе камера открывается под ним */ background:var(--bg-deep); display:none; flex-direction:column;}
   .cam.open{display:flex;}
   .cam video{flex:1; width:100%; object-fit:cover; min-height:0; background:#000;}
+  /* Зум: щипком по видоискателю плюс три быстрых значения, как в штатной камере */
+  .cam-zoom{position:absolute; left:50%; transform:translateX(-50%); z-index:4;
+    bottom:calc(150px + env(safe-area-inset-bottom)); display:flex; gap:6px;
+    padding:5px; border-radius:22px; background:rgba(18,14,9,.6);
+    -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);}
+  .cam-zoom button{min-width:42px; padding:7px 10px; border-radius:18px; cursor:pointer;
+    background:transparent; border:0; color:var(--text); font-family:var(--mono);
+    font-size:11px; letter-spacing:.06em; opacity:.75;}
+  .cam-zoom button.on{background:var(--gold); color:var(--gold-ink); opacity:1; font-weight:600;}
   .cam-bar{display:flex; align-items:center; justify-content:space-between; padding:24px 34px; padding-bottom:calc(24px + env(safe-area-inset-bottom));
     background:linear-gradient(180deg, rgba(7,8,9,0) 0%, var(--bg-deep) 58%);}
   /* верхняя строка видоискателя: закрыть · КАМЕРА · текущий лук */
@@ -837,6 +849,11 @@
   </div>
   <div class="cam-grid" aria-hidden="true"><i class="v1"></i><i class="v2"></i><i class="h1"></i><i class="h2"></i></div>
   <span class="vfm tl"></span><span class="vfm tr"></span><span class="vfm bl"></span><span class="vfm br"></span>
+  <div class="cam-zoom" id="camZoom" style="display:none">
+    <button data-z="1" class="on">1×</button>
+    <button data-z="2">2×</button>
+    <button data-z="max">Макс</button>
+  </div>
   <div class="cam-bar">
     <div style="width:48px"></div>
     <button class="shutter" id="shutter" aria-label="Снять">
@@ -2762,10 +2779,12 @@ async function startStream(){
   // Крупный кадр берём не из видеопотока, а фото-конвейером в момент спуска (см. shoot).
   camStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:facing, width:{ideal:1920}, height:{ideal:1080} }, audio:false });
   camVideo.srcObject = camStream;
+  setupZoom();                                // возможности зума читаем у новой дорожки
 }
 async function openCamera(){
   ensureTrap();
   cam.classList.add('open');
+  document.body.classList.add('shooting');     // прячет плёночное зерно с живой картинки
   const err = document.getElementById('camErr');
   err.style.display = 'none';                 // прошлая ошибка не должна висеть
   try { await startStream(); }
@@ -2776,7 +2795,12 @@ async function openCamera(){
     err.style.display = 'flex';
   }
 }
-function closeCamera(){ if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; } cam.classList.remove('open'); }
+function closeCamera(){
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+  cam.classList.remove('open');
+  document.body.classList.remove('shooting');
+  camZoomCaps = null; camZoomEl.style.display = 'none';
+}
 function useShot(c){
   // холст отдаём напрямую: раньше кадр гонялся через toDataURL('image/jpeg') и терял
   // качество ещё до того, как человек что-то сделал — при том что сохранять его потом
@@ -2806,6 +2830,73 @@ async function shoot(){
   useShot(c);
 }
 async function flipCamera(){ facing = facing==='environment' ? 'user' : 'environment'; try { await startStream(); } catch(e){} }
+
+// ─── Зум камеры ───
+// Телефон умеет приближать сам — через возможности видеодорожки. Это НАСТОЯЩИЙ зум
+// (сенсор/оптика), а не растягивание картинки, поэтому снимок не теряет в качестве.
+// Если дорожка зум не поддерживает, панель просто не показываем — пустышки не рисуем.
+let camZoomCaps = null, camZoomVal = 1;
+const camZoomEl = document.getElementById('camZoom');
+function camTrack(){ return camStream && camStream.getVideoTracks()[0]; }
+function setupZoom(){
+  camZoomCaps = null; camZoomVal = 1;
+  camZoomEl.style.display = 'none';
+  const t = camTrack();
+  if(!t || !t.getCapabilities) return;
+  let caps = null;
+  try{ caps = t.getCapabilities(); }catch(_){ return; }
+  if(!caps || caps.zoom == null || !(caps.zoom.max > caps.zoom.min)) return;
+  camZoomCaps = caps.zoom;
+  camZoomVal = (t.getSettings && t.getSettings().zoom) || caps.zoom.min || 1;
+  // кнопку «2×» показываем, только если телефон действительно столько может
+  const two = camZoomEl.querySelector('[data-z="2"]');
+  two.style.display = camZoomCaps.max >= camZoomCaps.min*2 ? '' : 'none';
+  camZoomEl.style.display = 'flex';
+  markZoom();
+}
+async function applyZoom(v){
+  const t = camTrack(); if(!t || !camZoomCaps) return;
+  const step = camZoomCaps.step || 0.1;
+  v = Math.max(camZoomCaps.min, Math.min(camZoomCaps.max, v));
+  v = Math.round(v/step)*step;
+  try{ await t.applyConstraints({ advanced:[{ zoom:v }] }); camZoomVal = v; markZoom(); }catch(_){}
+}
+function markZoom(){
+  if(!camZoomCaps) return;
+  const base = camZoomCaps.min || 1;
+  [...camZoomEl.children].forEach(b=>{
+    const want = b.dataset.z === 'max' ? camZoomCaps.max : base * (+b.dataset.z);
+    b.classList.toggle('on', Math.abs(camZoomVal - want) < (camZoomCaps.step || 0.1) * 1.5);
+  });
+  const cur = camZoomEl.querySelector('[data-z="max"]');
+  if(cur) cur.textContent = (camZoomCaps.max/base).toFixed(0) + '×';
+}
+camZoomEl.addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b || !camZoomCaps) return;
+  const base = camZoomCaps.min || 1;
+  applyZoom(b.dataset.z === 'max' ? camZoomCaps.max : base * (+b.dataset.z));
+});
+// щипок по видоискателю — как в штатной камере
+const camPtrs = new Map(); let camPinch = null;
+camVideo.addEventListener('pointerdown', e=>{
+  camPtrs.set(e.pointerId, e);
+  if(camPtrs.size === 2 && camZoomCaps){
+    const p = [...camPtrs.values()];
+    camPinch = { d0: Math.hypot(p[0].clientX-p[1].clientX, p[0].clientY-p[1].clientY), z0: camZoomVal };
+  }
+});
+camVideo.addEventListener('pointermove', e=>{
+  if(!camPtrs.has(e.pointerId)) return;
+  camPtrs.set(e.pointerId, e);
+  if(camPinch && camPtrs.size >= 2){
+    const p = [...camPtrs.values()];
+    const d = Math.hypot(p[0].clientX-p[1].clientX, p[0].clientY-p[1].clientY);
+    applyZoom(camPinch.z0 * (d/camPinch.d0));
+  }
+});
+const camPtrEnd = e=>{ camPtrs.delete(e.pointerId); if(camPtrs.size < 2) camPinch = null; };
+camVideo.addEventListener('pointerup', camPtrEnd);
+camVideo.addEventListener('pointercancel', camPtrEnd);
 document.getElementById('camX').onclick = closeCamera;
 document.getElementById('camErrPick').onclick = ()=>{ closeCamera(); document.getElementById('homePick').click(); };
 document.getElementById('shutter').onclick = shoot;
