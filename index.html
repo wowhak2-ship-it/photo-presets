@@ -428,6 +428,9 @@
   .pdlg-warn{margin-top:12px; padding:11px 13px; border-radius:11px; font-size:12.5px; line-height:1.45;
     color:var(--text); background:rgba(210,66,46,.12); border:1px solid rgba(210,66,46,.35);}
   .pdlg-warn b{font-weight:700;}
+  /* без мессенджера ничего не теряется — та же подсказка, но спокойным тоном */
+  .pdlg-warn.soft{background:rgba(224,162,74,.10); border-color:rgba(224,162,74,.30); color:var(--dim);}
+  .pdlg-warn.soft .pdlg-warn-go{background:transparent; border:1px solid var(--line-2); color:var(--gold);}
   .pdlg-warn-go{display:block; width:100%; margin-top:10px; padding:11px 0; border-radius:10px;
     background:var(--china); color:#fff; border:0; font-size:13px; font-weight:700; cursor:pointer;}
   .pdlg-warn-go:active{transform:scale(.98);}
@@ -2053,10 +2056,12 @@ onbEl.classList.add('open');
 // Мессенджеры открывают ссылки в своём встроенном окне. У него отдельное хранилище:
 // пресет, добавленный там, в приложение не попадёт и пропадёт вместе с этим окном.
 // Признак такого окна — пометка WebView в имени браузера либо мостик самого мессенджера.
+function inStandalone(){
+  return (matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone;
+}
 function inAppBrowser(){
   const ua = navigator.userAgent || '';
-  const standalone = (matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone;
-  if(standalone) return false;
+  if(inStandalone()) return false;
   return /;\s*wv\)/.test(ua) || !!window.TelegramWebviewProxy
       || /FBAN|FBAV|Instagram|Line\/|VKAndroidApp|OKApp|WhatsApp/i.test(ua);
 }
@@ -2074,7 +2079,16 @@ let incomingCode = null;
   setTimeout(()=>{
     closeOnb();
     pdlgOpen('ПРЕСЕТ ПО ССЫЛКЕ', dayMonth(), myRecipeText(p), p.name, 'Добавить к себе');
-    document.getElementById('pdlgWarn').style.display = inAppBrowser() ? 'block' : 'none';
+    // В самом приложении подсказка ни к чему. В браузере кнопка полезна всегда —
+    // угадывать, окно это мессенджера или обычная вкладка, значит иногда угадать неверно.
+    // Разница лишь в тоне: из мессенджера пресет пропадёт, из браузера — просто дойдёт не туда.
+    const warn = document.getElementById('pdlgWarn');
+    const risky = inAppBrowser();
+    warn.style.display = inStandalone() ? 'none' : 'block';
+    warn.classList.toggle('soft', !risky);
+    document.getElementById('pdlgWarnTx').textContent = risky
+      ? 'Ссылка открыта внутри мессенджера — здесь пресет сохранится только до закрытия этого окна.'
+      : 'Пресет добавится в браузере. Он будет виден и в приложении, но открыть сразу там — надёжнее.';
     pdlgIncoming = p;
   }, 300);
 })();
