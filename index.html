@@ -433,6 +433,8 @@
   .pdlg-btns button:active{transform:scale(.98);}
   .cdlg-tx{margin-top:14px; font-size:15px; line-height:1.45; color:var(--text);}
   #cdlg .pdlg-btns .go{background:var(--china); color:#fff;}
+  /* созидательное действие — золотом, разрушительное — красным */
+  #cdlg .pdlg-btns .go.gold{background:var(--gold); color:var(--gold-ink);}
 
   /* Список своих пресетов в настройках: имя + рецепт, чтобы было видно,
      что именно этот пресет делает, а не только как он называется */
@@ -1074,6 +1076,10 @@
   <div class="pdlg-card">
     <div class="pdlg-t" id="cdlgT">ПОДТВЕРЖДЕНИЕ</div>
     <div class="cdlg-tx" id="cdlgTx"></div>
+    <div class="pdlg-line" id="cdlgLine" style="display:none">
+      <input id="cdlgInput" type="text" maxlength="48" autocomplete="off"
+             autocapitalize="sentences" spellcheck="false">
+    </div>
     <div class="pdlg-btns">
       <button id="cdlgX">Отмена</button>
       <button class="go" id="cdlgOk">Удалить</button>
@@ -2906,22 +2912,34 @@ function toast(text){
 
 // Своё подтверждение. Системный confirm() возвращает false, когда браузер решил
 // диалоги не показывать, — и человек видит кнопку, которая ничего не делает.
-let cdlgResolve = null;
-function askConfirm(text, okText){
+let cdlgResolve = null, cdlgAsksText = false;
+function cdlgOpen(text, okText, ask, placeholder, value){
   const el = document.getElementById('cdlg');
+  cdlgAsksText = !!ask;
   document.getElementById('cdlgTx').textContent = text;
   document.getElementById('cdlgOk').textContent = okText || 'Удалить';
+  document.getElementById('cdlgOk').classList.toggle('gold', !!ask);
+  document.getElementById('cdlgLine').style.display = ask ? 'flex' : 'none';
+  const inp = document.getElementById('cdlgInput');
+  if(ask){ inp.placeholder = placeholder || ''; inp.value = value || ''; }
   el.classList.add('open');
+  if(ask) setTimeout(()=> inp.focus(), 50);
   return new Promise(res=>{ cdlgResolve = res; });
 }
-function cdlgClose(v){
+// Ответ «нет» отличается от пустого ответа: отмена даёт null, пустое поле — пустую строку.
+function askConfirm(text, okText){ return cdlgOpen(text, okText, false); }
+function askText(text, okText, placeholder, value){ return cdlgOpen(text, okText, true, placeholder, value); }
+function cdlgClose(ok){
   document.getElementById('cdlg').classList.remove('open');
   const r = cdlgResolve; cdlgResolve = null;
-  if(r) r(v);
+  if(!r) return;
+  if(!cdlgAsksText) return r(ok);
+  r(ok ? document.getElementById('cdlgInput').value : null);
 }
 document.getElementById('cdlgOk').onclick = ()=> cdlgClose(true);
 document.getElementById('cdlgX').onclick = ()=> cdlgClose(false);
 document.getElementById('cdlg').onclick = e=>{ if(e.target.id === 'cdlg') cdlgClose(false); };
+document.getElementById('cdlgInput').onkeydown = e=>{ if(e.key === 'Enter') cdlgClose(true); };
 
 // ─── Список своих пресетов в настройках ───
 function renderMyList(){
@@ -3090,10 +3108,11 @@ document.getElementById('packsImport').onclick = ()=> document.getElementById('m
 // Сборка набора: своя работа превращается в товар одним файлом. Имя набора и автор
 // нужны не для красоты — по ним покупатель видит, чей это вид, а витрина понимает,
 // что набор уже стоит.
-document.getElementById('packsMake').onclick = ()=>{
+document.getElementById('packsMake').onclick = async ()=>{
   const list = MYP.all();
   if(!list.length) return toast('Сначала сохраните хотя бы один свой пресет');
-  const name = (prompt('Название набора:', '') || '').trim().slice(0, 48);
+  const typed = await askText('Как назовём набор?', 'Собрать', 'Мягкий свет');
+  const name = (typed || '').trim().slice(0, 48);
   if(!name) return;
   const author = String(SET.get('author', '') || '').trim().slice(0, 48);
   const pack = { id: fileSlug(name) + '-' + list.length, name, count: list.length };
