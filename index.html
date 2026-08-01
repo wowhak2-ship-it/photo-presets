@@ -2144,7 +2144,11 @@ function pickFrame(e){
   // ИЗ пресета. Иначе человек тапает «Ч/Б», думает что видит чистую плёнку, а на ней
   // молча висит чужая экспозиция +18. Между обычными луками правки, как и раньше,
   // сохраняются: они там свои, руками наведённые.
-  if(myActive){ ADJ_KEYS.forEach(k=> adjust[k] = 0); syncAdjustUI(); }
+  if(myActive){
+    ADJ_KEYS.forEach(k=> adjust[k] = 0); syncAdjustUI();
+    CURVE_KEYS.forEach(k=> curve[k] = flatCurve()); buildCurveLuts();
+    HSL_BANDS.forEach(b=> HSL_PARTS.forEach(k=> hsl[b.key][k] = 0)); buildHslTables();
+  }
   myActive = null;
   selected = LOOKS.indexOf(e.look);
   setIntensity(100);
@@ -2377,12 +2381,17 @@ const MYP = {
                return Array.isArray(v) ? v : []; }catch(_){ return []; } },
   write(l){ try{ localStorage.setItem('myPresets', JSON.stringify(l)); }catch(_){} return l; },
   add(name){
+    // Кривая и цвета — такая же часть пресета, как плёнка и ползунки. Без них
+    // фотограф не может сохранить свою работу, а значит не может её ни передать,
+    // ни продать: собирать луки мог бы только автор приложения.
     return this.write(this.all().concat({
       id: 'p' + Date.now(),
       name,
       base: LOOKS[selected].name,          // ИМЯ, не номер: см. myBase()
       intensity,
       adjust: Object.assign({}, adjust),
+      curve: curveTouched() ? JSON.parse(JSON.stringify(curve)) : null,
+      hsl: hslTouched() ? JSON.parse(JSON.stringify(hsl)) : null,
       date: Date.now()
     }));
   },
@@ -2519,8 +2528,45 @@ function sanitizePreset(p){
     name,
     base: String(p.base == null ? LOOKS[0].name : p.base).slice(0, 40),
     intensity: Math.max(0, Math.min(100, Math.round(inten))),
-    adjust
+    adjust,
+    curve: sanitizeCurve(p.curve),
+    hsl: sanitizeHsl(p.hsl)
   };
+}
+// Кривая из чужого файла — тоже неизвестный ввод: точки режем по числу, загоняем
+// в 0..255 и сортируем по горизонтали, иначе интерполяция получит мусор.
+function sanitizeCurve(c){
+  if(!c || typeof c !== 'object') return null;
+  const out = {}; let есть = false;
+  for(const k of CURVE_KEYS){
+    const src = c[k];
+    if(!Array.isArray(src) || src.length < 2) continue;
+    const pts = src.slice(0, 12)
+      .filter(t=> Array.isArray(t) && isFinite(t[0]) && isFinite(t[1]))
+      .map(t=> [Math.max(0, Math.min(255, Math.round(t[0]))), Math.max(0, Math.min(255, Math.round(t[1])))])
+      .sort((a,b)=> a[0]-b[0]);
+    if(pts.length < 2 || curveIsFlat(pts)) continue;
+    out[k] = pts; есть = true;
+  }
+  return есть ? out : null;
+}
+function sanitizeHsl(h){
+  if(!h || typeof h !== 'object') return null;
+  const out = {}; let есть = false;
+  for(const b of HSL_BANDS){
+    const src = h[b.key];
+    if(!src || typeof src !== 'object') continue;
+    const v = {};
+    let ненуль = false;
+    for(const k of HSL_PARTS){
+      let n = Number(src[k]);
+      if(!isFinite(n)) n = 0;
+      v[k] = Math.max(-100, Math.min(100, Math.round(n)));
+      if(v[k]) ненуль = true;
+    }
+    if(ненуль){ out[b.key] = v; есть = true; }
+  }
+  return есть ? out : null;
 }
 MYP.importFrom = function(text){
   let data;
@@ -2539,7 +2585,8 @@ MYP.importFrom = function(text){
     while(taken.has(name.toLowerCase())) name = p.name + ' ' + (n++);
     taken.add(name.toLowerCase());
     list.push({ id:'p' + Date.now() + '_' + added, name, base:p.base,
-                intensity:p.intensity, adjust:p.adjust, date:Date.now() });
+                intensity:p.intensity, adjust:p.adjust,
+                curve:p.curve || null, hsl:p.hsl || null, date:Date.now() });
     added++;
   }
   if(!added) return { error:'В файле нет подходящих пресетов' };
@@ -2556,6 +2603,14 @@ function appBase(){
 }
 function presetToLink(p){
   const body = { n:p.name, b:p.base, i:p.intensity, a:ADJ_KEYS.map(k=> (p.adjust||{})[k] || 0) };
+  // кривую и цвета кладём коротко: только тронутое, полосы тройками чисел
+  if(p.curve){ const c = {};
+    for(const k of CURVE_KEYS) if(p.curve[k] && !curveIsFlat(p.curve[k])) c[k] = p.curve[k];
+    if(Object.keys(c).length) body.c = c; }
+  if(hslSetTouched(p.hsl)){ const h = {};
+    for(const b of HSL_BANDS){ const v = p.hsl[b.key];
+      if(v && HSL_PARTS.some(k=> v[k])) h[b.key] = HSL_PARTS.map(k=> v[k]||0); }
+    if(Object.keys(h).length) body.h = h; }
   const bytes = new TextEncoder().encode(JSON.stringify(body));
   let bin = '';
   for(const b of bytes) bin += String.fromCharCode(b);
@@ -2571,7 +2626,12 @@ function presetFromLink(code){
     const o = JSON.parse(new TextDecoder().decode(bytes));
     const adjust = {};
     ADJ_KEYS.forEach((k,i)=> adjust[k] = Array.isArray(o.a) ? o.a[i] : 0);
-    return sanitizePreset({ name:o.n, base:o.b, intensity:o.i, adjust });
+    const hsl = {};
+    if(o.h) for(const key of Object.keys(o.h)){
+      const t = o.h[key];
+      if(Array.isArray(t)) hsl[key] = { hue:t[0], sat:t[1], lum:t[2] };
+    }
+    return sanitizePreset({ name:o.n, base:o.b, intensity:o.i, adjust, curve:o.c, hsl });
   }catch(_){ return null; }
 }
 async function sharePresetLink(p){
@@ -2586,8 +2646,12 @@ async function sharePresetLink(p){
 }
 
 function presetBlob(list){
-  const body = { app:'presety', v:1, presets: list.map(p=>({
-    name:p.name, base:p.base, intensity:p.intensity, adjust:p.adjust })) };
+  const body = { app:'presety', v:2, presets: list.map(p=>{
+    const o = { name:p.name, base:p.base, intensity:p.intensity, adjust:p.adjust };
+    if(p.curve) o.curve = p.curve;
+    if(hslSetTouched(p.hsl)) o.hsl = p.hsl;
+    return o;
+  }) };
   return new Blob([JSON.stringify(body, null, 2)], { type:'application/json' });
 }
 // имя файла делаем латиницей: кириллица в именах вложений теряется по дороге через мессенджеры
@@ -2620,6 +2684,8 @@ function myRender(id, p, orig){
   const L = lookLayers(look, mix);
   applyHsl(id, L.hsl); applyCurve(id, L.curve);
   applyAdjust(id, p.adjust || ZERO_ADJ);
+  if(hslSetTouched(p.hsl)) applyHsl(id, hslSetToTables(p.hsl, 1));
+  if(p.curve) applyCurve(id, curveSetToLuts(p.curve));
 }
 // Короткая расшифровка рецепта — и в диалоге, и в списке настроек человек видит,
 // что пресет реально делает, а не только как он называется.
@@ -2632,12 +2698,21 @@ function myRecipeText(p){
     const v = (p.adjust || {})[k] || 0;
     if(v) parts.push(ADJ_RU[k] + ' ' + (v > 0 && k !== 'grain' ? '+' : '') + v);
   });
+  if(p.curve && CURVE_KEYS.some(k=> p.curve[k] && !curveIsFlat(p.curve[k]))) parts.push('кривая');
+  if(hslSetTouched(p.hsl)){
+    const n = HSL_BANDS.filter(b=> p.hsl[b.key] && HSL_PARTS.some(k=> p.hsl[b.key][k])).length;
+    parts.push('цвета ' + n);
+  }
   return parts.join(' · ');
 }
 let myActive = null;                        // id выбранного своего пресета, иначе null
 function applyMyPreset(p){
   selected = myBase(p);
   ADJ_KEYS.forEach(k=> adjust[k] = (p.adjust || ZERO_ADJ)[k] || 0);
+  CURVE_KEYS.forEach(k=> curve[k] = (p.curve && p.curve[k]) ? p.curve[k].map(t=> t.slice()) : flatCurve());
+  HSL_BANDS.forEach(b=> HSL_PARTS.forEach(k=>
+    hsl[b.key][k] = (p.hsl && p.hsl[b.key] ? p.hsl[b.key][k] : 0) || 0));
+  buildCurveLuts(); buildHslTables();
   syncAdjustUI();
   setIntensity(p.intensity == null ? 100 : p.intensity);
   myActive = p.id;
@@ -2685,7 +2760,8 @@ document.getElementById('pdlgOk').onclick = ()=>{
     let nm = name, n = 2;
     while(taken.has(nm.toLowerCase())) nm = name + ' ' + (n++);
     const list = MYP.write(MYP.all().concat({
-      id:'p'+Date.now(), name:nm, base:p.base, intensity:p.intensity, adjust:p.adjust, date:Date.now() }));
+      id:'p'+Date.now(), name:nm, base:p.base, intensity:p.intensity, adjust:p.adjust,
+      curve:p.curve || null, hsl:p.hsl || null, date:Date.now() }));
     myActive = list[list.length-1].id;
     if(sourceCanvas) applyMyPreset(list[list.length-1]);
     closeSavePreset();
