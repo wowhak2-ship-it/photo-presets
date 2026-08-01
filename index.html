@@ -462,8 +462,11 @@
      и рядом с тем, что она показывает. Работает по удержанию, как в Ретуши. */
   /* Обёртка сжимается ровно по снимку, поэтому кнопка сидит в его углу, а не висит
      в пустоте между фото и панелью. */
-  .ov-frame{position:relative; display:flex; min-width:0; min-height:0; max-width:100%; max-height:100%;}
-  .ov-frame canvas{max-width:100%; max-height:100%; display:block;}
+  /* Пропорции держит ОБЁРТКА через aspect-ratio, а холст просто её заполняет.
+     Раньше max-width и max-height висели на самом холсте, и когда упирались оба сразу
+     (вертикальный кадр), он растягивался в рамку — снимок шёл с искажением. */
+  .ov-frame{position:relative; max-width:100%; max-height:100%; min-width:0; min-height:0;}
+  .ov-frame canvas{width:100%; height:100%; display:block;}
   /* НИЗ, а не верх: сверху уже лежит «Готово» в шапке оверлея, и кнопки налезали друг
      на друга — поймано Артуром. Снизу свободно и ближе к пальцу. */
   .ov-cmp{position:absolute; bottom:8px; right:8px; z-index:3; padding:7px 12px; border-radius:16px;
@@ -488,11 +491,15 @@
      а не график. Кадр сверху, поле кривой снизу; поле сжимается на низких экранах,
      но не мельче 200 px, иначе точку пальцем не поймать. */
   .cv-body{flex:1; min-height:0; display:flex; flex-direction:column; align-items:center;
-    gap:12px; padding:calc(58px + env(safe-area-inset-top)) 20px 10px;}
+    gap:10px; padding:calc(56px + env(safe-area-inset-top)) 16px 8px;}
   .cv-shot{flex:1 1 auto; min-height:0; width:100%; display:flex; align-items:center; justify-content:center;}
   .cv-shot canvas{max-width:100%; max-height:100%; border-radius:2px; display:block;
     box-shadow:0 10px 26px rgba(0,0,0,.5);}
-  .cv-pad{flex:0 0 auto; width:100%; max-width:min(340px, 44vh); min-width:200px; aspect-ratio:1/1; position:relative;}
+  /* Поле кривой съедало половину экрана, а снимок оставался в 144 точки — по такому
+     кадру не оценить правку. Поле ужато настолько, чтобы точку всё ещё брать пальцем
+     (попадание считается в долях, а не в пикселях, поэтому меньший размер не мешает),
+     а освободившаяся высота уходит фотографии. */
+  .cv-pad{flex:0 0 auto; width:100%; max-width:min(258px, 31vh); min-width:190px; aspect-ratio:1/1; position:relative;}
   .cv-pad canvas{width:100%; height:100%; display:block; border-radius:4px;
     background:var(--panel); box-shadow:0 0 0 1px var(--line) inset; touch-action:none;}
   /* отступы задаются ниже составным селектором — .ov-dock обнуляет боковые */
@@ -504,7 +511,7 @@
   .cv-chans button.set{border-color:var(--china); color:var(--text);}
   .cv-chans button.on.set{border-color:transparent;}
   .cv-hint{font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; color:var(--faint);
-    text-align:center; margin-bottom:10px;}
+    text-align:center; margin-bottom:8px;}
   .cv-acts{display:flex; gap:8px; justify-content:center;}
   .cv-acts .adj-reset{margin-top:0;}
 
@@ -2991,7 +2998,10 @@ let hsBand = HSL_BANDS[0].key, hsBackup = null;
 function hsDrawShot(){
   const src = previewSrc || sourceCanvas;
   if(!src) return;
-  if(hsShot.width !== src.width){ hsShot.width = src.width; hsShot.height = src.height; }
+  if(hsShot.width !== src.width || hsShot.height !== src.height){
+    hsShot.width = src.width; hsShot.height = src.height;
+    hsShot.parentElement.style.aspectRatio = src.width + ' / ' + src.height;
+  }
   hsShot.getContext('2d').putImageData(processedData(src), 0, 0);
 }
 function hsSync(){
@@ -3152,7 +3162,12 @@ const cvShot = document.getElementById('cvShot');
 function cvDrawShot(){
   const src = previewSrc || sourceCanvas;
   if(!src) return;
-  if(cvShot.width !== src.width){ cvShot.width = src.width; cvShot.height = src.height; }
+  // сверяем И ширину, И высоту: у горизонтального и квадратного кадра ширина совпадает,
+  // и по одной ширине высота холста осталась бы от прошлого снимка
+  if(cvShot.width !== src.width || cvShot.height !== src.height){
+    cvShot.width = src.width; cvShot.height = src.height;
+    cvShot.parentElement.style.aspectRatio = src.width + ' / ' + src.height;
+  }
   cvShot.getContext('2d').putImageData(processedData(src), 0, 0);
 }
 function cvCommit(){
