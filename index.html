@@ -545,6 +545,27 @@
     font-size:12px; font-weight:600; letter-spacing:.04em; padding:10px 12px; border-radius:11px; cursor:pointer;}
   .myp-io:active{transform:scale(.98);}
 
+  /* Витрина наборов */
+  .packs-lead{font-size:13px; line-height:1.55; color:var(--faint); margin-bottom:16px;}
+  .pack{display:flex; gap:13px; padding:12px; border-radius:14px; background:var(--panel);
+    border:1px solid var(--line); margin-bottom:10px;}
+  .pack-cover{width:78px; height:98px; flex:0 0 auto; border-radius:4px; object-fit:cover;
+    background:#1B160F; border:1px solid var(--line);}
+  .pack-tx{flex:1 1 0; min-width:0; display:flex; flex-direction:column;}
+  .pack-tx b{font-size:15px; font-weight:600; color:var(--text); line-height:1.25;}
+  .pack-by{font-family:var(--mono); font-size:9px; letter-spacing:.14em; color:var(--dim);
+    margin-top:3px; text-transform:uppercase;}
+  .pack-ab{font-size:12.5px; line-height:1.45; color:var(--faint); margin-top:7px;}
+  .pack-foot{display:flex; align-items:center; gap:10px; margin-top:auto; padding-top:11px;}
+  .pack-price{font-family:var(--mono); font-size:13px; font-weight:600; color:var(--text);}
+  .pack-buy{margin-left:auto; background:var(--gold); color:var(--gold-ink); border:0;
+    font-size:12.5px; font-weight:700; letter-spacing:.03em; padding:9px 15px; border-radius:11px; cursor:pointer;}
+  .pack-buy:active{transform:scale(.98);}
+  .pack-owned{margin-left:auto; font-family:var(--mono); font-size:10px; letter-spacing:.12em;
+    color:var(--gold); border:1px solid rgba(224,162,74,.4); border-radius:9px; padding:7px 11px;}
+  .packs-empty{font-size:13px; line-height:1.5; color:var(--faint); padding:2px 2px 4px;}
+  .packs-legal a{color:var(--dim); text-decoration:underline;}
+
   .toast{position:fixed; left:50%; bottom:calc(28px + env(safe-area-inset-bottom)); transform:translate(-50%,10px);
     z-index:90; padding:10px 18px; border-radius:20px; background:var(--glass); border:1px solid var(--glass-line);
     -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); color:var(--text);
@@ -1125,11 +1146,39 @@
 
     <div class="set-group">
       <div class="set-gl">ПРИЛОЖЕНИЕ</div>
+      <button class="set-row" id="rowPacks">
+        <span class="set-name">Наборы пресетов</span>
+        <span class="set-val" id="setPacksVal">Смотреть<i>›</i></span>
+      </button>
+      <button class="set-row" id="rowPrivacy">
+        <span class="set-name">Конфиденциальность</span>
+        <span class="set-val"><i>›</i></span>
+      </button>
       <div class="set-row static">
         <span class="set-name">Версия</span>
         <span class="set-ver" id="setVer">—</span>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Витрина наборов. Список приходит из ./packs.json на сайте, а не зашит в код:
+     новый набор появляется у всех без обновления приложения. -->
+<div class="settings" id="packs">
+  <div class="cam-top">
+    <button class="cam-x" id="packsClose">✕</button>
+    <span class="cam-title">НАБОРЫ</span>
+    <span style="width:40px"></span>
+  </div>
+  <div class="set-body">
+    <div class="packs-lead">Набор — это готовый вид от фотографа: кривая, цвета и все правки одним касанием. Ставится в ленту рядом с вашими пресетами и работает офлайн.</div>
+    <div id="packsList"></div>
+    <div class="myp-acts">
+      <button class="myp-io" id="packsImport">Загрузить купленный файл</button>
+      <button class="myp-io" id="packsMake">Собрать свой набор</button>
+    </div>
+    <div class="set-note">Свой набор — это все ваши пресеты одним файлом с названием и авторством. Такой файл можно продавать или отдавать: у получателя он встанет как готовый набор.</div>
+    <div class="set-note packs-legal">Покупка наборов — по <a href="./offer.html" target="_blank" rel="noopener">условиям продажи</a>. Данные обрабатываются согласно <a href="./privacy.html" target="_blank" rel="noopener">политике конфиденциальности</a>.</div>
   </div>
 </div>
 
@@ -2596,7 +2645,11 @@ MYP.importFrom = function(text){
   }
   if(!added) return { error:'В файле нет подходящих пресетов' };
   this.write(list);
-  return { added };
+  // Файл набора несёт свою метку: по ней витрина понимает, что этот набор уже куплен,
+  // и больше не предлагает его купить второй раз.
+  const pack = data && data.pack && data.pack.id
+    ? { id:String(data.pack.id).slice(0,64), name:String(data.pack.name || '').slice(0,64) } : null;
+  return { added, pack };
 };
 // ─── Пресет ссылкой ───
 // Файлом делиться плохо: мессенджер показывает .json безымянным документом, а открыть
@@ -2650,13 +2703,14 @@ async function sharePresetLink(p){
   catch(_){ prompt('Скопируйте ссылку на пресет:', url); }
 }
 
-function presetBlob(list){
+function presetBlob(list, pack){
   const body = { app:'presety', v:2, presets: list.map(p=>{
     const o = { name:p.name, base:p.base, intensity:p.intensity, adjust:p.adjust };
     if(p.curve) o.curve = p.curve;
     if(hslSetTouched(p.hsl)) o.hsl = p.hsl;
     return o;
   }) };
+  if(pack) body.pack = pack;                   // метка набора: по ней витрина узнаёт покупку
   return new Blob([JSON.stringify(body, null, 2)], { type:'application/json' });
 }
 // имя файла делаем латиницей: кириллица в именах вложений теряется по дороге через мессенджеры
@@ -2668,8 +2722,8 @@ function fileSlug(s){
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
   return out || 'presety';
 }
-async function sharePresets(list, slug){
-  const blob = presetBlob(list);
+async function sharePresets(list, slug, pack){
+  const blob = presetBlob(list, pack);
   const file = new File([blob], slug + '.presety.json', { type:'application/json' });
   if(navigator.canShare && navigator.canShare({ files:[file] })){
     try{ await navigator.share({ files:[file] }); return; }catch(e){ if(e && e.name === 'AbortError') return; }
@@ -2868,6 +2922,10 @@ document.getElementById('mypFile').onchange = e=>{
     const res = MYP.importFrom(String(fr.result));
     if(res.error) return toast(res.error);
     renderMyList(); buildChips(); buildHomeLooks();
+    if(res.pack){                              // купленный набор больше не предлагаем купить
+      PACKS.own(res.pack.id);
+      if(packsEl.classList.contains('open')) renderPacks();
+    }
     const n = res.added;
     toast('Добавлено ' + n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'пресет'
         : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'пресета' : 'пресетов')));
@@ -2875,6 +2933,100 @@ document.getElementById('mypFile').onchange = e=>{
   fr.onerror = ()=> toast('Файл не прочитался');
   fr.readAsText(f);
 };
+
+// ─── Наборы пресетов ───
+// Список наборов лежит НЕ в коде приложения, а в ./packs.json на сайте: выложить новый
+// набор — значит положить файл, а не пересобирать и переустанавливать приложение.
+// Последний удачный ответ держим у себя, чтобы витрина открывалась и без сети.
+const PACKS = {
+  owned(){ try{ const v = JSON.parse(localStorage.getItem('packsOwned') || '[]');
+                return Array.isArray(v) ? v : []; }catch(_){ return []; } },
+  own(id){ if(!id) return; const l = this.owned();
+           if(!l.includes(id)){ l.push(id); try{ localStorage.setItem('packsOwned', JSON.stringify(l)); }catch(_){} } },
+  cached(){ try{ const v = JSON.parse(localStorage.getItem('packsCache') || 'null');
+                 return v && Array.isArray(v.packs) ? v.packs : null; }catch(_){ return null; } },
+  async load(){
+    try{
+      const r = await fetch('./packs.json', { cache:'no-cache' });
+      if(!r.ok) throw 0;
+      const j = await r.json();
+      if(!j || !Array.isArray(j.packs)) throw 0;
+      try{ localStorage.setItem('packsCache', JSON.stringify({ packs:j.packs })); }catch(_){}
+      return j.packs;
+    }catch(_){ return this.cached(); }
+  }
+};
+function packCard(p){
+  const owned = PACKS.owned().includes(p.id);
+  const el = document.createElement('div'); el.className = 'pack';
+  if(p.cover){
+    const img = document.createElement('img'); img.className = 'pack-cover';
+    img.src = p.cover; img.alt = ''; img.loading = 'lazy';
+    img.onerror = ()=> img.remove();
+    el.appendChild(img);
+  }
+  const tx = document.createElement('div'); tx.className = 'pack-tx';
+  const b = document.createElement('b'); b.textContent = p.name || 'Набор';
+  tx.appendChild(b);
+  if(p.author){ const by = document.createElement('div'); by.className = 'pack-by';
+                by.textContent = p.author; tx.appendChild(by); }
+  if(p.about){ const ab = document.createElement('div'); ab.className = 'pack-ab';
+               ab.textContent = p.about; tx.appendChild(ab); }
+  const foot = document.createElement('div'); foot.className = 'pack-foot';
+  const pr = document.createElement('span'); pr.className = 'pack-price';
+  pr.textContent = owned ? (p.count ? p.count + ' в ленте' : 'установлен')
+                         : (p.price || '');
+  foot.appendChild(pr);
+  if(owned){
+    const ok = document.createElement('span'); ok.className = 'pack-owned'; ok.textContent = 'ВАШ';
+    foot.appendChild(ok);
+  } else if(p.buy){
+    const go = document.createElement('button'); go.className = 'pack-buy'; go.textContent = 'Купить';
+    go.onclick = ()=> window.open(p.buy, '_blank', 'noopener');
+    foot.appendChild(go);
+  }
+  tx.appendChild(foot);
+  el.appendChild(tx);
+  return el;
+}
+async function renderPacks(){
+  const host = document.getElementById('packsList');
+  if(!host) return;
+  host.innerHTML = '';
+  const wait = document.createElement('div'); wait.className = 'packs-empty';
+  wait.textContent = 'Загружаю…';
+  host.appendChild(wait);
+  const list = await PACKS.load();
+  host.innerHTML = '';
+  if(!list || !list.length){
+    const e = document.createElement('div'); e.className = 'packs-empty';
+    e.textContent = list ? 'Пока ни одного набора. Скоро появятся.'
+                         : 'Список не загрузился — нужен интернет. Купленный набор можно поставить из файла кнопкой ниже.';
+    host.appendChild(e); return;
+  }
+  list.forEach(p=> host.appendChild(packCard(p)));
+}
+const packsEl = document.getElementById('packs');
+document.getElementById('rowPacks').onclick = ()=>{
+  packsEl.classList.add('open');
+  ensureTrap(); renderPacks();
+};
+document.getElementById('packsClose').onclick = ()=> packsEl.classList.remove('open');
+document.getElementById('packsImport').onclick = ()=> document.getElementById('mypFile').click();
+// Сборка набора: своя работа превращается в товар одним файлом. Имя набора и автор
+// нужны не для красоты — по ним покупатель видит, чей это вид, а витрина понимает,
+// что набор уже стоит.
+document.getElementById('packsMake').onclick = ()=>{
+  const list = MYP.all();
+  if(!list.length) return toast('Сначала сохраните хотя бы один свой пресет');
+  const name = (prompt('Название набора:', '') || '').trim().slice(0, 48);
+  if(!name) return;
+  const author = String(SET.get('author', '') || '').trim().slice(0, 48);
+  const pack = { id: fileSlug(name) + '-' + list.length, name, count: list.length };
+  if(author) pack.author = author;
+  sharePresets(list, fileSlug(name), pack);
+};
+document.getElementById('rowPrivacy').onclick = ()=> window.open('./privacy.html', '_blank', 'noopener');
 
 document.getElementById('openSettings').onclick = ()=>{
   document.getElementById('settings').classList.add('open');
@@ -4542,12 +4694,14 @@ function isAnyScreenOpen(){
   return document.body.classList.contains('editing')
       || cam.classList.contains('open')
       || cropEl.classList.contains('open')
-      || retouchEl.classList.contains('open');
+      || retouchEl.classList.contains('open')
+      || packsEl.classList.contains('open');
 }
 function forceHome(){
   if(cam.classList.contains('open')) closeCamera();
   if(cropEl.classList.contains('open')) closeCrop();
   if(retouchEl.classList.contains('open')) closeRetouch();
+  if(packsEl.classList.contains('open')) packsEl.classList.remove('open');
   if(document.body.classList.contains('editing')) goHome();
 }
 const backToast = document.getElementById('backToast');

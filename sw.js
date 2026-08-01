@@ -1,9 +1,11 @@
 // Service worker — offline cache for the Photo Presets PWA
-const CACHE = 'photo-presets-v41';
+const CACHE = 'photo-presets-v42';
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './privacy.html',
+  './offer.html',
   './demo.jpg',
   './avatar.jpg',
   './icon-192-v2.png',
@@ -58,8 +60,11 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const isHTML = req.mode === 'navigate' || req.destination === 'document' ||
                  url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
+  // Витрина наборов должна обновляться сама: новый набор выкладывается файлом на сайт,
+  // а не новой версией приложения. Под cache-first список замёрз бы навсегда.
+  const isLive = url.pathname.endsWith('/packs.json');
 
-  if (isHTML) {
+  if (isHTML || isLive) {
     // Network-first, bypassing the browser's HTTP cache — GitHub Pages serves
     // index.html with max-age=600, so a plain fetch() could hand back a stale
     // copy for ten minutes after a deploy.
@@ -68,7 +73,7 @@ self.addEventListener('fetch', e => {
         const copy = resp.clone();
         caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
         return resp;
-      }).catch(() => caches.match(req).then(r => r || caches.match('./index.html')))
+      }).catch(() => caches.match(req).then(r => r || (isHTML ? caches.match('./index.html') : undefined)))
     );
   } else {
     // Cache-first for static assets (icons, manifest)
