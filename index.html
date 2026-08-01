@@ -428,6 +428,9 @@
   .pdlg-warn{margin-top:12px; padding:11px 13px; border-radius:11px; font-size:12.5px; line-height:1.45;
     color:var(--text); background:rgba(210,66,46,.12); border:1px solid rgba(210,66,46,.35);}
   .pdlg-warn b{font-weight:700;}
+  .pdlg-warn-go{display:block; width:100%; margin-top:10px; padding:11px 0; border-radius:10px;
+    background:var(--china); color:#fff; border:0; font-size:13px; font-weight:700; cursor:pointer;}
+  .pdlg-warn-go:active{transform:scale(.98);}
   .pdlg-btns{display:flex; gap:8px; margin-top:20px;}
   .pdlg-btns button{flex:1; padding:12px 0; border-radius:11px; font-size:13px; font-weight:600; cursor:pointer;
     background:transparent; border:1px solid var(--line-2); color:var(--dim);}
@@ -1106,7 +1109,10 @@
       <span class="pdlg-date" id="pdlgDate">27.07</span>
     </div>
     <div class="pdlg-recipe" id="pdlgRecipe"></div>
-    <div class="pdlg-warn" id="pdlgWarn" style="display:none">Ссылка открыта внутри мессенджера — здесь пресет сохранится только до закрытия этого окна. Чтобы он встал в приложение: зажмите сообщение со ссылкой → <b>«Поделиться»</b> → выберите <b>«Пресеты»</b>.</div>
+    <div class="pdlg-warn" id="pdlgWarn" style="display:none">
+      <span id="pdlgWarnTx">Ссылка открыта внутри мессенджера — здесь пресет сохранится только до закрытия этого окна.</span>
+      <button class="pdlg-warn-go" id="pdlgWarnGo">Открыть в приложении</button>
+    </div>
     <div class="pdlg-btns">
       <button id="pdlgX">Отмена</button>
       <button class="go" id="pdlgOk">Сохранить пресет</button>
@@ -2057,9 +2063,11 @@ function inAppBrowser(){
 
 // Пресет пришёл ссылкой — показываем, ЧТО именно предлагают, и даём переименовать.
 // Адрес чистим сразу, чтобы обновление страницы не предлагало то же самое повторно.
+let incomingCode = null;
 (function(){
   const code = new URLSearchParams(location.search).get('p');
   if(!code) return;
+  incomingCode = code;
   history.replaceState(null, '', appBase());
   const p = presetFromLink(code);
   if(!p) return setTimeout(()=> toast('Ссылка на пресет не читается'), 400);
@@ -2070,6 +2078,24 @@ function inAppBrowser(){
     pdlgIncoming = p;
   }, 300);
 })();
+// Выход из встроенного окна мессенджера. Обычная ссылка его не покинет — она снова
+// откроется здесь же. Адрес вида intent:// система разбирает сама и передаёт наружу,
+// установленному приложению. Если мессенджер такой адрес не пропустил, через пару
+// секунд мы всё ещё здесь — тогда показываем путь руками.
+document.getElementById('pdlgWarnGo').onclick = function(){
+  const btn = this;
+  const tx = document.getElementById('pdlgWarnTx');
+  const manual = ()=>{
+    btn.style.display = 'none';
+    tx.innerHTML = 'Мессенджер не выпускает ссылку наружу. Чтобы пресет встал в приложение: '
+                 + 'зажмите сообщение со ссылкой → <b>«Поделиться»</b> → выберите <b>«Пресеты»</b>.';
+  };
+  if(!/Android/i.test(navigator.userAgent) || !incomingCode) return manual();
+  const u = new URL(appBase() + '?p=' + incomingCode);
+  setTimeout(()=>{ if(!document.hidden) manual(); }, 2000);
+  location.href = 'intent://' + u.host + u.pathname + u.search
+                + '#Intent;scheme=https;action=android.intent.action.VIEW;end';
+};
 
 function processedData(src){
   src = src || sourceCanvas;
