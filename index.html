@@ -836,7 +836,7 @@
     <span class="em-n" id="edgeCount">00/12</span>
   </div>
 
-  <button class="ghost-btn home-batch" id="homeBatch">ОБРАБОТАТЬ НЕСКОЛЬКО ФОТО</button>
+  <button class="ghost-btn home-batch" id="homeBatch">ОБРАБОТАТЬ ВСЮ СЪЁМКУ</button>
   <div class="home-actions">
     <button class="ghost-btn" id="homePick">ВЫБРАТЬ ДРУГОЕ ФОТО</button>
     <button class="solid-btn" id="homeCam">СНЯТЬ</button>
@@ -884,6 +884,10 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
     Кадр
   </button>
+  <button class="tool" id="tabAdjust">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15.5" cy="16" r="2.6"/></svg>
+    Настройки<span class="dot"></span>
+  </button>
   <button class="tool" data-go="curve">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V3M3 21h18"/><path d="M3 18c5 0 6-11 11-11 3 0 4 3 7 3"/></svg>
     Кривая
@@ -892,9 +896,9 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 3.6v16.8M3.6 12h16.8M6 6l12 12M18 6L6 18"/></svg>
     Цвета
   </button>
-  <button class="tool" id="tabAdjust">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15.5" cy="16" r="2.6"/></svg>
-    Настройки<span class="dot"></span>
+  <button class="tool" data-go="batch">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="10" rx="1.6"/><path d="M7.5 4.5h11a1.6 1.6 0 0 1 1.6 1.6v9"/><path d="M6.4 14.2l2.6-2.8 2.4 2.3 2-2.1 2.6 3"/></svg>
+    Съёмка
   </button>
 </div>
 
@@ -1018,7 +1022,7 @@
 <div class="batch" id="batch">
   <div class="cam-top">
     <button class="cam-x" id="batchClose">✕</button>
-    <span class="cam-title">ПАЧКА</span>
+    <span class="cam-title">ОБРАБОТАТЬ СЪЁМКУ</span>
     <span style="width:40px"></span>
   </div>
   <div class="batch-body">
@@ -1026,7 +1030,7 @@
     <div class="batch-grid" id="batchGrid"></div>
   </div>
   <div class="ov-dock batch-dock">
-    <div class="batch-status" id="batchStatus">Выберите снимки — к ним ляжет тот же вид</div>
+    <div class="batch-status" id="batchStatus">Выберите кадры съёмки — на все ляжет один вид</div>
     <div class="batch-btns">
       <button class="crop-btn" id="batchPick">Выбрать снимки</button>
       <button class="crop-btn gold" id="batchGo" disabled>Обработать</button>
@@ -1143,7 +1147,7 @@
     <div class="exp-btns">
       <button class="crop-btn gold" id="expSave">Сохранить в галерею</button>
       <button class="crop-btn" id="expShare">Поделиться</button>
-      <button class="exp-batch" id="expBatch">Применить этот вид к другим снимкам</button>
+      <button class="exp-batch" id="expBatch">Применить этот вид ко всей съёмке</button>
     </div>
   </div>
 </div>
@@ -2182,6 +2186,7 @@ function applyPendingTool(){
   if(t==='crop'){ openCrop(); return; }
   if(t==='curve'){ openCurve(); return; }
   if(t==='hsl'){ openHsl(); return; }
+  if(t==='batch'){ openBatch(); return; }
   if(!t) return;   // выбрали фото просто через «Галерея»/«Камера» — остаёмся на главной, фото уже подхвачено лентой луков
   goEditor();
   setTab(t==='adjust' ? 'adjust' : 'presets');
@@ -3454,7 +3459,9 @@ addEventListener('resize', ()=>{ if(cvEl.classList.contains('open')) cvDraw(); }
 // ретушь привязаны к конкретному кадру, на чужих снимках они были бы бессмыслицей.
 // Считаем строго по одному снимку за раз и сразу отпускаем холсты — двадцать кадров
 // по 24 мегапикселя одновременно телефон не переживёт.
-const BATCH_LIMIT = 30;
+// Съёмка — это сотни кадров, а не десяток: у выписки или крестин их бывает под двести.
+// Потолок поднят до сотни; миниатюры при этом мельче, иначе сотня превью съест память.
+const BATCH_LIMIT = 100;
 let batchItems = [], batchBusy = false;
 const batchEl = document.getElementById('batch');
 const batchStatus = t => { document.getElementById('batchStatus').textContent = t; };
@@ -3499,18 +3506,19 @@ function renderBatch(){
   go.disabled = batchBusy || !batchItems.length;
   pick.disabled = batchBusy;
   if(batchBusy) return;
+  const всего = batchItems.length;
   if(done && ok){
     go.textContent = 'Поделиться всеми';
     pick.textContent = 'Сохранить по одному';
-    batchStatus('Готово ' + ok + ' из ' + batchItems.length);
+    batchStatus('Съёмка готова: ' + ok + ' из ' + batchItems.length);
   } else {
-    go.textContent = 'Обработать';
-    pick.textContent = batchItems.length ? 'Добавить ещё' : 'Выбрать снимки';
+    go.textContent = всего ? 'Обработать ' + всего : 'Обработать';
+    pick.textContent = всего ? 'Добавить ещё' : 'Выбрать кадры';
     batchStatus(noLook
-      ? 'Вид не выбран — снимки сохранятся как есть. Откройте фото и выберите плёнку'
+      ? 'Вид не выбран — кадры сохранятся как есть. Откройте фото и выберите плёнку'
       : (batchItems.length
-          ? ('Выбрано ' + batchItems.length + ' — тап по кадру убирает его')
-          : 'Выберите снимки — к ним ляжет тот же вид. Можно добавлять по одному'));
+          ? ('В съёмке ' + batchItems.length + ' кадров — тап по кадру убирает его')
+          : 'Выберите кадры съёмки — на все ляжет один вид. Можно добавлять по частям'));
   }
 }
 // Снимок в холст: полный размер под тем же потолком, что и у обычного экспорта
@@ -3538,7 +3546,7 @@ async function batchRun(){
   for(let i=0; i<batchItems.length; i++){
     const it = batchItems[i];
     if(it.blob) continue;
-    batchStatus('Считаю ' + (i+1) + ' из ' + batchItems.length + '…');
+    batchStatus('Обрабатываю ' + (i+1) + ' из ' + batchItems.length + '…');
     if(it.el) it.el.querySelector('.bs').textContent = String(i+1).padStart(2,'0') + ' · считаю';
     try{
       const src = await fileToCanvas(it.file);
@@ -3632,7 +3640,7 @@ document.getElementById('batchFile').onchange = async e=>{
     try{
       const cv = await fileToCanvas(it.file);
       const t = document.createElement('canvas');
-      const k = Math.min(1, 260/Math.max(cv.width, cv.height));
+      const k = Math.min(1, 170/Math.max(cv.width, cv.height));
       t.width = Math.round(cv.width*k); t.height = Math.round(cv.height*k);
       const tc = t.getContext('2d'); tc.imageSmoothingQuality = 'high';
       tc.drawImage(cv, 0, 0, t.width, t.height);
