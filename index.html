@@ -1404,14 +1404,31 @@ function curveIsFlat(c){
 function curveTouched(){ return CURVE_KEYS.some(k=> !curveIsFlat(curve[k])); }
 // Четыре кривые схлопываются в ТРИ таблицы: общая применяется первой, канальная поверх.
 // Дальше это один просмотр таблицы на канал — цена та же, что у тонировки пресета.
-function buildCurveLuts(){
-  if(!curveTouched()){ curveLuts = null; return null; }
-  const base = curveLUT(curve.rgb);
+// Таблицы из ЛЮБОГО набора кривых — им пользуются и пресет, и ручная правка.
+function curveSetToLuts(set){
+  const base = curveLUT(set.rgb || flatCurve());
   const out = { r:new Uint8ClampedArray(256), g:new Uint8ClampedArray(256), b:new Uint8ClampedArray(256) };
-  const ch = { r:curveLUT(curve.r), g:curveLUT(curve.g), b:curveLUT(curve.b) };
+  const ch = { r:curveLUT(set.r || flatCurve()), g:curveLUT(set.g || flatCurve()), b:curveLUT(set.b || flatCurve()) };
   for(let i=0;i<256;i++){ const v = base[i]; out.r[i] = ch.r[v]; out.g[i] = ch.g[v]; out.b[i] = ch.b[v]; }
-  curveLuts = out;
   return out;
+}
+// Две кривые складываются простым сквозным просмотром: сперва пресет, следом рука.
+// Поэтому лишнего прохода по пикселям не появляется — таблица по-прежнему одна.
+function composeLuts(a, b){
+  if(!a) return b; if(!b) return a;
+  const out = { r:new Uint8ClampedArray(256), g:new Uint8ClampedArray(256), b:new Uint8ClampedArray(256) };
+  for(let i=0;i<256;i++){ out.r[i] = b.r[a.r[i]]; out.g[i] = b.g[a.g[i]]; out.b[i] = b.b[a.b[i]]; }
+  return out;
+}
+// Кривая пресета слабеет вместе с его силой: точки подтягиваются к прямой.
+function fadeCurveSet(set, k){
+  if(k >= 1) return set;
+  const f = pts => pts.map(([x,y])=> [x, Math.round(x + (y - x)*k)]);
+  return { rgb:f(set.rgb||flatCurve()), r:f(set.r||flatCurve()), g:f(set.g||flatCurve()), b:f(set.b||flatCurve()) };
+}
+function buildCurveLuts(){
+  curveLuts = curveTouched() ? curveSetToLuts(curve) : null;
+  return curveLuts;
 }
 function applyCurve(img, luts, y0, y1){
   if(!luts) return img;
@@ -1442,8 +1459,9 @@ let hsl = {};
 HSL_BANDS.forEach(b=> hsl[b.key] = { hue:0, sat:0, lum:0 });
 let hslTables = null;
 function hslTouched(){ return HSL_BANDS.some(b=> HSL_PARTS.some(k=> hsl[b.key][k] !== 0)); }
-function buildHslTables(){
-  if(!hslTouched()){ hslTables = null; return null; }
+// Таблицы цветов из ЛЮБОГО набора — тоже общие для пресета и ручной правки.
+function hslSetToTables(src, k){
+  k = k == null ? 1 : k;
   const hue = new Float32Array(360), sat = new Float32Array(360), lum = new Float32Array(360);
   for(let h=0; h<360; h++){
     // ищем участок между двумя соседними центрами и раскладываем оттенок на них
@@ -1456,18 +1474,50 @@ function buildHslTables(){
     const b = (i+1 < HSL_BANDS.length) ? HSL_BANDS[i+1].c : 360;
     const t = b === a ? 0 : (h - a)/(b - a);
     const wA = (1 + Math.cos(Math.PI*t))/2, wB = 1 - wA;      // косинусный переход, без ступеньки
-    const A = hsl[HSL_BANDS[i].key], B = hsl[HSL_BANDS[next].key];
-    hue[h] = (A.hue*wA + B.hue*wB)/100 * 30;                  // ±30° — как в Lightroom
-    sat[h] = 1 + (A.sat*wA + B.sat*wB)/100;                   // +100 → вдвое, −100 → в серый
+    const пусто = { hue:0, sat:0, lum:0 };
+    const A = src[HSL_BANDS[i].key] || пусто, B = src[HSL_BANDS[next].key] || пусто;
+    hue[h] = ((A.hue||0)*wA + (B.hue||0)*wB)/100 * 30 * k;     // ±30° — как в Lightroom
+    sat[h] = 1 + ((A.sat||0)*wA + (B.sat||0)*wB)/100 * k;      // +100 → вдвое, −100 → в серый
     // Яркость — СТЕПЕНЬ, а не множитель. Умножение давало неровный ход: тёмная листва
     // в тени почти не отзывалась (+0.05), а светлая на солнце уходила в пересвет (+0.23).
     // Степенная кривая двигает весь диапазон соразмерно и не может выбить света: ноль
     // остаётся нулём, единица — единицей.
-    const la = (A.lum*wA + B.lum*wB)/100;                      // −1..1
+    const la = ((A.lum||0)*wA + (B.lum||0)*wB)/100 * k;        // −1..1
     lum[h] = la >= 0 ? 1/(1 + la*0.85) : 1 + (-la)*0.85;
   }
-  hslTables = { hue, sat, lum };
+  return { hue, sat, lum };
+}
+// Два набора цветов складываются ТОЧНО: сдвиги оттенка суммируются, насыщенности
+// перемножаются, а показатели яркости перемножаются, потому что (L^a)^b = L^(a·b).
+// Значит лишнего прохода по пикселям не нужно и здесь.
+function composeHsl(a, b){
+  if(!a) return b; if(!b) return a;
+  const hue = new Float32Array(360), sat = new Float32Array(360), lum = new Float32Array(360);
+  for(let h=0; h<360; h++){ hue[h] = a.hue[h] + b.hue[h]; sat[h] = a.sat[h] * b.sat[h]; lum[h] = a.lum[h] * b.lum[h]; }
+  return { hue, sat, lum };
+}
+function hslSetTouched(src){
+  return !!src && HSL_BANDS.some(b=> src[b.key] && HSL_PARTS.some(k=> (src[b.key][k]||0) !== 0));
+}
+function buildHslTables(){
+  hslTables = hslTouched() ? hslSetToTables(hsl, 1) : null;
   return hslTables;
+}
+// ─── Пресет со своей кривой и своими цветами ───
+// Без этого «настоящая плёнка» невозможна: лук умел только общий контраст и тонировку,
+// а плёнка держится на сдвиге отдельных цветов и на тональной кривой по каналам.
+// Обе части ослабевают вместе с силой пресета — иначе ползунок «сила» врал бы.
+function lookLayers(look, mix){
+  const c = look && look.curve ? curveSetToLuts(fadeCurveSet(look.curve, mix)) : null;
+  const h = hslSetTouched(look && look.hsl) ? hslSetToTables(look.hsl, mix) : null;
+  return { curve:c, hsl:h };
+}
+// Итоговые таблицы: сперва то, что заложено в пресет, следом ручная правка.
+let mixCurve = null, mixHsl = null;
+function syncTables(){
+  const L = lookLayers(LOOKS[selected], intensity/100);
+  mixCurve = composeLuts(L.curve, curveLuts);
+  mixHsl = composeHsl(L.hsl, hslTables);
 }
 function applyHsl(img, T, y0, y1){
   if(!T) return img;
@@ -1856,8 +1906,9 @@ function processedData(src){
   const orig = src.getContext('2d').getImageData(0,0,w,h);
   const proc = new ImageData(new Uint8ClampedArray(orig.data), w, h);
   applyLook(proc, LOOKS[selected], intensity/100, orig);   // «сила» смешивается внутри цикла
-  applyHsl(proc, hslTables);                              // отдельные цвета
-  applyCurve(proc, curveLuts);                            // кривая — последней, как в Lightroom
+  syncTables();                                           // пресет + рука в одних таблицах
+  applyHsl(proc, mixHsl);                                 // отдельные цвета
+  applyCurve(proc, mixCurve);                             // кривая — последней, как в Lightroom
   applyAdjust(proc, adjust);   // manual doctoring on top of the preset
   return proc;
 }
@@ -2024,7 +2075,8 @@ function buildChips(){
     const c = document.createElement('canvas'); c.width=tw; c.height=th;
     c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
     const id = new ImageData(new Uint8ClampedArray(thumb.data), tw, th);
-    if(e.mine) myRender(id, e.p, thumb); else applyLook(id, e.look);
+    if(e.mine) myRender(id, e.p, thumb);
+    else { applyLook(id, e.look); const L = lookLayers(e.look, 1); applyHsl(id, L.hsl); applyCurve(id, L.curve); }
     c.getContext('2d').putImageData(id, 0, 0);
     const num = document.createElement('div'); num.className = 'cn';
     num.textContent = String(i+1).padStart(2,'0');
@@ -2167,7 +2219,8 @@ function buildHomeLooks(){
     const wrap = document.createElement('div'); wrap.className = 'thumb';
     const c = document.createElement('canvas'); c.width = tw; c.height = th;
     const id = new ImageData(new Uint8ClampedArray(bd.data), tw, th);
-    if(e.mine) myRender(id, e.p, bd); else applyLook(id, look);
+    if(e.mine) myRender(id, e.p, bd);
+    else { applyLook(id, look); const L = lookLayers(look, 1); applyHsl(id, L.hsl); applyCurve(id, L.curve); }
     c.getContext('2d').putImageData(id, 0, 0);
     // свечение у своего пресета — той же силы, что и сам лук в нём
     if(look.bloom) applyBloom(c, look.bloom * (e.mine ? (e.p.intensity == null ? 100 : e.p.intensity)/100 : 1), look.bloomWarm);
@@ -2523,7 +2576,10 @@ function myBase(p){ const i = LOOKS.findIndex(l=> l.name === p.base); return i <
 const ZERO_ADJ = { exposure:0, contrast:0, temp:0, saturation:0, grain:0 };
 // Отрисовка пресета в миниатюру: тот же порядок, что в processedData.
 function myRender(id, p, orig){
-  applyLook(id, LOOKS[myBase(p)], (p.intensity == null ? 100 : p.intensity)/100, orig);
+  const look = LOOKS[myBase(p)], mix = (p.intensity == null ? 100 : p.intensity)/100;
+  applyLook(id, look, mix, orig);
+  const L = lookLayers(look, mix);
+  applyHsl(id, L.hsl); applyCurve(id, L.curve);
   applyAdjust(id, p.adjust || ZERO_ADJ);
 }
 // Короткая расшифровка рецепта — и в диалоге, и в списке настроек человек видит,
@@ -2843,7 +2899,7 @@ function processParallel(proc, orig, look, mix, adj, W, H, onProgress){
         feed(w);
       };
       w.onerror = err => { failed = true; reject(err); };
-      w.postMessage({ id:y0, band, orig:og, W, H, y0, y1, look, mix, adjust:adj, hsl:hslTables, curve:curveLuts },
+      w.postMessage({ id:y0, band, orig:og, W, H, y0, y1, look, mix, adjust:adj, hsl:mixHsl, curve:mixCurve },
                     og ? [band, og] : [band]);
     };
     for(const w of pool){ if(!queue.length) break; live++; feed(w); }
@@ -2858,6 +2914,7 @@ async function buildExportAsync(maxDim, base, onProgress){
   const orig = ctx.getImageData(0, 0, W, H);
   const proc = new ImageData(new Uint8ClampedArray(orig.data), W, H);
   const look = LOOKS[selected], mix = intensity/100;
+  syncTables();                                 // слои пресета и руки — до начала счёта
   let spread = null;
   try{ spread = processParallel(proc, orig, look, mix, adjust, W, H, onProgress); }catch(e){}
   if(spread){ try{ await spread; }catch(e){ spread = null; } }
@@ -2869,8 +2926,8 @@ async function buildExportAsync(maxDim, base, onProgress){
       const sub = { data: proc.data.subarray(y*W*4, y1*W*4), width: W, height: H };
       applyLook(sub, look, mix, { data: orig.data.subarray(y*W*4, y1*W*4) }, y, y1);
       applyAdjust(sub, adjust, y, y1);
-      applyHsl(sub, hslTables, y, y1);
-      applyCurve(sub, curveLuts, y, y1);
+      applyHsl(sub, mixHsl, y, y1);
+      applyCurve(sub, mixCurve, y, y1);
       if(onProgress) onProgress(y1 / H * 0.9);
       await nextFrame();
     }
