@@ -1087,7 +1087,7 @@
     </div>
   </div>
 
-  <div class="onb-h1">Один кадр —<br>двенадцать плёнок</div>
+  <div class="onb-h1" id="onbH1">Один кадр</div>
   <div class="onb-sub">Выберите фото — и увидите его сразу во всех луках. Проявка занимает секунду.</div>
 
   <div class="onb-btns">
@@ -1822,6 +1822,25 @@ const LOOKS = [
     shSplit:[0,0,0], hiSplit:[0,0,0], vibrance:0, saturation:0, vignette:0.16, grain:0.08,
     curve:{ rgb:[[0,16],[56,56],[128,138],[200,214],[255,246]] } },
 ];
+
+// Заголовок первого экрана считает плёнки сам. Число здесь жило текстом и разошлось
+// с набором, как только луков стало меньше: обещали двенадцать, показывали девять.
+// «Оригинал» — это исходный кадр, а не плёнка, поэтому он из счёта выпадает.
+const NUM_F = ['ноль','одна','две','три','четыре','пять','шесть','семь','восемь','девять','десять',
+  'одиннадцать','двенадцать','тринадцать','четырнадцать','пятнадцать','шестнадцать','семнадцать',
+  'восемнадцать','девятнадцать','двадцать'];
+function filmCount(){ return LOOKS.filter(l=> l.name !== 'Оригинал').length; }
+function filmsPhrase(n){
+  const t = n % 100, o = n % 10;
+  const word = (t >= 11 && t <= 14) ? 'плёнок'
+             : o === 1 ? 'плёнка' : (o >= 2 && o <= 4) ? 'плёнки' : 'плёнок';
+  return (n <= 20 ? NUM_F[n] : String(n)) + ' ' + word;
+}
+function syncOnbTitle(){
+  const el = document.getElementById('onbH1');
+  if(el) el.innerHTML = 'Один кадр —<br>' + filmsPhrase(filmCount());
+}
+syncOnbTitle();
 
 let selected = 0, intensity = 100, sourceCanvas = null, compareMode = false, comparePos = 0.5, editedCanvas = null;
 const ADJ_KEYS = ['exposure','contrast','temp','saturation','grain'];
