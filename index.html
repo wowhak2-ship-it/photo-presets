@@ -1703,32 +1703,71 @@ function healSpot(canvas, cx, cy, r, srcOverride, opts){
   ctx.putImageData(D, x0, y0);
 }
 
+// ─── Луки ───
+// Набор собран под конкретный материал: семейная и детская съёмка при жёстком
+// полуденном свете. Замеры 16 съёмок: тональный размах ~180 из 255, до 36% кадра
+// в глухой тени, до 11% выбитых светов, насыщенность неба до 0.81. Такому кадру
+// нужно РАЗВЕСТИ свет, а не добавить контраста: поднять тени, укатать света,
+// погасить агрессивное небо, смягчить кожу. Прошлый набор делал ровно обратное.
+// Тон задаётся кривой (точнее общих ползунков), цвет — работой по полосам.
 const LOOKS = [
   { name:"Оригинал", temp:0, tint:0, contrast:0, fade:0, shadowsLift:0, highlightsRoll:0,
     shSplit:[0,0,0], hiSplit:[0,0,0], vibrance:0, saturation:1, vignette:0, grain:0 },
-  { name:"Золотой час", temp:12, tint:1, contrast:0.17, fade:0.02, shadowsLift:0.12, highlightsRoll:0.18,
-    shSplit:[6,3,-2], hiSplit:[16,9,-6], vibrance:0.18, saturation:1.06, vignette:0.10, grain:0.04, bloom:0.20, bloomWarm:true },
-  { name:"Плёнка",   temp:10, tint:2,  contrast:0.12, fade:0.06, shadowsLift:0.18, highlightsRoll:0.15,
-    shSplit:[-4,2,6],   hiSplit:[10,4,-6],  vibrance:0.22, saturation:1.02, vignette:0.05, grain:0.05 },
-  { name:"Кино",     temp:4,  tint:0,  contrast:0.22, fade:0.05, shadowsLift:0.05, highlightsRoll:0.10,
-    shSplit:[-18,4,20], hiSplit:[22,6,-16], vibrance:0.10, saturation:1.05, vignette:0.28, grain:0.04 },
-  { name:"Винтаж",   temp:12, tint:4,  contrast:0.05, fade:0.20, shadowsLift:0.22, highlightsRoll:0.22,
-    shSplit:[8,4,-4],   hiSplit:[14,6,-10], vibrance:0.0,  saturation:0.8,  vignette:0.22, grain:0.09 },
-  { name:"Портрет",  temp:6,  tint:-2, contrast:0.08, fade:0.03, shadowsLift:0.14, highlightsRoll:0.20,
-    shSplit:[2,0,2],    hiSplit:[8,4,-2],   vibrance:0.16, saturation:1.0,  vignette:0.06, grain:0.03 },
-  { name:"Муди",     temp:-4, tint:2,  contrast:0.20, fade:0.08, shadowsLift:-0.06, highlightsRoll:0.20,
-    shSplit:[-10,2,10], hiSplit:[6,2,-6],   vibrance:0.05, saturation:0.82, vignette:0.32, grain:0.05 },
-  { name:"Ч/Б",      temp:0,  tint:0,  contrast:0.26, fade:0.04, shadowsLift:0.06, highlightsRoll:0.08,
-    shSplit:[0,0,0],    hiSplit:[0,0,0],    vibrance:0.0,  saturation:0.0,  vignette:0.20, grain:0.11 },
-  // ── new looks (added 12.07) ──
-  { name:"Блокбастер", temp:6, tint:0,  contrast:0.20, fade:0.03, shadowsLift:0.08, highlightsRoll:0.14,
-    shSplit:[-20,3,16], hiSplit:[20,5,-14], vibrance:0.12, saturation:1.06, vignette:0.16, grain:0.03 },
-  { name:"Пастель",  temp:4,  tint:-2, contrast:-0.06, fade:0.16, shadowsLift:0.22, highlightsRoll:0.10,
-    shSplit:[4,2,6],    hiSplit:[10,4,2],   vibrance:0.04, saturation:0.86, vignette:0.0,  grain:0.02, bloom:0.16 },
-  { name:"Kodak",    temp:8,  tint:-2, contrast:0.10, fade:0.08, shadowsLift:0.16, highlightsRoll:0.18,
-    shSplit:[2,0,4],    hiSplit:[12,6,-4],  vibrance:0.14, saturation:0.98, vignette:0.06, grain:0.06 },
-  { name:"Матовый Ч/Б", temp:0, tint:0, contrast:0.05, fade:0.18, shadowsLift:0.12, highlightsRoll:0.12,
-    shSplit:[0,0,0],    hiSplit:[0,0,0],    vibrance:0.0,  saturation:0.0,  vignette:0.14, grain:0.10 },
+
+  // Рабочая лошадь для полудня: то, что нужно большинству её кадров
+  { name:"Мягкий свет", temp:2, tint:0, contrast:0, fade:0, shadowsLift:0, highlightsRoll:0,
+    shSplit:[2,1,2], hiSplit:[4,2,-2], vibrance:0.08, saturation:1.0, vignette:0.04, grain:0.02,
+    curve:{ rgb:[[0,14],[48,64],[128,140],[205,208],[255,242]] },
+    hsl:{ red:{sat:-4,lum:5}, orange:{sat:6,lum:10}, yellow:{sat:-14,lum:6},
+          green:{sat:-18,lum:4}, aqua:{sat:-24,lum:6}, blue:{sat:-28,lum:8} } },
+
+  { name:"Золотой час", temp:12, tint:1, contrast:0.10, fade:0.02, shadowsLift:0.08, highlightsRoll:0.12,
+    shSplit:[6,3,-2], hiSplit:[16,9,-6], vibrance:0.14, saturation:1.04, vignette:0.10, grain:0.04,
+    bloom:0.18, bloomWarm:true,
+    curve:{ rgb:[[0,10],[60,72],[190,200],[255,246]] },
+    hsl:{ orange:{sat:8,lum:8}, yellow:{sat:-6,lum:6}, green:{hue:-6,sat:-14},
+          aqua:{sat:-20,lum:4}, blue:{sat:-22,lum:6} } },
+
+  // Настоящая плёнка: приподнятый чёрный с синевой, укатанные света, уведённая зелень
+  { name:"Плёнка", temp:6, tint:2, contrast:0.06, fade:0.04, shadowsLift:0.10, highlightsRoll:0.12,
+    shSplit:[-4,2,8], hiSplit:[10,5,-4], vibrance:0.10, saturation:0.96, vignette:0.06, grain:0.06,
+    curve:{ rgb:[[0,18],[60,72],[190,196],[255,238]],
+            r:[[0,2],[128,134],[255,250]], b:[[0,16],[128,132],[255,244]] },
+    hsl:{ red:{sat:-6}, orange:{sat:4,lum:6}, yellow:{hue:-10,sat:-20,lum:4},
+          green:{hue:-12,sat:-24,lum:2}, aqua:{hue:10,sat:-26,lum:4}, blue:{sat:-16,lum:6} } },
+
+  // Кожа на первом месте: фон приглушён, чтобы лицо вышло вперёд
+  { name:"Портрет", temp:5, tint:-1, contrast:0.04, fade:0.02, shadowsLift:0.10, highlightsRoll:0.16,
+    shSplit:[2,0,2], hiSplit:[8,4,-2], vibrance:0.10, saturation:0.98, vignette:0.06, grain:0.02,
+    curve:{ rgb:[[0,12],[52,68],[128,138],[200,206],[255,244]] },
+    hsl:{ red:{sat:-10,lum:6}, orange:{sat:2,lum:12}, yellow:{sat:-22,lum:2},
+          green:{sat:-30,lum:-2}, aqua:{sat:-26,lum:2}, blue:{sat:-26,lum:4} } },
+
+  // Для младенцев и выписок: очень мягко, почти без контраста
+  { name:"Пастель", temp:4, tint:-2, contrast:-0.04, fade:0.10, shadowsLift:0.16, highlightsRoll:0.08,
+    shSplit:[4,2,6], hiSplit:[10,5,2], vibrance:0.02, saturation:0.88, vignette:0, grain:0.02, bloom:0.14,
+    curve:{ rgb:[[0,26],[64,88],[128,150],[200,212],[255,240]] },
+    hsl:{ red:{sat:-14,lum:8}, orange:{sat:-4,lum:12}, yellow:{sat:-24,lum:10},
+          green:{sat:-30,lum:8}, aqua:{sat:-32,lum:10}, blue:{sat:-32,lum:12} } },
+
+  // Пасмурно и зима: холод, но кожа остаётся живой
+  { name:"Северный", temp:-6, tint:1, contrast:0.10, fade:0.03, shadowsLift:0.06, highlightsRoll:0.10,
+    shSplit:[-6,0,8], hiSplit:[4,4,2], vibrance:0.08, saturation:0.94, vignette:0.10, grain:0.03,
+    curve:{ rgb:[[0,8],[64,66],[190,200],[255,248]], b:[[0,10],[128,136],[255,252]] },
+    hsl:{ orange:{sat:-2,lum:8}, yellow:{sat:-24,lum:2}, green:{hue:8,sat:-28},
+          aqua:{sat:-8,lum:6}, blue:{sat:-6,lum:8} } },
+
+  // Кадр без людей: дамба, палатки, пейзаж — здесь плотность к месту
+  { name:"Плотный", temp:2, tint:0, contrast:0.16, fade:0, shadowsLift:0.04, highlightsRoll:0.10,
+    shSplit:[-8,0,8], hiSplit:[10,4,-6], vibrance:0.16, saturation:1.04, vignette:0.14, grain:0.03,
+    curve:{ rgb:[[0,4],[54,46],[128,132],[202,214],[255,252]] },
+    hsl:{ orange:{sat:4,lum:2}, yellow:{sat:4,lum:-2}, green:{sat:8,lum:-4},
+          aqua:{sat:2,lum:-4}, blue:{sat:6,lum:-6} } },
+
+  // Чёрно-белый по её же вкусу: мягкий чёрный, без провалов
+  { name:"Ч/Б", temp:0, tint:0, contrast:0.10, fade:0.06, shadowsLift:0.08, highlightsRoll:0.10,
+    shSplit:[0,0,0], hiSplit:[0,0,0], vibrance:0, saturation:0, vignette:0.16, grain:0.08,
+    curve:{ rgb:[[0,16],[56,56],[128,138],[200,214],[255,246]] } },
 ];
 
 let selected = 0, intensity = 100, sourceCanvas = null, compareMode = false, comparePos = 0.5, editedCanvas = null;
