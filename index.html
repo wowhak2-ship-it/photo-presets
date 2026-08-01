@@ -217,6 +217,12 @@
   .chip span{font-size:7.5px; letter-spacing:.04em; color:var(--dim); text-align:center;
     text-transform:uppercase; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .chip.active .cn, .chip.active span{color:var(--china);}
+  /* «Ещё виды» — пустой кадр в конце ленты: рамка есть, плёнки в ней пока нет */
+  .chip-more-box{display:grid; place-items:center; border-radius:3px;
+    border:1px dashed rgba(224,162,74,.45); color:var(--gold); font-size:20px; font-weight:300;
+    line-height:1; background:rgba(224,162,74,.05); transition:transform .15s;}
+  .chip.more:active .chip-more-box{transform:scale(.95);}
+  .chip.more span{color:var(--gold);}
 
   .cam{position:fixed; inset:0; z-index:70;   /* выше стартового экрана — иначе камера открывается под ним */ background:var(--bg-deep); display:none; flex-direction:column;}
   .cam.open{display:flex;}
@@ -2201,6 +2207,19 @@ function buildChips(){
     };
     chips.appendChild(chip);
   });
+  // Последним кадром — пустая рамка «ещё виды». Витрина, спрятанная в настройках,
+  // человеку не попадается: искать наборы он идёт туда, где виды кончились.
+  const more = document.createElement('div');
+  more.className = 'chip more';
+  const box = document.createElement('div'); box.className = 'chip-more-box';
+  box.style.width = cssW + 'px'; box.style.height = cssH + 'px';
+  box.textContent = '+';
+  const mnum = document.createElement('div'); mnum.className = 'cn';
+  mnum.innerHTML = '&nbsp;';                 // держит подпись на одной строке с соседями
+  const mlabel = document.createElement('span'); mlabel.textContent = 'Наборы';
+  more.appendChild(box); more.appendChild(mnum); more.appendChild(mlabel);
+  more.onclick = openPacks;
+  chips.appendChild(more);
 }
 // Единый список кадров для ленты и контактного листа: встроенные луки, затем свои пресеты.
 function frameList(){
@@ -3026,10 +3045,11 @@ async function renderPacks(){
   list.forEach(p=> host.appendChild(packCard(p)));
 }
 const packsEl = document.getElementById('packs');
-document.getElementById('rowPacks').onclick = ()=>{
+function openPacks(){
   packsEl.classList.add('open');
   ensureTrap(); renderPacks();
-};
+}
+document.getElementById('rowPacks').onclick = openPacks;
 document.getElementById('packsClose').onclick = ()=> packsEl.classList.remove('open');
 document.getElementById('packsImport').onclick = ()=> document.getElementById('mypFile').click();
 // Сборка набора: своя работа превращается в товар одним файлом. Имя набора и автор
