@@ -1941,6 +1941,14 @@ function buildFullSource(){
   return c;   // без правок это сам оригинал — читаем из него, но не пишем в него
 }
 
+// Снимков в пути может быть несколько сразу: демонстрационный кадр грузится с запуском
+// приложения, а человек в это же время уже выбирает свой. Кто придёт последним, тот и
+// оказывался на экране — поэтому выбранное фото иногда сменялось демонстрационным.
+// Каждая загрузка берёт номер; в дело идёт только последняя заказанная.
+let loadSeq = 0;
+function claimLoad(){ return ++loadSeq; }
+function loadIsCurrent(n){ return n === loadSeq; }
+
 function setSource(img){
   // оригинал держим целиком — это то, что уйдёт в файл при сохранении
   const fs = Math.min(1, FULL_MAX/Math.max(img.width, img.height));
@@ -2016,8 +2024,9 @@ onbEl.classList.add('open');
       const blob = await r.blob();
       await c.delete('./shared-photo');        // забрали — больше не показываем
       sourceExif = await fileExif(blob);
+      const my = claimLoad();
       const img = new Image();
-      img.onload = ()=>{ setSource(img); closeOnb(); goEditor(); };
+      img.onload = ()=>{ if(!loadIsCurrent(my)) return; setSource(img); closeOnb(); goEditor(); };
       img.onerror = ()=>{ toast('Снимок не открылся'); loadDemo(true); };
       img.src = URL.createObjectURL(blob);
     }catch(_){ loadDemo(true); }
@@ -2269,9 +2278,10 @@ function pickFrame(e){
 
 document.getElementById('file').onchange = async e=>{
   const f = e.target.files[0]; if(!f) return;
+  const my = claimLoad();                     // выбор человека отменяет всё, что грузится сейчас
   sourceExif = await fileExif(f);             // данные съёмки берём до того, как файл станет картинкой
   const img = new Image();
-  img.onload = ()=>{ setSource(img); closeOnb(); applyPendingTool(); };
+  img.onload = ()=>{ if(!loadIsCurrent(my)) return; setSource(img); closeOnb(); applyPendingTool(); };
   img.src = URL.createObjectURL(f);
 };
 
@@ -3995,7 +4005,10 @@ function makeDemoPhoto(){
   x.fillStyle='#e0a878'; x.fillRect(60,90,150,150);
   x.fillStyle='#c98a5e'; x.fillRect(60,240,150,40);
   ['#eee','#bbb','#888','#555','#222'].forEach((col,i)=>{ x.fillStyle=col; x.fillRect(720,60+i*26,120,24); });
-  const img = new Image(); img.onload = ()=> setSource(img); img.src = c.toDataURL();
+  const my = claimLoad();
+  const img = new Image();
+  img.onload = ()=>{ if(loadIsCurrent(my)) setSource(img); };
+  img.src = c.toDataURL();
 }
 // start on the real demo photo; fall back to the synthetic gradient if it can't load
 // Присланный снимок важнее демонстрационного. Демо лежит рядом и грузится за миг,
@@ -4004,9 +4017,10 @@ function makeDemoPhoto(){
 const sharedPending = new URLSearchParams(location.search).has('shared');
 function loadDemo(force){
   if(sharedPending && !force) return;
+  const my = claimLoad();
   const img = new Image();
-  img.onload = ()=> setSource(img);
-  img.onerror = ()=> makeDemoPhoto();
+  img.onload = ()=>{ if(loadIsCurrent(my)) setSource(img); };
+  img.onerror = ()=>{ if(loadIsCurrent(my)) makeDemoPhoto(); };
   img.src = './demo.jpg';
 }
 loadDemo();
@@ -4064,6 +4078,7 @@ function useShot(c){
   // холст отдаём напрямую: раньше кадр гонялся через toDataURL('image/jpeg') и терял
   // качество ещё до того, как человек что-то сделал — при том что сохранять его потом
   // всё равно в JPEG. Одно сжатие вместо двух.
+  claimLoad();                                // снятый кадр важнее всего, что ещё грузится
   closeCamera(); setSource(c); closeOnb();
 }
 async function shoot(){
