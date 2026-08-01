@@ -1,5 +1,5 @@
 // Service worker — offline cache for the Photo Presets PWA
-const CACHE = 'photo-presets-v43';
+const CACHE = 'photo-presets-v44';
 const ASSETS = [
   './',
   './index.html',
@@ -41,6 +41,7 @@ self.addEventListener('fetch', e => {
 
   if (req.method === 'POST' && url.searchParams.has('share')) {
     e.respondWith((async () => {
+      let preset = null;
       try {
         const form = await req.formData();
         const file = form.get('photo');
@@ -49,10 +50,18 @@ self.addEventListener('fetch', e => {
           await c.put(SHARE_KEY, new Response(file, {
             headers: { 'content-type': file.type || 'image/jpeg' }
           }));
+        } else {
+          // Поделились не снимком, а ссылкой на пресет. Тапнуть по такой ссылке в
+          // мессенджере мало: он откроет её у себя, а туда приложению хода нет.
+          // Через «Поделиться» ссылка приходит сюда — и пресет ставится куда надо.
+          const text = [form.get('url'), form.get('text'), form.get('title')]
+            .filter(v => typeof v === 'string').join(' ');
+          const m = text.match(/[?&]p=([A-Za-z0-9\-_]+)/);
+          if (m) preset = m[1];
         }
       } catch (err) {}
       // 303 обязателен: иначе браузер повторит POST при обновлении страницы
-      return Response.redirect('./index.html?shared=1', 303);
+      return Response.redirect(preset ? './index.html?p=' + preset : './index.html?shared=1', 303);
     })());
     return;
   }
