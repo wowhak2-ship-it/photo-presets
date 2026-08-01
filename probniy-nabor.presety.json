@@ -1,0 +1,50 @@
+{
+  "app": "presety",
+  "v": 2,
+  "pack": {
+    "id": "probniy-nabor-3",
+    "name": "Пробный набор",
+    "count": 3,
+    "author": "Пресеты"
+  },
+  "presets": [
+    {
+      "name": "Утро в тени",
+      "base": "Мягкий свет",
+      "intensity": 100,
+      "adjust": { "exposure": 6, "contrast": -4, "temp": 4, "saturation": 0, "grain": 0 },
+      "curve": { "rgb": [[0, 22], [52, 76], [128, 146], [200, 208], [255, 240]] },
+      "hsl": {
+        "orange": { "hue": 0, "sat": 4, "lum": 14 },
+        "yellow": { "hue": 0, "sat": -18, "lum": 8 },
+        "green": { "hue": 0, "sat": -26, "lum": 6 },
+        "blue": { "hue": 0, "sat": -20, "lum": 10 }
+      }
+    },
+    {
+      "name": "Полдень мягкий",
+      "base": "Портрет",
+      "intensity": 85,
+      "adjust": { "exposure": 0, "contrast": -6, "temp": 6, "saturation": 0, "grain": 0 },
+      "curve": { "rgb": [[0, 16], [60, 80], [128, 140], [190, 198], [255, 234]] },
+      "hsl": {
+        "red": { "hue": 0, "sat": -8, "lum": 6 },
+        "orange": { "hue": 0, "sat": 2, "lum": 12 },
+        "aqua": { "hue": 0, "sat": -30, "lum": 4 },
+        "blue": { "hue": 0, "sat": -32, "lum": 6 }
+      }
+    },
+    {
+      "name": "Тёплый вечер",
+      "base": "Золотой час",
+      "intensity": 75,
+      "adjust": { "exposure": 0, "contrast": 0, "temp": 8, "saturation": 0, "grain": 0 },
+      "curve": { "rgb": [[0, 12], [64, 74], [190, 202], [255, 248]] },
+      "hsl": {
+        "orange": { "hue": 0, "sat": 10, "lum": 10 },
+        "yellow": { "hue": -4, "sat": -8, "lum": 6 },
+        "green": { "hue": -8, "sat": -18, "lum": 0 }
+      }
+    }
+  ]
+}
