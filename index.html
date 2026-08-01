@@ -431,6 +431,8 @@
   .pdlg-btns .go{background:var(--gold); border-color:transparent; color:var(--gold-ink);}
   .pdlg-btns button:disabled{opacity:.4;}
   .pdlg-btns button:active{transform:scale(.98);}
+  .cdlg-tx{margin-top:14px; font-size:15px; line-height:1.45; color:var(--text);}
+  #cdlg .pdlg-btns .go{background:var(--china); color:#fff;}
 
   /* Список своих пресетов в настройках: имя + рецепт, чтобы было видно,
      что именно этот пресет делает, а не только как он называется */
@@ -1061,6 +1063,20 @@
     <div class="batch-btns">
       <button class="crop-btn" id="batchPick">Выбрать снимки</button>
       <button class="crop-btn gold" id="batchGo" disabled>Обработать</button>
+    </div>
+  </div>
+</div>
+
+<!-- Своё подтверждение вместо системного confirm: браузер вправе не показать
+     системное окно (встроенный просмотр, запрет диалогов на странице), и тогда
+     удаление молча не срабатывает — кнопка выглядит сломанной. -->
+<div class="pdlg" id="cdlg">
+  <div class="pdlg-card">
+    <div class="pdlg-t" id="cdlgT">ПОДТВЕРЖДЕНИЕ</div>
+    <div class="cdlg-tx" id="cdlgTx"></div>
+    <div class="pdlg-btns">
+      <button id="cdlgX">Отмена</button>
+      <button class="go" id="cdlgOk">Удалить</button>
     </div>
   </div>
 </div>
@@ -2888,6 +2904,25 @@ function toast(text){
   clearTimeout(toastT); toastT = setTimeout(()=> el.classList.remove('on'), 1800);
 }
 
+// Своё подтверждение. Системный confirm() возвращает false, когда браузер решил
+// диалоги не показывать, — и человек видит кнопку, которая ничего не делает.
+let cdlgResolve = null;
+function askConfirm(text, okText){
+  const el = document.getElementById('cdlg');
+  document.getElementById('cdlgTx').textContent = text;
+  document.getElementById('cdlgOk').textContent = okText || 'Удалить';
+  el.classList.add('open');
+  return new Promise(res=>{ cdlgResolve = res; });
+}
+function cdlgClose(v){
+  document.getElementById('cdlg').classList.remove('open');
+  const r = cdlgResolve; cdlgResolve = null;
+  if(r) r(v);
+}
+document.getElementById('cdlgOk').onclick = ()=> cdlgClose(true);
+document.getElementById('cdlgX').onclick = ()=> cdlgClose(false);
+document.getElementById('cdlg').onclick = e=>{ if(e.target.id === 'cdlg') cdlgClose(false); };
+
 // ─── Список своих пресетов в настройках ───
 function renderMyList(){
   const host = document.getElementById('mypList');
@@ -2915,8 +2950,8 @@ function renderMyList(){
     const sh = document.createElement('button'); sh.className = 'myp-x'; sh.textContent = 'Поделиться';
     sh.onclick = ()=> sharePresetLink(p);
     const x = document.createElement('button'); x.className = 'myp-x'; x.textContent = 'Удалить';
-    x.onclick = ()=>{
-      if(!confirm('Удалить пресет «' + p.name + '»?')) return;
+    x.onclick = async ()=>{
+      if(!await askConfirm('Удалить пресет «' + p.name + '»?')) return;
       MYP.remove(p.id);
       if(myActive === p.id) myActive = null;
       renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
