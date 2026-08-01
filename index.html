@@ -761,6 +761,13 @@
     border:2.5px solid var(--china); border-radius:7px 11px 8px 10px; transform:rotate(-.8deg);}
   .look-card.on .no{color:var(--china);}
   .look-card.on .nm{color:var(--text);}
+  /* «Наборы» — пустая рамка в конце листа: плёнка ещё не заряжена */
+  .look-card.more .thumb{box-shadow:none; background:transparent;}
+  .more-box{position:relative; width:100%; border-radius:3px;
+    border:1px dashed rgba(224,162,74,.45); background:rgba(224,162,74,.05);}
+  .more-box i{position:absolute; inset:0; display:grid; place-items:center;
+    font-style:normal; font-size:26px; font-weight:300; color:var(--gold);}
+  .look-card.more .nm{color:var(--gold);}
 
   /* краевая маркировка плёнки */
   .edge-mark{display:flex; align-items:center; gap:9px; padding-top:9px;
@@ -2378,7 +2385,25 @@ function buildHomeLooks(){
   }
   let i = 0;                                   // «Оригинал» — кадр 01 контактного листа
   const step = ()=>{
-    if(token !== hlToken || i >= total) return;
+    if(token !== hlToken) return;
+    // Кадры кончились — последней ставим пустую рамку «Наборы». Здесь человек и ищет
+    // новые виды: он только что просмотрел все свои и упёрся в конец листа.
+    if(i >= total){
+      const more = document.createElement('button');
+      more.className = 'look-card more';
+      const w = document.createElement('div'); w.className = 'thumb';
+      const box = document.createElement('div'); box.className = 'more-box';
+      box.style.aspectRatio = String(ar);        // та же форма кадра, что у соседей
+      box.innerHTML = '<i>+</i>';
+      w.appendChild(box);
+      const meta = document.createElement('div'); meta.className = 'meta';
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = 'Наборы';
+      meta.appendChild(nm);
+      more.appendChild(w); more.appendChild(meta);
+      more.onclick = openPacks;
+      host.appendChild(more);
+      return;
+    }
     const e = frames[i], idx = i; i++;
     const look = e.mine ? LOOKS[myBase(e.p)] : e.look;
     const card = document.createElement('button');
