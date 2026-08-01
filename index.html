@@ -3004,6 +3004,36 @@ function hsDrawShot(){
   }
   hsShot.getContext('2d').putImageData(processedData(src), 0, 0);
 }
+// Сколько КАЖДОГО цвета в кадре. Без этого ползунок «Зелёный» на снимке с листвой
+// берёт треть эффекта (настоящая листва лежит около 83°, то есть на две трети в Жёлтом),
+// и человек решает, что инструмент сломан. Считаем по уменьшенной копии — дёшево.
+let hsShare = null;
+function hsMeasure(){
+  const src = previewSrc || sourceCanvas;
+  hsShare = null;
+  if(!src) return;
+  const d = src.getContext('2d').getImageData(0, 0, src.width, src.height).data;
+  const доли = new Float64Array(8);
+  let всего = 0;
+  for(let p=0; p<d.length; p+=4){
+    const r=d[p], g=d[p+1], b=d[p+2];
+    const mx = r>g?(r>b?r:b):(g>b?g:b), mn = r<g?(r<b?r:b):(g<b?g:b), dl = mx-mn;
+    if(!dl || mx < 25) continue;
+    const s = dl/mx;
+    if(s < 0.15) continue;                       // почти серое не в счёт
+    let h; if(mx===r) h=(g-b)/dl; else if(mx===g) h=(b-r)/dl+2; else h=(r-g)/dl+4;
+    h*=60; if(h<0) h+=360;
+    let i=0;
+    for(let k=0;k<HSL_BANDS.length;k++){
+      const a=HSL_BANDS[k].c, bb=(k+1<HSL_BANDS.length)?HSL_BANDS[k+1].c:360;
+      if(h>=a && h<bb){ i=k; break; }
+    }
+    const a=HSL_BANDS[i].c, bb=(i+1<HSL_BANDS.length)?HSL_BANDS[i+1].c:360;
+    const t = bb===a ? 0 : (h-a)/(bb-a), wA = (1+Math.cos(Math.PI*t))/2;
+    доли[i] += wA*s; доли[(i+1)%8] += (1-wA)*s; всего += s;
+  }
+  hsShare = Array.from(доли, v=> всего ? v/всего : 0);
+}
 function hsSync(){
   const v = hsl[hsBand];
   HSL_PARTS.forEach(k=>{
@@ -3011,16 +3041,24 @@ function hsSync(){
     document.getElementById('hsv-'+k).textContent = (v[k] > 0 ? '+' : '') + v[k];
   });
   const band = HSL_BANDS.find(b=> b.key === hsBand);
-  document.getElementById('hsName').textContent = band.name;
+  const bi = HSL_BANDS.indexOf(band);
+  const доля = hsShare ? Math.round(hsShare[bi]*100) : null;
+  // К имени цвета приписываем его долю в кадре — сразу видно, будет ли толк от ползунка
+  document.getElementById('hsName').textContent = band.name
+    + (доля === null ? '' : доля < 1 ? ' · нет в кадре' : ' · ' + доля + '% кадра');
   hsMarkBands();
 }
 // Метки «здесь накручено» обновляем и во время протяжки ползунка: иначе точка под
 // цветом появлялась только после переключения полосы, и человек не видел, что уже тронул.
 function hsMarkBands(){
-  document.querySelectorAll('#hsBands button').forEach(el=>{
+  document.querySelectorAll('#hsBands button').forEach((el, i)=>{
     const s = hsl[el.dataset.band];
     el.classList.toggle('on', el.dataset.band === hsBand);
     el.classList.toggle('set', HSL_PARTS.some(k=> s[k] !== 0));
+    // приглушаем то, чего в кадре почти нет — но выбрать всё равно даём
+    // выбранный всегда в полную яркость: иначе не видно, что именно правишь
+    el.style.opacity = (!hsShare || el.dataset.band === hsBand)
+      ? '1' : (0.3 + 0.7*Math.min(1, hsShare[i]/0.12)).toFixed(2);
   });
 }
 function hsCommit(){ buildHslTables(); editedCanvas = null; hsDrawShot(); hsSync(); }
@@ -3062,6 +3100,7 @@ function openHsl(){
   ensureTrap();
   hsBackup = JSON.parse(JSON.stringify(hsl));
   hsEl.classList.add('open');
+  hsMeasure();
   requestAnimationFrame(()=>{ hsDrawShot(); hsSync(); });
 }
 function closeHsl(){ hsEl.classList.remove('open'); }
