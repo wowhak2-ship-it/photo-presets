@@ -2770,7 +2770,9 @@ async function sharePresetLink(p){
     catch(e){ if(e && e.name === 'AbortError') return; }
   }
   try{ await navigator.clipboard.writeText(url); toast('Ссылка скопирована'); }
-  catch(_){ prompt('Скопируйте ссылку на пресет:', url); }
+  // Последний рубеж: показываем ссылку в поле, откуда её можно выделить и скопировать
+  // руками. Системное окно здесь не годится — браузер вправе его не показать.
+  catch(_){ askText('Скопируйте ссылку на пресет', 'Готово', '', url); }
 }
 
 function presetBlob(list, pack){
