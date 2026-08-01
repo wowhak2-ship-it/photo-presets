@@ -425,6 +425,9 @@
   .pdlg-date{font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--faint); flex:0 0 auto;}
   .pdlg-recipe{margin-top:12px; font-family:var(--mono); font-size:10px; line-height:1.6;
     letter-spacing:.06em; color:var(--faint);}
+  .pdlg-warn{margin-top:12px; padding:11px 13px; border-radius:11px; font-size:12.5px; line-height:1.45;
+    color:var(--text); background:rgba(210,66,46,.12); border:1px solid rgba(210,66,46,.35);}
+  .pdlg-warn b{font-weight:700;}
   .pdlg-btns{display:flex; gap:8px; margin-top:20px;}
   .pdlg-btns button{flex:1; padding:12px 0; border-radius:11px; font-size:13px; font-weight:600; cursor:pointer;
     background:transparent; border:1px solid var(--line-2); color:var(--dim);}
@@ -1103,6 +1106,7 @@
       <span class="pdlg-date" id="pdlgDate">27.07</span>
     </div>
     <div class="pdlg-recipe" id="pdlgRecipe"></div>
+    <div class="pdlg-warn" id="pdlgWarn" style="display:none">Ссылка открыта внутри мессенджера — здесь пресет сохранится только до закрытия этого окна. Чтобы он встал в приложение, откройте ссылку в браузере: меню <b>⋮</b> → «Открыть в браузере».</div>
     <div class="pdlg-btns">
       <button id="pdlgX">Отмена</button>
       <button class="go" id="pdlgOk">Сохранить пресет</button>
@@ -2040,6 +2044,17 @@ onbEl.classList.add('open');
   })();
 })();
 
+// Мессенджеры открывают ссылки в своём встроенном окне. У него отдельное хранилище:
+// пресет, добавленный там, в приложение не попадёт и пропадёт вместе с этим окном.
+// Признак такого окна — пометка WebView в имени браузера либо мостик самого мессенджера.
+function inAppBrowser(){
+  const ua = navigator.userAgent || '';
+  const standalone = (matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone;
+  if(standalone) return false;
+  return /;\s*wv\)/.test(ua) || !!window.TelegramWebviewProxy
+      || /FBAN|FBAV|Instagram|Line\/|VKAndroidApp|OKApp|WhatsApp/i.test(ua);
+}
+
 // Пресет пришёл ссылкой — показываем, ЧТО именно предлагают, и даём переименовать.
 // Адрес чистим сразу, чтобы обновление страницы не предлагало то же самое повторно.
 (function(){
@@ -2051,6 +2066,7 @@ onbEl.classList.add('open');
   setTimeout(()=>{
     closeOnb();
     pdlgOpen('ПРЕСЕТ ПО ССЫЛКЕ', dayMonth(), myRecipeText(p), p.name, 'Добавить к себе');
+    document.getElementById('pdlgWarn').style.display = inAppBrowser() ? 'block' : 'none';
     pdlgIncoming = p;
   }, 300);
 })();
@@ -2754,38 +2770,106 @@ MYP.importFrom = function(text){
 function appBase(){
   return location.origin + location.pathname.replace(/[^/]*$/, '');
 }
-function presetToLink(p){
-  const body = { n:p.name, b:p.base, i:p.intensity, a:ADJ_KEYS.map(k=> (p.adjust||{})[k] || 0) };
-  // кривую и цвета кладём коротко: только тронутое, полосы тройками чисел
-  if(p.curve){ const c = {};
-    for(const k of CURVE_KEYS) if(p.curve[k] && !curveIsFlat(p.curve[k])) c[k] = p.curve[k];
-    if(Object.keys(c).length) body.c = c; }
-  if(hslSetTouched(p.hsl)){ const h = {};
-    for(const b of HSL_BANDS){ const v = p.hsl[b.key];
-      if(v && HSL_PARTS.some(k=> v[k])) h[b.key] = HSL_PARTS.map(k=> v[k]||0); }
-    if(Object.keys(h).length) body.h = h; }
-  const bytes = new TextEncoder().encode(JSON.stringify(body));
+// Ссылку читают глазами и пересылают в переписке, поэтому она должна быть короткой.
+// JSON тратил половину длины на собственные кавычки и на имя плёнки словом («Оригинал» —
+// это восемь букв кириллицы, то есть шестнадцать байт). Пишем поля подряд через «~»,
+// плёнку — её номером; получается вдвое короче при том же содержании.
+function packB64(text){
+  const bytes = new TextEncoder().encode(text);
   let bin = '';
   for(const b of bytes) bin += String.fromCharCode(b);
-  const b64 = btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-  return appBase() + '?p=' + b64;
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function unpackB64(code){
+  const b64 = code.replace(/-/g,'+').replace(/_/g,'/');
+  const bin = atob(b64 + '==='.slice((b64.length + 3) % 4));
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function presetToLink(p){
+  const li = LOOKS.findIndex(l=> l.name === p.base);
+  const parts = [
+    String(p.name || '').replace(/~/g, ' '),   // «~» разделяет поля — в имени его быть не может
+    li >= 0 ? String(li) : ('*' + p.base),     // плёнки нет в наборе — тогда словом, со звёздочкой
+    (p.intensity == null || p.intensity === 100) ? '' : String(p.intensity),
+    ADJ_KEYS.map(k=>{ const v = (p.adjust||{})[k] || 0; return v ? String(v) : ''; }).join('.'),
+    '', ''
+  ];
+  if(p.curve){                                 // «номер канала:пары чисел», каналы через «;»
+    const cs = [];
+    CURVE_KEYS.forEach((k, i)=>{
+      if(p.curve[k] && !curveIsFlat(p.curve[k]))
+        cs.push(i + ':' + p.curve[k].map(t=> t[0] + ',' + t[1]).join(','));
+    });
+    parts[4] = cs.join(';');
+  }
+  if(hslSetTouched(p.hsl)){                    // «номер полосы:тон,насыщенность,яркость»
+    const hs = [];
+    HSL_BANDS.forEach((b, i)=>{
+      const v = p.hsl[b.key];
+      if(v && HSL_PARTS.some(k=> v[k])) hs.push(i + ':' + HSL_PARTS.map(k=> v[k]||0).join(','));
+    });
+    parts[5] = hs.join(';');
+  }
+  while(parts.length && parts[parts.length-1] === '') parts.pop();   // хвост пустых полей ни к чему
+  return appBase() + '?p=' + packB64(parts.join('~'));
 }
 function presetFromLink(code){
   try{
-    const b64 = code.replace(/-/g,'+').replace(/_/g,'/');
-    const bin = atob(b64 + '==='.slice((b64.length + 3) % 4));
-    const bytes = new Uint8Array(bin.length);
-    for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
-    const o = JSON.parse(new TextDecoder().decode(bytes));
+    const text = unpackB64(code);
+    // Ссылки прежнего вида уже разосланы по перепискам и должны открываться и дальше.
+    if(text.charAt(0) === '{') return presetFromLegacyLink(text);
+
+    const f = text.split('~');
     const adjust = {};
-    ADJ_KEYS.forEach((k,i)=> adjust[k] = Array.isArray(o.a) ? o.a[i] : 0);
-    const hsl = {};
-    if(o.h) for(const key of Object.keys(o.h)){
-      const t = o.h[key];
-      if(Array.isArray(t)) hsl[key] = { hue:t[0], sat:t[1], lum:t[2] };
+    const nums = String(f[3] || '').split('.');
+    ADJ_KEYS.forEach((k,i)=> adjust[k] = Number(nums[i]) || 0);
+
+    const bref = String(f[1] || '0');
+    const base = bref.charAt(0) === '*' ? bref.slice(1)
+               : (LOOKS[Number(bref)] || LOOKS[0]).name;
+
+    let curve = null;
+    if(f[4]) { curve = {};
+      for(const part of f[4].split(';')){
+        const [ci, body] = part.split(':');
+        const key = CURVE_KEYS[Number(ci)];
+        if(!key || !body) continue;
+        const n = body.split(',').map(Number);
+        const pts = [];
+        for(let i=0;i+1<n.length;i+=2) pts.push([n[i], n[i+1]]);
+        if(pts.length) curve[key] = pts;
+      }
+      if(!Object.keys(curve).length) curve = null;
     }
-    return sanitizePreset({ name:o.n, base:o.b, intensity:o.i, adjust, curve:o.c, hsl });
+
+    let hsl = null;
+    if(f[5]){ hsl = {};
+      for(const part of f[5].split(';')){
+        const [bi, body] = part.split(':');
+        const band = HSL_BANDS[Number(bi)];
+        if(!band || !body) continue;
+        const n = body.split(',').map(Number);
+        hsl[band.key] = { hue:n[0]||0, sat:n[1]||0, lum:n[2]||0 };
+      }
+      if(!Object.keys(hsl).length) hsl = null;
+    }
+
+    return sanitizePreset({ name:f[0], base, intensity: f[2] === '' || f[2] == null ? 100 : Number(f[2]),
+                            adjust, curve, hsl });
   }catch(_){ return null; }
+}
+function presetFromLegacyLink(json){
+  const o = JSON.parse(json);
+  const adjust = {};
+  ADJ_KEYS.forEach((k,i)=> adjust[k] = Array.isArray(o.a) ? o.a[i] : 0);
+  const hsl = {};
+  if(o.h) for(const key of Object.keys(o.h)){
+    const t = o.h[key];
+    if(Array.isArray(t)) hsl[key] = { hue:t[0], sat:t[1], lum:t[2] };
+  }
+  return sanitizePreset({ name:o.n, base:o.b, intensity:o.i, adjust, curve:o.c, hsl });
 }
 async function sharePresetLink(p){
   const url = presetToLink(p);
