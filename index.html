@@ -326,6 +326,9 @@
   .onb-btns{width:100%; display:flex; flex-direction:column; gap:10px; margin-top:26px;}
   .onb-primary{padding:16px; border-radius:14px; background:var(--gold); color:var(--gold-ink);
     border:0; font-size:14px; font-weight:700; cursor:pointer;}
+  .onb-third{padding:13px; border-radius:14px; background:transparent; border:0; color:var(--gold);
+    font-size:13px; font-weight:600; letter-spacing:.02em; cursor:pointer;}
+  .onb-third:active{transform:scale(.97);}
   .onb-second{padding:15px; border-radius:14px; background:transparent; border:1px solid var(--line);
     color:var(--text); font-size:13px; cursor:pointer;}
   .onb-primary:active,.onb-second:active{transform:scale(.97);}
@@ -867,8 +870,13 @@
      для горизонтального ряда. При равной специфичности выигрывает он, и кнопка в
      вертикальной колонке растягивалась на всю оставшуюся высоту — Артур прислал скриншот
      с обводкой во пол-экрана. Та же ловушка, что была с доком экспорта. */
-  .ghost-btn.home-batch{flex:0 0 auto; width:100%; margin-bottom:8px; border-radius:999px;
-    border-color:var(--line-2); color:var(--gold);}
+  /* два входа в один ряд: съёмка пачкой и коллаж — оба начинаются с выбора кадров */
+  .home-two{display:flex; gap:8px; margin-bottom:8px;}
+  /* на половине ширины прежняя разрядка не оставляла места надписи — поджимаем её,
+     а не обрезаем многоточием */
+  .ghost-btn.home-batch{flex:1 1 0; min-width:0; width:auto; margin-bottom:0; border-radius:999px;
+    border-color:var(--line-2); color:var(--gold); white-space:nowrap; padding:14px 8px;
+    font-size:9.5px; letter-spacing:.07em;}
   .home-actions{display:flex; gap:10px; align-items:center; padding:4px 0 2px;}
   .ghost-btn{flex:1; padding:14px; border-radius:999px; border:1px solid var(--line);
     background:transparent; color:var(--text); font-size:11px; letter-spacing:.14em; cursor:pointer;}
@@ -958,7 +966,10 @@
     <span class="em-n" id="edgeCount">00/12</span>
   </div>
 
-  <button class="ghost-btn home-batch" id="homeBatch">ОБРАБОТАТЬ ВСЮ СЪЁМКУ</button>
+  <div class="home-two">
+    <button class="ghost-btn home-batch" id="homeBatch">ОБРАБОТАТЬ СЪЁМКУ</button>
+    <button class="ghost-btn home-batch" id="homeCollage">СОБРАТЬ КОЛЛАЖ</button>
+  </div>
   <div class="home-actions">
     <button class="ghost-btn" id="homePick">ВЫБРАТЬ ДРУГОЕ ФОТО</button>
     <button class="solid-btn" id="homeCam">СНЯТЬ</button>
@@ -1270,6 +1281,9 @@
   <div class="onb-btns">
     <button class="onb-primary" id="onbPick">Открыть фото</button>
     <button class="onb-second" id="onbCam">Снять на камеру</button>
+    <!-- коллаж — самостоятельный вход, а не продолжение обработки: он набирает
+         свои кадры сам, и заставлять сперва открыть один снимок было бы лишним шагом -->
+    <button class="onb-third" id="onbCollage">Собрать коллаж</button>
   </div>
   <div class="onb-perm">Нужен доступ к галерее и камере. Фото обрабатываются на телефоне и никуда не отправляются.</div>
 </div>
@@ -2177,6 +2191,7 @@ const onbEl = document.getElementById('onb');
 function closeOnb(){ onbEl.classList.remove('open'); }
 document.getElementById('onbPick').onclick = ()=> document.getElementById('homePick').click();
 document.getElementById('onbCam').onclick  = ()=> document.getElementById('homeCam').click();
+document.getElementById('onbCollage').onclick = ()=>{ closeOnb(); openCollage(); };
 onbEl.classList.add('open');
 
 // Снимок прислали через «Поделиться» — воркер положил его в кэш, забираем и открываем.
@@ -4182,7 +4197,8 @@ const COL_LAYOUTS = {
     [[0,0,.5,1],[.5,0,.5,1]],
     [[0,0,1,.5],[0,.5,1,.5]],
     [[0,0,.63,1],[.63,0,.37,1]],
-    [[0,0,1,.63],[0,.63,1,.37]]
+    [[0,0,1,.63],[0,.63,1,.37]],
+    [[0,0,1,1],[.58,.62,.40,.34]]        // кадр в кадре: второй ложится поверх первого
   ],
   3: [
     [[0,0,1,.5],[0,.5,.5,.5],[.5,.5,.5,.5]],
@@ -4325,9 +4341,11 @@ function colBuildChips(){
     b.className = 'col-chip' + (i === colLayout ? ' on' : '');
     // схему рисуем теми же долями, что и сам коллаж: чип показывает, что получится
     const svg = ['<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">'];
+    // обводка цветом фона: без неё в раскладке «кадр в кадре» верхний прямоугольник
+    // сливается с нижним и схема выглядит сплошным пятном
     cells.forEach(r=> svg.push('<rect x="'+(r[0]*24+.6).toFixed(1)+'" y="'+(r[1]*24+.6).toFixed(1)
       +'" width="'+(r[2]*24-1.2).toFixed(1)+'" height="'+(r[3]*24-1.2).toFixed(1)
-      +'" rx="1.4" fill="currentColor"/>'));
+      +'" rx="1.4" fill="currentColor" stroke="#100E0B" stroke-width="1.2"/>'));
     svg.push('</svg>');
     b.innerHTML = svg.join('');
     b.style.padding = '5px 8px';
@@ -4651,6 +4669,7 @@ document.getElementById('homeBatch').onclick = ()=>{
   if(!sourceCanvas) return document.getElementById('homePick').click();
   openBatch();
 };
+document.getElementById('homeCollage').onclick = openCollage;
 document.getElementById('batchClose').onclick = closeBatch;
 document.getElementById('batchPick').onclick = ()=>{
   const done = batchItems.length && batchItems.every(i=> i.blob || i.failed);
