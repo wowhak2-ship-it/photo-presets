@@ -971,6 +971,7 @@
   <div class="adj-row"><span class="albl">Тепло</span><input type="range" id="adj-temp" min="-100" max="100" value="0"><span class="aval" id="val-temp">0</span></div>
   <div class="adj-row"><span class="albl">Насыщенность</span><input type="range" id="adj-saturation" min="-100" max="100" value="0"><span class="aval" id="val-saturation">0</span></div>
   <div class="adj-row"><span class="albl">Зерно</span><input type="range" id="adj-grain" min="0" max="100" value="0"><span class="aval" id="val-grain">0</span></div>
+  <div class="adj-row"><span class="albl">Свечение</span><input type="range" id="adj-bloom" min="0" max="100" value="0"><span class="aval" id="val-bloom">0</span></div>
   <div class="adj-acts">
     <button class="adj-reset" id="adjReset">Сбросить</button>
     <button class="adj-reset adj-keep" id="adjKeep">Сохранить как пресет</button>
@@ -1464,6 +1465,16 @@ function applyBloom(canvas, amount, warm){
   ctx.drawImage(tmp, 0, 0); ctx.restore();
 }
 
+// Свечение складывается из двух источников: своё у плёнки (гаснет вместе с её силой)
+// и своё у человека — ползунком. Тёплый оттенок берём от плёнки, а ручное свечение
+// золотим всегда: это имитация солнечной дымки, белое даёт грязный выцветший кадр.
+function bloomAmount(look, mix, adj){
+  return (look && look.bloom ? look.bloom * mix : 0) + ((adj && adj.bloom || 0)/100);
+}
+function bloomIsWarm(look, adj){
+  return !!((look && look.bloomWarm) || (adj && adj.bloom > 0));
+}
+
 // ─── Кривая ───
 // Точки задаются в 0..255 по обеим осям. Интерполяция МОНОТОННАЯ (Фрич–Карлсон):
 // обычный сплайн между близко стоящими точками выгибается за их пределы, и на снимке
@@ -1822,12 +1833,17 @@ const LOOKS = [
     hsl:{ red:{sat:-4,lum:5}, orange:{sat:6,lum:10}, yellow:{sat:-14,lum:6},
           green:{sat:-18,lum:4}, aqua:{sat:-24,lum:6}, blue:{sat:-28,lum:8} } },
 
-  { name:"Золотой час", temp:12, tint:1, contrast:0.10, fade:0.02, shadowsLift:0.08, highlightsRoll:0.12,
-    shSplit:[6,3,-2], hiSplit:[16,9,-6], vibrance:0.14, saturation:1.04, vignette:0.10, grain:0.04,
-    bloom:0.18, bloomWarm:true,
-    curve:{ rgb:[[0,10],[60,72],[190,200],[255,246]] },
-    hsl:{ orange:{sat:8,lum:8}, yellow:{sat:-6,lum:6}, green:{hue:-6,sat:-14},
-          aqua:{sat:-20,lum:4}, blue:{sat:-22,lum:6} } },
+  // Собран по её собственным работам, а не придуман: замеры трёх её кадров в контровом
+  // свете дали чёрную точку 28–44 (чёрного нет вовсе, ни одного проваленного пикселя),
+  // белую 234–247 без выбитых светов, разброс 44–60 и тёплые света до +51 по R−B.
+  // Прежний лук грел кадр, но оставлял чёрное чёрным и потому светился втрое слабее.
+  { name:"Золотой час", temp:12, tint:1, contrast:0.16, fade:0.02, shadowsLift:0.05, highlightsRoll:0.14,
+    shSplit:[8,4,-2], hiSplit:[20,11,-8], vibrance:0.10, saturation:1.0, vignette:0.04, grain:0.04,
+    bloom:0.15, bloomWarm:true,
+    curve:{ rgb:[[0,6],[60,62],[128,128],[200,202],[255,240]],
+            r:[[0,10],[128,140],[255,252]], b:[[0,26],[128,120],[255,232]] },
+    hsl:{ orange:{sat:10,lum:12}, yellow:{sat:-8,lum:8}, green:{hue:-8,sat:-18,lum:6},
+          aqua:{sat:-24,lum:6}, blue:{sat:-26,lum:8} } },
 
   // Настоящая плёнка: приподнятый чёрный с синевой, укатанные света, уведённая зелень
   { name:"Плёнка", temp:6, tint:2, contrast:0.06, fade:0.04, shadowsLift:0.10, highlightsRoll:0.12,
@@ -1891,8 +1907,11 @@ function syncOnbTitle(){
 syncOnbTitle();
 
 let selected = 0, intensity = 100, sourceCanvas = null, compareMode = false, comparePos = 0.5, editedCanvas = null;
-const ADJ_KEYS = ['exposure','contrast','temp','saturation','grain'];
-let adjust = { exposure:0, contrast:0, temp:0, saturation:0, grain:0 };
+// Свечение стоит в этом ряду особняком: остальные правки считаются по пикселям, а оно
+// размывает и накладывает целый кадр — поэтому applyAdjust его не трогает, зато пресет
+// и файл набора уносят его вместе с остальными. Без него чужой светящийся вид не продать.
+const ADJ_KEYS = ['exposure','contrast','temp','saturation','grain','bloom'];
+let adjust = { exposure:0, contrast:0, temp:0, saturation:0, grain:0, bloom:0 };
 const stage = document.getElementById('stage');
 const sctx = stage.getContext('2d', { willReadFrequently:true });
 
@@ -2129,8 +2148,8 @@ function buildEdited(){
   if(!editedCanvas) editedCanvas = document.createElement('canvas');
   editedCanvas.width = w; editedCanvas.height = h;
   editedCanvas.getContext('2d').putImageData(processedData(), 0, 0);
-  const bl = LOOKS[selected].bloom;
-  if(bl) applyBloom(editedCanvas, bl * (intensity/100), LOOKS[selected].bloomWarm);
+  const bl = bloomAmount(LOOKS[selected], intensity/100, adjust);
+  if(bl) applyBloom(editedCanvas, bl, bloomIsWarm(LOOKS[selected], adjust));
 }
 // Lightweight compositing of original (left) + cached edited (right) — runs on every drag frame
 function drawCompare(){
@@ -2236,8 +2255,8 @@ function renderNow(){
   const data = processedData(src);
   if(stage.width !== src.width || stage.height !== src.height){ stage.width = src.width; stage.height = src.height; }
   sctx.putImageData(data, 0, 0);
-  const bl = LOOKS[selected].bloom;
-  if(bl) applyBloom(stage, bl * (intensity/100), LOOKS[selected].bloomWarm);
+  const bl = bloomAmount(LOOKS[selected], intensity/100, adjust);
+  if(bl) applyBloom(stage, bl, bloomIsWarm(LOOKS[selected], adjust));
   if(!scrubbing) paintStageBg();
 }
 
@@ -2471,7 +2490,9 @@ function buildHomeLooks(){
     else { applyLook(id, look); const L = lookLayers(look, 1); applyHsl(id, L.hsl); applyCurve(id, L.curve); }
     c.getContext('2d').putImageData(id, 0, 0);
     // свечение у своего пресета — той же силы, что и сам лук в нём
-    if(look.bloom) applyBloom(c, look.bloom * (e.mine ? (e.p.intensity == null ? 100 : e.p.intensity)/100 : 1), look.bloomWarm);
+    const cardAdj = e.mine ? (e.p.adjust || null) : null;
+    const cardBl = bloomAmount(look, e.mine ? (e.p.intensity == null ? 100 : e.p.intensity)/100 : 1, cardAdj);
+    if(cardBl) applyBloom(c, cardBl, bloomIsWarm(look, cardAdj));
     wrap.appendChild(c);
     const meta = document.createElement('div'); meta.className = 'meta';
     const no = document.createElement('span'); no.className = 'no';
@@ -2727,7 +2748,8 @@ function sanitizePreset(p){
   ADJ_KEYS.forEach(k=>{
     let v = Number((p.adjust || {})[k]);
     if(!isFinite(v)) v = 0;
-    adjust[k] = Math.max(k === 'grain' ? 0 : -100, Math.min(100, Math.round(v)));
+    // зерно и свечение только добавляются — отрицательных значений у них нет
+    adjust[k] = Math.max((k === 'grain' || k === 'bloom') ? 0 : -100, Math.min(100, Math.round(v)));
   });
   return {
     name,
@@ -2956,7 +2978,7 @@ async function sharePresets(list, slug, pack){
 // Базовый лук ищем ПО ИМЕНИ. Если список встроенных когда-нибудь изменится или
 // перетасуется, сохранённый пресет не начнёт молча показывать чужую плёнку.
 function myBase(p){ const i = LOOKS.findIndex(l=> l.name === p.base); return i < 0 ? 0 : i; }
-const ZERO_ADJ = { exposure:0, contrast:0, temp:0, saturation:0, grain:0 };
+const ZERO_ADJ = { exposure:0, contrast:0, temp:0, saturation:0, grain:0, bloom:0 };
 // Отрисовка пресета в миниатюру: тот же порядок, что в processedData.
 function myRender(id, p, orig){
   const look = LOOKS[myBase(p)], mix = (p.intensity == null ? 100 : p.intensity)/100;
@@ -2969,14 +2991,14 @@ function myRender(id, p, orig){
 }
 // Короткая расшифровка рецепта — и в диалоге, и в списке настроек человек видит,
 // что пресет реально делает, а не только как он называется.
-const ADJ_RU = { exposure:'экспозиция', contrast:'контраст', temp:'тепло', saturation:'насыщенность', grain:'зерно' };
+const ADJ_RU = { exposure:'экспозиция', contrast:'контраст', temp:'тепло', saturation:'насыщенность', grain:'зерно', bloom:'свечение' };
 function myRecipeText(p){
   const parts = [ (p.base || LOOKS[0].name).toUpperCase() ];
   const inten = p.intensity == null ? 100 : p.intensity;
   if(inten !== 100) parts.push('сила ' + inten + '%');
   ADJ_KEYS.forEach(k=>{
     const v = (p.adjust || {})[k] || 0;
-    if(v) parts.push(ADJ_RU[k] + ' ' + (v > 0 && k !== 'grain' ? '+' : '') + v);
+    if(v) parts.push(ADJ_RU[k] + ' ' + (v > 0 && k !== 'grain' && k !== 'bloom' ? '+' : '') + v);
   });
   if(p.curve && CURVE_KEYS.some(k=> p.curve[k] && !curveIsFlat(p.curve[k]))) parts.push('кривая');
   if(hslSetTouched(p.hsl)){
@@ -3317,8 +3339,8 @@ function buildExport(maxDim, base){
   const full = document.createElement('canvas');
   full.width = src.width; full.height = src.height;
   full.getContext('2d').putImageData(processedData(src), 0, 0);
-  const bl = LOOKS[selected].bloom;
-  if(bl) applyBloom(full, bl * (intensity/100), LOOKS[selected].bloomWarm);
+  const bl = bloomAmount(LOOKS[selected], intensity/100, adjust);
+  if(bl) applyBloom(full, bl, bloomIsWarm(LOOKS[selected], adjust));
   if(!maxDim || Math.max(full.width, full.height) <= maxDim) return full;
   const k = maxDim / Math.max(full.width, full.height);
   const out = document.createElement('canvas');
@@ -3461,8 +3483,8 @@ async function buildExportAsync(maxDim, base, onProgress){
   const full = document.createElement('canvas');
   full.width = W; full.height = H;
   full.getContext('2d').putImageData(proc, 0, 0);
-  const bl = look.bloom;
-  if(bl) applyBloom(full, bl * mix, look.bloomWarm);
+  const bl = bloomAmount(look, mix, adjust);
+  if(bl) applyBloom(full, bl, bloomIsWarm(look, adjust));
   if(onProgress) onProgress(0.95);
   await nextFrame();
   if(!maxDim || Math.max(W, H) <= maxDim) return full;
