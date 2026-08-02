@@ -4335,24 +4335,48 @@ function colBuildChips(){
     lh.appendChild(b);
   });
 }
+// Кадры держим уменьшенными: в коллаж больше 1600 точек по длинной стороне не попадёт
+// даже в самом крупном формате, а перерисовывать 24-мегапиксельный снимок на каждое
+// движение пальца телефон не успевает.
+const COL_MAX = 1600;
+function colShrink(src){
+  const w = src.width || src.naturalWidth, h = src.height || src.naturalHeight;
+  const k = Math.min(1, COL_MAX/Math.max(w, h));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(w*k)); cv.height = Math.max(1, Math.round(h*k));
+  const c = cv.getContext('2d');
+  c.imageSmoothingQuality = 'high';
+  c.drawImage(src, 0, 0, cv.width, cv.height);
+  if(src.close) src.close();
+  return cv;
+}
 async function colTake(files){
   const picked = [...files].slice(0, 4);
   if(picked.length < 2) return batchStatusless('Нужно хотя бы два кадра');
-  colImgs.forEach(b=> b.close && b.close());
   colImgs = [];
+  colLayout = 0;
+  colPos = [];                               // новые кадры — новая посадка в ячейках
+  // снимок с телефона распаковывается заметно дольше мгновения: молчать всё это время
+  // нельзя, иначе выглядит так, будто выбор не сработал
+  const empty = document.getElementById('colEmpty');
+  empty.style.display = 'block';
+  document.getElementById('colCanvas').style.display = 'none';
+  let n = 0;
   for(const f of picked){
-    try{ colImgs.push(await createImageBitmap(f)); }
+    empty.textContent = 'Готовлю кадры… ' + (++n) + ' из ' + picked.length;
+    await nextFrame();
+    try{ colImgs.push(colShrink(await createImageBitmap(f))); }
     catch(_){
       try{
         const url = URL.createObjectURL(f);
         const img = new Image();
         await new Promise((ok,bad)=>{ img.onload=ok; img.onerror=bad; img.src=url; });
-        colImgs.push(img);
+        colImgs.push(colShrink(img));
+        URL.revokeObjectURL(url);
       }catch(e){}
     }
   }
-  colLayout = 0;
-  colPos = [];                               // новые кадры — новая посадка в ячейках
+  empty.textContent = 'Выберите от двух до четырёх кадров';
   colBuildChips(); colRender();
 }
 function batchStatusless(t){ toast(t); }
@@ -4449,7 +4473,13 @@ async function colBlob(){
 })();
 
 document.getElementById('colPick').onclick = ()=> document.getElementById('colFile').click();
-document.getElementById('colFile').onchange = e=>{ const fs = e.target.files; e.target.value = ''; colTake(fs); };
+// Список файлов надо СКОПИРОВАТЬ до очистки поля: обнуление value опустошает и сам
+// FileList, а он живой — передашь ссылку, и к моменту сборки в ней уже ничего нет.
+document.getElementById('colFile').onchange = e=>{
+  const fs = [...e.target.files];
+  e.target.value = '';                        // тот же файл можно выбрать повторно
+  colTake(fs);
+};
 document.getElementById('colClose').onclick = closeCollage;
 document.getElementById('colGap').oninput = e=>{
   colGap = +e.target.value;
