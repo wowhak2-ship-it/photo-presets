@@ -313,15 +313,19 @@
     box-shadow:0 0 12px rgba(210,66,46,.6);}
   .onb-brand b{color:var(--text); font-size:13px; letter-spacing:.28em; font-weight:600;}
   .onb-tag{color:var(--dim); font-family:var(--mono); font-size:10px; letter-spacing:.16em; margin-top:8px;}
-  .onb-hero{flex:1; display:grid; place-items:center; width:100%;}
-  /* веер отпечатков: один кадр в трёх плёнках — суть приложения одним взглядом */
-  .onb-fan{position:relative; width:172px; height:228px;}
+  .onb-hero{flex:1; min-height:0; display:grid; place-items:center; width:100%; padding:14px 0 18px;}
+  /* Веер отпечатков: один кадр в трёх плёнках — суть приложения одним взглядом.
+     Размер не может быть жёстким и не может считаться от высоты ОКНА: вееру достаётся
+     лишь то, что осталось от заголовка и кнопок, и на невысоком экране он наезжал на
+     текст. Занимаем ровно свободную строку (боковые карточки свешиваются ниже рамки
+     на 10 px — на них и уходит нижний отступ), а форму держим соотношением. */
+  .onb-fan{position:relative; height:100%; max-height:228px; aspect-ratio:172/228; max-width:60%;}
   .ofc{position:absolute; inset:0; border-radius:8px; overflow:hidden; box-shadow:0 18px 40px rgba(0,0,0,.55);}
   .ofc canvas{width:100%; height:100%; display:block;}
   .ofc.a{transform:rotate(-10deg) translate(-20px,10px);}
   .ofc.c{transform:rotate(10deg) translate(20px,10px);}
   .ofc.b{z-index:3; border:2.5px solid var(--china); box-shadow:0 22px 46px rgba(0,0,0,.6);}
-  .onb-h1{color:var(--text); font-size:28px; font-weight:700; line-height:1.12; margin-top:8px;}
+  .onb-h1{color:var(--text); font-size:28px; font-weight:700; line-height:1.12; margin-top:18px;}
   .onb-sub{color:var(--dim); font-size:14px; line-height:1.5; max-width:290px; margin:14px auto 0;}
   .onb-btns{width:100%; display:flex; flex-direction:column; gap:10px; margin-top:26px;}
   .onb-primary{padding:16px; border-radius:14px; background:var(--gold); color:var(--gold-ink);
