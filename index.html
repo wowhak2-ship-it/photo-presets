@@ -267,6 +267,9 @@
     text-shadow:0 1px 6px rgba(0,0,0,.85);}
   .cam-x{width:40px; height:40px; border-radius:50%; background:rgba(0,0,0,.45); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.14); color:#fff; font-size:19px; cursor:pointer; transition:transform .12s;}
   .cam-x:active{transform:scale(.92);}
+  .cam-done{background:transparent; border:0; color:var(--gold); font-size:13px; font-weight:700;
+    letter-spacing:.06em; cursor:pointer; padding:8px 4px;}
+  .cam-done:active{transform:scale(.96);}
   /* сетка третей и уголки кадра — как в видоискателе плёночной камеры */
   .cam-grid{position:absolute; inset:0; z-index:2; pointer-events:none;}
   .cam-grid i{position:absolute; background:rgba(255,255,255,.16);}
@@ -582,6 +585,11 @@
   .batch-status{font-size:12.5px; color:var(--dim); text-align:center; margin:4px 0 10px; min-height:16px;}
   .batch-btns{display:flex; gap:8px;}
   .batch-btns .crop-btn{flex:1;}
+  .batch-sheet{width:100%; margin-top:8px; background:transparent; border:1px solid var(--line-2);
+    color:var(--gold); font-size:13px; font-weight:600; letter-spacing:.02em;
+    padding:12px; border-radius:13px; cursor:pointer;}
+  .batch-sheet:active{transform:scale(.98);}
+  .batch-sheet:disabled{opacity:.5;}
 
   .set-input input{flex:0 1 150px; min-width:0; text-align:right; background:transparent; border:0;
     outline:none; color:var(--gold); font-family:inherit; font-size:14px; padding:0;}
@@ -697,6 +705,38 @@
   .crop-btn:active{transform:scale(.97);}
 
   /* retouch overlay */
+  /* ── Коллаж ── */
+  .collage{position:fixed; inset:0; z-index:62; background:var(--bg-deep);
+    background-image:radial-gradient(120% 55% at 50% 0%, #16181F 0%, var(--bg) 50%, var(--bg-deep) 100%);
+    display:none; flex-direction:column;}
+  .collage.open{display:flex;}
+  .col-stage{flex:1; min-height:0; display:grid; place-items:center;
+    padding:calc(66px + env(safe-area-inset-top)) 18px 10px;}
+  .col-stage canvas{max-width:100%; max-height:100%; border-radius:4px;
+    box-shadow:0 18px 44px rgba(0,0,0,.5);}
+  .col-dock{padding:12px 0 calc(16px + env(safe-area-inset-bottom));}
+  .col-empty{font-size:13px; line-height:1.5; color:var(--faint); text-align:center; padding:6px 20px 10px;}
+  .col-line{display:flex; align-items:center; gap:10px; padding:5px 16px;}
+  .col-lbl{flex:0 0 54px; font-family:var(--mono); font-size:8.5px; letter-spacing:.18em; color:var(--dim);}
+  .col-chips{flex:1; min-width:0; display:flex; gap:6px; overflow-x:auto; padding:2px 0;
+    scrollbar-width:none;}
+  .col-chips::-webkit-scrollbar{display:none;}
+  .col-chip{flex:0 0 auto; background:transparent; border:1px solid var(--line); color:var(--dim);
+    font-family:var(--mono); font-size:10px; letter-spacing:.06em; padding:7px 11px; border-radius:9px;
+    cursor:pointer; white-space:nowrap;}
+  .col-chip.on{border-color:var(--gold); color:var(--gold);}
+  .col-chip:active{transform:scale(.96);}
+  /* сетка рисуется схемой, а не описывается словами — так видно, что получишь */
+  .col-chip.grid{display:flex; gap:2px; padding:7px 9px; align-items:stretch; height:32px;}
+  .col-chip.grid i{display:flex; flex-direction:column; gap:2px;}
+  .col-chip.grid u{display:block; width:9px; background:currentColor; opacity:.55;
+    border-radius:1.5px; text-decoration:none;}
+  .col-chip.grid.on u{opacity:1;}
+  .col-line input[type=range]{flex:1; height:30px;}
+  .col-val{flex:0 0 26px; text-align:right; font-family:var(--mono); font-size:12px; color:var(--gold);}
+  .col-btns{display:flex; gap:8px; padding:8px 16px 0;}
+  .col-btns .crop-btn{flex:1;}
+
   .retouch{position:fixed; inset:0; z-index:60; background:var(--bg-deep);
     background-image:radial-gradient(120% 55% at 50% 0%, #16181F 0%, var(--bg) 50%, var(--bg-deep) 100%);
     display:none; flex-direction:column;}
@@ -978,6 +1018,10 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
     Кадр
   </button>
+  <button class="tool sm" data-go="collage">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.4"/><rect x="13" y="3" width="8" height="8" rx="1.4"/><rect x="3" y="13" width="8" height="8" rx="1.4"/><rect x="13" y="13" width="8" height="8" rx="1.4"/></svg>
+    Коллаж
+  </button>
   <button class="tool sm" data-go="batch">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="10" rx="1.6"/><path d="M7.5 4.5h11a1.6 1.6 0 0 1 1.6 1.6v9"/><path d="M6.4 14.2l2.6-2.8 2.4 2.3 2-2.1 2.6 3"/></svg>
     Съёмка
@@ -1119,8 +1163,44 @@
       <button class="crop-btn" id="batchPick">Выбрать снимки</button>
       <button class="crop-btn gold" id="batchGo" disabled>Обработать</button>
     </div>
+    <!-- Съёмку показывают не по кадру, а разом. Лист — это готовая картинка для сторис:
+         вся съёмка одной плёнкой, с датой и авторством. -->
+    <button class="batch-sheet" id="batchSheet" style="display:none">Собрать лист съёмки</button>
   </div>
 </div>
+
+<!-- Коллаж: два-четыре кадра, готовые раскладки и формат под то, куда его выкладывают.
+     Раскладки заданы долями холста, поэтому одна и та же сетка работает и в квадрате,
+     и в вертикали 9:16 — пересчитывать ничего не надо. -->
+<div class="collage" id="collage">
+  <div class="cam-top">
+    <button class="cam-x" id="colClose">✕</button>
+    <span class="cam-title">КОЛЛАЖ</span>
+    <button class="cam-done" id="colShare">Готово</button>
+  </div>
+  <div class="col-stage"><canvas id="colCanvas"></canvas></div>
+  <div class="ov-dock col-dock">
+    <div class="col-empty" id="colEmpty">Выберите от двух до четырёх кадров</div>
+    <div class="col-line">
+      <span class="col-lbl">ФОРМАТ</span>
+      <div class="col-chips" id="colFormats"></div>
+    </div>
+    <div class="col-line">
+      <span class="col-lbl">СЕТКА</span>
+      <div class="col-chips" id="colLayouts"></div>
+    </div>
+    <div class="col-line">
+      <span class="col-lbl">ЗАЗОР</span>
+      <input type="range" id="colGap" min="0" max="40" value="12">
+      <span class="col-val" id="colGapVal">12</span>
+    </div>
+    <div class="col-btns">
+      <button class="crop-btn" id="colPick">Выбрать кадры</button>
+      <button class="crop-btn gold" id="colSave" disabled>Сохранить</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="colFile" accept="image/*" multiple hidden>
 
 <!-- Своё подтверждение вместо системного confirm: браузер вправе не показать
      системное окно (встроенный просмотр, запрет диалогов на странице), и тогда
@@ -2438,12 +2518,14 @@ function applyPendingTool(){
   if(t==='curve'){ openCurve(); return; }
   if(t==='hsl'){ openHsl(); return; }
   if(t==='batch'){ openBatch(); return; }
+  if(t==='collage'){ openCollage(); return; }
   if(!t) return;   // выбрали фото просто через «Галерея»/«Камера» — остаёмся на главной, фото уже подхвачено лентой луков
   goEditor();
   setTab(t==='adjust' ? 'adjust' : 'presets');
 }
 function runTool(tool){
-  if(!sourceCanvas){ pendingTool = tool; document.getElementById('file').click(); return; }
+  // коллаж набирает кадры сам, открытый снимок ему не нужен — остальным инструментам нужен
+  if(tool !== 'collage' && !sourceCanvas){ pendingTool = tool; document.getElementById('file').click(); return; }
   pendingTool = tool; applyPendingTool();
 }
 document.getElementById('homePick').onclick = ()=>{ pendingTool = null; document.getElementById('file').click(); };
@@ -3996,6 +4078,12 @@ function renderBatch(){
   const noLook = !myActive && selected === 0 && intensity === 100 && ADJ_KEYS.every(k=> !adjust[k]);
   go.disabled = batchBusy || !batchItems.length;
   pick.disabled = batchBusy;
+  // лист собирается из уже обработанных кадров — до счёта предлагать нечего
+  const sheet = document.getElementById('batchSheet');
+  if(sheet){
+    sheet.style.display = (!batchBusy && ok) ? 'block' : 'none';
+    sheet.textContent = 'Собрать лист съёмки' + (ok > SHEET_MAX ? ' · первые ' + SHEET_MAX : '');
+  }
   if(batchBusy) return;
   const всего = batchItems.length;
   if(done && ok){
@@ -4067,6 +4155,288 @@ async function batchRun(){
   }
   batchBusy = false; renderBatch();
 }
+// ─── Коллаж ───
+// Раскладка — это доли холста, а не пиксели: одна и та же сетка ложится и в квадрат,
+// и в вертикаль 9:16, поэтому смена формата не требует отдельных раскладок.
+const COL_FORMATS = [
+  { name:'1:1',  w:1080, h:1080 },
+  { name:'4:5',  w:1080, h:1350 },
+  { name:'9:16', w:1080, h:1920 },
+  { name:'16:9', w:1920, h:1080 },
+  { name:'3:4',  w:1080, h:1440 }
+];
+const COL_LAYOUTS = {
+  2: [
+    [[0,0,.5,1],[.5,0,.5,1]],
+    [[0,0,1,.5],[0,.5,1,.5]],
+    [[0,0,.63,1],[.63,0,.37,1]],
+    [[0,0,1,.63],[0,.63,1,.37]]
+  ],
+  3: [
+    [[0,0,1,.5],[0,.5,.5,.5],[.5,.5,.5,.5]],
+    [[0,0,.5,.5],[.5,0,.5,.5],[0,.5,1,.5]],
+    [[0,0,.56,1],[.56,0,.44,.5],[.56,.5,.44,.5]],
+    [[0,0,1,1/3],[0,1/3,1,1/3],[0,2/3,1,1/3]],
+    [[0,0,1/3,1],[1/3,0,1/3,1],[2/3,0,1/3,1]]
+  ],
+  4: [
+    [[0,0,.5,.5],[.5,0,.5,.5],[0,.5,.5,.5],[.5,.5,.5,.5]],
+    [[0,0,.56,1],[.56,0,.44,1/3],[.56,1/3,.44,1/3],[.56,2/3,.44,1/3]],
+    [[0,0,1,.55],[0,.55,1/3,.45],[1/3,.55,1/3,.45],[2/3,.55,1/3,.45]],
+    [[0,0,1,.25],[0,.25,1,.25],[0,.5,1,.25],[0,.75,1,.25]],
+    [[0,0,.25,1],[.25,0,.25,1],[.5,0,.25,1],[.75,0,.25,1]]
+  ]
+};
+let colImgs = [], colFmt = 1, colLayout = 0, colGap = 12;
+const colEl = document.getElementById('collage');
+
+function colDraw(cv, W, H, gap){
+  const c = cv.getContext('2d');
+  cv.width = W; cv.height = H;
+  c.fillStyle = '#0A0908'; c.fillRect(0, 0, W, H);
+  const cells = (COL_LAYOUTS[colImgs.length] || [])[colLayout];
+  if(!cells) return;
+  const half = gap/2;
+  cells.forEach((r, i)=>{
+    const bm = colImgs[i];
+    if(!bm) return;
+    // зазор снимаем ИЗНУТРИ ячейки, чтобы по краям холста поля не удваивались
+    const x = Math.round(r[0]*W + (r[0] > 0 ? half : gap));
+    const y = Math.round(r[1]*H + (r[1] > 0 ? half : gap));
+    const w = Math.round(r[2]*W - (r[0] > 0 ? half : gap) - (r[0]+r[2] < .999 ? half : gap));
+    const h = Math.round(r[3]*H - (r[1] > 0 ? half : gap) - (r[1]+r[3] < .999 ? half : gap));
+    if(w <= 0 || h <= 0) return;
+    const bw = bm.width, bh = bm.height, target = w/h;
+    let sw = bw, sh = bh, sx = 0, sy = 0;
+    if(bw/bh > target){ sw = Math.round(bh*target); sx = (bw - sw) >> 1; }
+    else { sh = Math.round(bw/target); sy = (bh - sh) >> 1; }
+    c.save();
+    roundRect(c, x, y, w, h, 6); c.clip();
+    c.drawImage(bm, sx, sy, sw, sh, x, y, w, h);
+    c.restore();
+  });
+}
+function colRender(){
+  const f = COL_FORMATS[colFmt];
+  const cv = document.getElementById('colCanvas');
+  const has = colImgs.length >= 2;
+  document.getElementById('colEmpty').style.display = has ? 'none' : 'block';
+  cv.style.display = has ? 'block' : 'none';
+  document.getElementById('colSave').disabled = !has;
+  document.getElementById('colShare').style.visibility = has ? 'visible' : 'hidden';
+  if(!has) return;
+  // превью считаем в уменьшенном холсте: полный 9:16 пересчитывался бы на каждый шаг ползунка
+  const k = 720 / Math.max(f.w, f.h);
+  colDraw(cv, Math.round(f.w*k), Math.round(f.h*k), Math.round(colGap*k*2));
+}
+function colBuildChips(){
+  const fh = document.getElementById('colFormats');
+  fh.innerHTML = '';
+  COL_FORMATS.forEach((f, i)=>{
+    const b = document.createElement('button');
+    b.className = 'col-chip' + (i === colFmt ? ' on' : '');
+    b.textContent = f.name;
+    b.onclick = ()=>{ colFmt = i; colBuildChips(); colRender(); };
+    fh.appendChild(b);
+  });
+  const lh = document.getElementById('colLayouts');
+  lh.innerHTML = '';
+  const list = COL_LAYOUTS[colImgs.length] || [];
+  list.forEach((cells, i)=>{
+    const b = document.createElement('button');
+    b.className = 'col-chip' + (i === colLayout ? ' on' : '');
+    // схему рисуем теми же долями, что и сам коллаж: чип показывает, что получится
+    const svg = ['<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">'];
+    cells.forEach(r=> svg.push('<rect x="'+(r[0]*24+.6).toFixed(1)+'" y="'+(r[1]*24+.6).toFixed(1)
+      +'" width="'+(r[2]*24-1.2).toFixed(1)+'" height="'+(r[3]*24-1.2).toFixed(1)
+      +'" rx="1.4" fill="currentColor"/>'));
+    svg.push('</svg>');
+    b.innerHTML = svg.join('');
+    b.style.padding = '5px 8px';
+    b.onclick = ()=>{ colLayout = i; colBuildChips(); colRender(); };
+    lh.appendChild(b);
+  });
+}
+async function colTake(files){
+  const picked = [...files].slice(0, 4);
+  if(picked.length < 2) return batchStatusless('Нужно хотя бы два кадра');
+  colImgs.forEach(b=> b.close && b.close());
+  colImgs = [];
+  for(const f of picked){
+    try{ colImgs.push(await createImageBitmap(f)); }
+    catch(_){
+      try{
+        const url = URL.createObjectURL(f);
+        const img = new Image();
+        await new Promise((ok,bad)=>{ img.onload=ok; img.onerror=bad; img.src=url; });
+        colImgs.push(img);
+      }catch(e){}
+    }
+  }
+  colLayout = 0;
+  colBuildChips(); colRender();
+}
+function batchStatusless(t){ toast(t); }
+function openCollage(){
+  ensureTrap();
+  colEl.classList.add('open');
+  colBuildChips(); colRender();
+}
+function closeCollage(){
+  colEl.classList.remove('open');
+}
+async function colBlob(){
+  const f = COL_FORMATS[colFmt];
+  const cv = document.createElement('canvas');
+  colDraw(cv, f.w, f.h, colGap*2);
+  const blob = await new Promise(r=> cv.toBlob(r, 'image/jpeg', 0.94));
+  cv.width = 0; cv.height = 0;
+  return blob;
+}
+document.getElementById('colPick').onclick = ()=> document.getElementById('colFile').click();
+document.getElementById('colFile').onchange = e=>{ const fs = e.target.files; e.target.value = ''; colTake(fs); };
+document.getElementById('colClose').onclick = closeCollage;
+document.getElementById('colGap').oninput = e=>{
+  colGap = +e.target.value;
+  document.getElementById('colGapVal').textContent = colGap;
+  colRender();
+};
+document.getElementById('colSave').onclick = async ()=>{
+  const b = await colBlob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(b); a.download = 'presety-kollazh.jpg'; a.click();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 1000);
+  toast('Коллаж сохранён');
+};
+document.getElementById('colShare').onclick = async ()=>{
+  const b = await colBlob();
+  const file = new File([b], 'presety-kollazh.jpg', { type:'image/jpeg' });
+  if(navigator.canShare && navigator.canShare({ files:[file] })){
+    try{ await navigator.share({ files:[file] }); return; }
+    catch(e){ if(e && e.name === 'AbortError') return; }
+  }
+  document.getElementById('colSave').click();
+};
+
+// ─── Лист съёмки ───
+// Съёмку показывают не по кадру, а разом: одной картинкой в сторис или клиенту.
+// Собираем её так, как фотограф смотрит плёнку — контролькой: кадры в ряд, перфорация
+// по краям, по низу маркировка с датой и авторством. Кадры уже обработаны пачкой,
+// поэтому лист несёт ровно тот вид, который человек выбрал.
+const SHEET_W = 1080, SHEET_MAX = 12;
+// До шести кадров держим две колонки: лист выходит вертикальным, около 4:5 —
+// в этой форме ленты и сторис показывают картинку целиком, а не режут по краям.
+function sheetCols(n){ return n <= 6 ? 2 : 3; }
+async function buildSheet(){
+  const ready = batchItems.filter(i=> i.blob).slice(0, SHEET_MAX);
+  if(!ready.length) return null;
+  const bitmaps = [];
+  for(const it of ready){
+    try{ bitmaps.push(await createImageBitmap(it.blob)); }catch(_){}
+  }
+  if(!bitmaps.length) return null;
+
+  const cols = sheetCols(bitmaps.length);
+  const rows = Math.ceil(bitmaps.length / cols);
+  const pad = 64, gap = 18, perf = 46, foot = 92;
+  const cellW = Math.round((SHEET_W - pad*2 - gap*(cols-1)) / cols);
+  // форма кадра — по первому снимку: лист остаётся ровным, а горизонтальные съёмки
+  // не притворяются вертикальными
+  const ar = bitmaps[0].width / bitmaps[0].height;
+  const cellH = Math.round(cellW / (ar > 1.15 ? 4/3 : (ar < 0.87 ? 3/4 : 1)));
+  const gridTop = perf + pad/2;
+  const gridH = rows*cellH + (rows-1)*gap;
+  const perfBottom = gridTop + gridH + pad/2;    // вторая полоса перфорации — под кадрами
+  const H = perfBottom + perf + foot;
+
+  const cv = document.createElement('canvas');
+  cv.width = SHEET_W; cv.height = H;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#100E0B'; c.fillRect(0, 0, SHEET_W, H);
+
+  // перфорация сверху и снизу — как на полоске 35 мм
+  c.fillStyle = '#1B160F';
+  const holeW = 34, holeH = 20, step = 68;
+  for(let x = pad - 10; x + holeW <= SHEET_W - pad + 10; x += step){
+    roundRect(c, x, (perf - holeH)/2, holeW, holeH, 5); c.fill();
+    roundRect(c, x, perfBottom + (perf - holeH)/2, holeW, holeH, 5); c.fill();
+  }
+
+  bitmaps.forEach((bm, i)=>{
+    const col = i % cols, row = (i / cols) | 0;
+    const x = pad + col*(cellW + gap);
+    const y = gridTop + row*(cellH + gap);
+    // кадр вписываем ПО ЗАПОЛНЕНИЮ и режем по центру: иначе в сетке зияли бы поля
+    const bw = bm.width, bh = bm.height, target = cellW/cellH;
+    let sw = bw, sh = bh, sx = 0, sy = 0;
+    if(bw/bh > target){ sw = Math.round(bh*target); sx = (bw - sw) >> 1; }
+    else { sh = Math.round(bw/target); sy = (bh - sh) >> 1; }
+    c.save();
+    roundRect(c, x, y, cellW, cellH, 4); c.clip();
+    c.drawImage(bm, sx, sy, sw, sh, x, y, cellW, cellH);
+    c.restore();
+    if(bm.close) bm.close();
+    c.strokeStyle = 'rgba(255,255,255,.07)'; c.lineWidth = 1;
+    roundRect(c, x + .5, y + .5, cellW - 1, cellH - 1, 4); c.stroke();
+  });
+
+  // маркировка по низу: чья съёмка, когда и сколько кадров
+  const author = String(SET.get('author', '') || '').trim();
+  const d = new Date();
+  const date = String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
+  const baseY = H - foot/2 + 6;
+  c.fillStyle = '#E0A24A';
+  c.font = '600 26px ui-monospace, Menlo, Consolas, monospace';
+  c.textAlign = 'left';
+  c.fillText('ПРЕСЕТЫ', pad, baseY);
+  c.fillStyle = '#A2988A';
+  c.font = '500 24px ui-monospace, Menlo, Consolas, monospace';
+  const marks = [date, bitmaps.length + ' ' + framesWord(bitmaps.length)];
+  c.fillText('·  ' + marks.join('  ·  '), pad + 132, baseY);
+  if(author){
+    c.textAlign = 'right';
+    c.fillStyle = '#F4EFE5';
+    c.font = '500 24px ui-monospace, Menlo, Consolas, monospace';
+    c.fillText(author.toUpperCase(), SHEET_W - pad, baseY);
+  }
+  return cv;
+}
+function framesWord(n){
+  const t = n % 100, o = n % 10;
+  if(t >= 11 && t <= 14) return 'КАДРОВ';
+  return o === 1 ? 'КАДР' : (o >= 2 && o <= 4) ? 'КАДРА' : 'КАДРОВ';
+}
+function roundRect(c, x, y, w, h, r){
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+async function sheetShare(){
+  const btn = document.getElementById('batchSheet');
+  const was = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Собираю лист…';
+  try{
+    const cv = await buildSheet();
+    if(!cv) return batchStatus('Нет готовых кадров для листа');
+    const blob = await new Promise(r=> cv.toBlob(r, 'image/jpeg', 0.94));
+    cv.width = 0; cv.height = 0;
+    const file = new File([blob], 'presety-list.jpg', { type:'image/jpeg' });
+    if(navigator.canShare && navigator.canShare({ files:[file] })){
+      try{ await navigator.share({ files:[file] }); return; }
+      catch(e){ if(e && e.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file); a.download = file.name; a.click();
+    setTimeout(()=> URL.revokeObjectURL(a.href), 1000);
+    batchStatus('Лист сохранён');
+  } finally { btn.disabled = false; btn.textContent = was; }
+}
+document.getElementById('batchSheet').onclick = sheetShare;
+
 function batchFiles(){
   return batchItems.filter(i=> i.blob).map((i, n)=>
     new File([i.blob], 'presety_' + String(n+1).padStart(2,'0') + '.jpg', { type:'image/jpeg' }));
@@ -5039,13 +5409,15 @@ function isAnyScreenOpen(){
       || cam.classList.contains('open')
       || cropEl.classList.contains('open')
       || retouchEl.classList.contains('open')
-      || packsEl.classList.contains('open');
+      || packsEl.classList.contains('open')
+      || colEl.classList.contains('open');
 }
 function forceHome(){
   if(cam.classList.contains('open')) closeCamera();
   if(cropEl.classList.contains('open')) closeCrop();
   if(retouchEl.classList.contains('open')) closeRetouch();
   if(packsEl.classList.contains('open')) packsEl.classList.remove('open');
+  if(colEl.classList.contains('open')) closeCollage();
   if(document.body.classList.contains('editing')) goHome();
 }
 const backToast = document.getElementById('backToast');
