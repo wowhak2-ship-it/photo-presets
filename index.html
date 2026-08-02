@@ -723,6 +723,9 @@
   .col-empty{font-size:13px; line-height:1.5; color:var(--faint); text-align:center; padding:6px 20px 10px;}
   .col-hint{font-family:var(--mono); font-size:8.5px; letter-spacing:.14em; color:var(--faint);
     text-align:center; padding:2px 20px 8px; text-transform:uppercase;}
+  .col-clear-row{text-align:center; padding:0 20px 2px;}
+  .col-clear{background:transparent; border:0; color:var(--dim); font-size:11px; cursor:pointer;
+    text-decoration:underline; padding:2px 6px;}
   .col-stage canvas{touch-action:none;}   /* жесты наши: браузер не должен их перехватывать */
   .col-line{display:flex; align-items:center; gap:10px; padding:5px 16px;}
   .col-lbl{flex:0 0 54px; font-family:var(--mono); font-size:8.5px; letter-spacing:.18em; color:var(--dim);}
@@ -1198,8 +1201,9 @@
   </div>
   <div class="col-stage"><canvas id="colCanvas"></canvas></div>
   <div class="ov-dock col-dock">
-    <div class="col-empty" id="colEmpty">Выберите от двух до четырёх кадров</div>
+    <div class="col-empty" id="colEmpty">Выберите кадры — от двух до четырёх. Можно добавлять по одному</div>
     <div class="col-hint" id="colHint" style="display:none">Двигайте кадр пальцем, двумя — приближайте</div>
+    <div class="col-clear-row"><button class="col-clear" id="colClear" style="display:none">Убрать кадры</button></div>
     <div class="col-line">
       <span class="col-lbl">ФОРМАТ</span>
       <div class="col-chips" id="colFormats"></div>
@@ -4271,6 +4275,7 @@ function colRender(){
   const has = colImgs.length >= 2;
   document.getElementById('colEmpty').style.display = has ? 'none' : 'block';
   document.getElementById('colHint').style.display = has ? 'block' : 'none';
+  colSyncButtons();
   cv.style.display = has ? 'block' : 'none';
   document.getElementById('colSave').disabled = !has;
   document.getElementById('colShare').style.visibility = has ? 'visible' : 'hidden';
@@ -4368,17 +4373,19 @@ function colShrink(src){
   if(src.close) src.close();
   return cv;
 }
+// Кадры НАКАПЛИВАЮТСЯ: старые выборщики Android умеют отдавать только по одному файлу,
+// и требовать выбрать сразу четыре — значит не работать на половине телефонов.
 async function colTake(files){
-  const picked = [...files].slice(0, 4);
-  if(picked.length < 2) return batchStatusless('Нужно хотя бы два кадра');
-  colImgs = [];
+  const room = 4 - colImgs.length;
+  const picked = [...files].slice(0, Math.max(0, room));
+  if(!picked.length) return batchStatusless('В коллаже уже четыре кадра');
   colLayout = 0;
-  colPos = [];                               // новые кадры — новая посадка в ячейках
   // снимок с телефона распаковывается заметно дольше мгновения: молчать всё это время
   // нельзя, иначе выглядит так, будто выбор не сработал
   const empty = document.getElementById('colEmpty');
+  const hadCollage = colImgs.length >= 2;     // готовый коллаж на экране не гасим
   empty.style.display = 'block';
-  document.getElementById('colCanvas').style.display = 'none';
+  if(!hadCollage) document.getElementById('colCanvas').style.display = 'none';
   let n = 0;
   for(const f of picked){
     empty.textContent = 'Готовлю кадры… ' + (++n) + ' из ' + picked.length;
@@ -4394,8 +4401,22 @@ async function colTake(files){
       }catch(e){}
     }
   }
-  empty.textContent = 'Выберите от двух до четырёх кадров';
   colBuildChips(); colRender();
+}
+// Подписи ведут за руку: пока кадр один — коллажа не выйдет, и это надо сказать прямо,
+// а не оставлять пустой экран с непонятной кнопкой.
+function colSyncButtons(){
+  const n = colImgs.length;
+  const pick = document.getElementById('colPick');
+  const empty = document.getElementById('colEmpty');
+  const clear = document.getElementById('colClear');
+  pick.textContent = n === 0 ? 'Выбрать кадры' : (n >= 4 ? 'Кадров максимум' : 'Добавить кадр');
+  pick.disabled = n >= 4;
+  clear.style.display = n ? 'inline' : 'none';
+  clear.textContent = 'Убрать ' + (n === 1 ? 'кадр' : 'кадры');
+  if(n < 2) empty.textContent = n === 1
+    ? 'Ещё один кадр — и получится коллаж. Можно добавлять по одному'
+    : 'Выберите кадры — от двух до четырёх. Можно добавлять по одному';
 }
 function batchStatusless(t){ toast(t); }
 function openCollage(){
@@ -4491,6 +4512,10 @@ async function colBlob(){
 })();
 
 document.getElementById('colPick').onclick = ()=> document.getElementById('colFile').click();
+document.getElementById('colClear').onclick = ()=>{
+  colImgs = []; colPos = []; colLayout = 0;
+  colBuildChips(); colRender();
+};
 // Список файлов надо СКОПИРОВАТЬ до очистки поля: обнуление value опустошает и сам
 // FileList, а он живой — передашь ссылку, и к моменту сборки в ней уже ничего нет.
 document.getElementById('colFile').onchange = e=>{
