@@ -187,18 +187,38 @@
   /* Инструментов стало семь, и в одну строку на 360 px они уже не помещались — подписи
      слипались, крайняя кнопка упиралась в край. Раскладываем сеткой в две строки и
      группируем по смыслу: сверху работа с кадром и лицом, снизу работа с цветом. */
-  .toolbar{position:relative; z-index:2; display:none;
-    grid-template-columns:repeat(4, 1fr); gap:7px; padding:13px 12px 12px;
-    border-bottom:1px solid rgba(255,255,255,.06);}
-  .toolbar.on{display:grid;}
-  .tool{display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
-    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); color:var(--text);
-    font-size:9.5px; font-weight:500; letter-spacing:.01em; cursor:pointer;
-    padding:9px 2px; border-radius:11px;
-    white-space:nowrap; user-select:none; -webkit-user-select:none; position:relative; min-width:0;}
-  .tool svg{width:16px; height:16px; stroke:var(--gold);}
-  .tool.active{color:var(--gold-ink); background:var(--gold); border-color:transparent;}
-  .tool.active svg{stroke:var(--gold-ink);}
+  /* Панель — не пульт из одинаковых клавиш, а шкала: тон и цвет крупно наверху,
+     под краевой меткой — рабочая мелочь. Рамки убраны, разделяет воздух. */
+  .toolbar{position:relative; z-index:2; display:none; flex-direction:column;
+    padding:8px 14px 7px; border-bottom:1px solid rgba(255,255,255,.06);}
+  .toolbar.on{display:flex;}
+  .tool-main{display:grid; grid-template-columns:repeat(3, 1fr); gap:4px;}
+  .tool-rest{display:grid; grid-template-columns:repeat(5, 1fr); gap:2px;}
+  /* краевая метка — та же, что идёт по краю плёнки на контактном листе */
+  .tool-edge{display:flex; align-items:center; gap:9px; margin:6px 2px 5px;}
+  .tool-edge::before, .tool-edge::after{content:""; height:1px; background:rgba(255,255,255,.07);}
+  .tool-edge::before{width:14px; flex:0 0 auto;}
+  .tool-edge::after{flex:1;}
+  .tool-edge span{font-family:var(--mono); font-size:7.5px; letter-spacing:.22em; color:var(--faint);
+    flex:0 0 auto;}
+
+  .tool{display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    background:transparent; border:0; color:var(--text);
+    font-size:10px; font-weight:500; letter-spacing:.01em; cursor:pointer;
+    padding:7px 2px 8px; border-radius:10px;
+    white-space:nowrap; user-select:none; -webkit-user-select:none; position:relative; min-width:0;
+    transition:color .15s;}
+  .tool svg{width:19px; height:19px; stroke:var(--gold);}
+  .tool.sm{font-size:8.5px; gap:5px; padding:5px 1px 6px; color:var(--dim);}
+  .tool.sm svg{width:15px; height:15px; stroke:var(--dim);}
+  .tool:active{transform:scale(.94);}
+  /* выбранное отмечено чертой под подписью — как риска на шкале, без заливки */
+  .tool.active{color:var(--gold);}
+  .tool.active svg{stroke:var(--gold);}
+  .tool.active::after{content:""; position:absolute; left:50%; bottom:2px; width:16px; height:2px;
+    margin-left:-8px; border-radius:1px; background:var(--gold);}
+  .tool.sm.active{color:var(--gold);}
+  .tool.sm.active svg{stroke:var(--gold);}
 
   /* ── лента плёнки: перфорация по краю + кадры с номерами ── */
   .perf{display:flex; gap:25px; padding:9px 14px 0; overflow:hidden;}
@@ -387,7 +407,15 @@
   .adj-row .albl{flex:0 0 104px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     font-size:11px; letter-spacing:.04em; color:var(--dim); font-weight:600; text-transform:uppercase;}
   .adj-row input[type=range]{flex:1; height:38px;}
-  .adj-row .aval{flex:0 0 44px; text-align:right; font-family:var(--mono); font-size:13px; font-weight:600; color:var(--gold); font-variant-numeric:tabular-nums;}
+  /* Тронутое видно по цифре: нетронутый ноль сидит тихо, изменённое горит золотом.
+     Иначе с шести ползунков не понять, что именно ты уже подвинул. */
+  .adj-row .aval{flex:0 0 44px; text-align:right; font-family:var(--mono); font-size:13px; font-weight:600;
+    color:var(--gold); font-variant-numeric:tabular-nums; transition:color .15s;}
+  .adj-row .aval.zero{color:var(--faint); font-weight:500;}
+  /* риска середины — как ноль на шкале объектива; у односторонних её нет */
+  .adj-row.bi{position:relative;}
+  .adj-row.bi::after{content:""; position:absolute; left:calc(104px + 12px + (100% - 104px - 44px - 24px)/2);
+    top:50%; width:1px; height:9px; margin-top:-4.5px; background:rgba(255,255,255,.16); pointer-events:none;}
   .adj-reset{align-self:center; margin-top:5px; background:transparent; border:1px solid var(--line); color:var(--dim);
     font-size:11px; font-weight:600; letter-spacing:.08em; padding:8px 18px; border-radius:20px; cursor:pointer; text-transform:uppercase;}
   .adj-reset:active{transform:scale(.97);}
@@ -914,8 +942,27 @@
 </main>
 
 <div class="dock" id="dock">
+<!-- Инструменты разложены по весу, а не ровной сеткой: тон и цвет — то, ради чего
+     сюда заходят, они идут первым рядом и крупнее. Остальное — рабочие мелочи. -->
 <div class="toolbar" id="toolbar">
-  <button class="tool" id="compare">
+ <div class="tool-main">
+  <button class="tool" id="tabAdjust">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15.5" cy="16" r="2.6"/></svg>
+    Настройки<span class="dot"></span>
+  </button>
+  <button class="tool" data-go="curve">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V3M3 21h18"/><path d="M3 18c5 0 6-11 11-11 3 0 4 3 7 3"/></svg>
+    Кривая
+  </button>
+  <button class="tool" data-go="hsl">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 3.6v16.8M3.6 12h16.8M6 6l12 12M18 6L6 18"/></svg>
+    Цвета
+  </button>
+ </div>
+ <!-- по краю плёнки печатают её тип и номер кадра; здесь — то, что правда о снимке -->
+ <div class="tool-edge"><span id="toolEdge">—</span></div>
+ <div class="tool-rest">
+  <button class="tool sm" id="compare">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
     До/После
   </button>
@@ -931,22 +978,11 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
     Кадр
   </button>
-  <button class="tool" id="tabAdjust">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15.5" cy="16" r="2.6"/></svg>
-    Настройки<span class="dot"></span>
-  </button>
-  <button class="tool" data-go="curve">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V3M3 21h18"/><path d="M3 18c5 0 6-11 11-11 3 0 4 3 7 3"/></svg>
-    Кривая
-  </button>
-  <button class="tool" data-go="hsl">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 3.6v16.8M3.6 12h16.8M6 6l12 12M18 6L6 18"/></svg>
-    Цвета
-  </button>
-  <button class="tool" data-go="batch">
+  <button class="tool sm" data-go="batch">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="10" rx="1.6"/><path d="M7.5 4.5h11a1.6 1.6 0 0 1 1.6 1.6v9"/><path d="M6.4 14.2l2.6-2.8 2.4 2.3 2-2.1 2.6 3"/></svg>
     Съёмка
   </button>
+ </div>
 </div>
 
 <div class="tabs" id="tabs" style="display:none">
@@ -2245,6 +2281,19 @@ function paintStageBg(){
   const vig = document.getElementById('stageVig');
   if(vig) vig.style.display = 'block';
 }
+// Краевая метка панели: настоящий размер кадра и сколько его останется в файле.
+// Меняется вместе с кадрированием, поэтому обновляем при отрисовке, но пишем в DOM
+// только когда текст правда стал другим — иначе это делалось бы на каждый кадр ползунка.
+let toolEdgeWas = '';
+function syncToolEdge(){
+  const el = document.getElementById('toolEdge');
+  if(!el || !fullSource) return;
+  const mp = (fullSource.width * fullSource.height) / 1e6;
+  const t = fullSource.width + ' × ' + fullSource.height + '  ·  '
+          + (mp >= 1 ? mp.toFixed(1).replace('.', ',') + ' МП' : Math.round(mp*1000) + ' КП')
+          + '  ·  JPEG';
+  if(t !== toolEdgeWas){ el.textContent = t; toolEdgeWas = t; }
+}
 function renderNow(){
   if(compareMode){ buildEdited(); drawCompare(); return; }
   const src = (scrubbing && previewSrc) ? previewSrc : sourceCanvas;
@@ -2258,6 +2307,7 @@ function renderNow(){
   const bl = bloomAmount(LOOKS[selected], intensity/100, adjust);
   if(bl) applyBloom(stage, bl, bloomIsWarm(LOOKS[selected], adjust));
   if(!scrubbing) paintStageBg();
+  syncToolEdge();
 }
 
 // Миниатюры надо считать в ТОЧКАХ ЭКРАНА, а не в CSS-пикселях. Кадр ленты показывается
@@ -2577,18 +2627,31 @@ function bindSlider(el, onInput){
   el.addEventListener('input', ()=>{ onInput(); scrubbing = true; render(); settleRender(); });
   el.addEventListener('change', settleRender);
 }
+// Односторонние ползунки начинаются с нуля и растут вправо — риска середины им не нужна,
+// а плюс перед числом был бы бессмысленным: меньше нуля они не бывают.
+const ADJ_ONE_WAY = ['grain','bloom'];
+function adjValText(k){
+  return (ADJ_ONE_WAY.indexOf(k) < 0 && adjust[k] > 0 ? '+' : '') + adjust[k];
+}
+function paintAdjVal(k){
+  const out = document.getElementById('val-'+k);
+  out.textContent = adjValText(k);
+  out.classList.toggle('zero', adjust[k] === 0);
+}
 ADJ_KEYS.forEach(k=>{
-  const el = document.getElementById('adj-'+k), out = document.getElementById('val-'+k);
+  const el = document.getElementById('adj-'+k);
+  if(ADJ_ONE_WAY.indexOf(k) < 0) el.closest('.adj-row').classList.add('bi');
   bindSlider(el, ()=>{
     adjust[k] = +el.value;
-    out.textContent = (k!=='grain' && adjust[k]>0 ? '+' : '') + adjust[k];
+    paintAdjVal(k);
     updateAdjDot();
   });
+  paintAdjVal(k);
 });
 function syncAdjustUI(){
   ADJ_KEYS.forEach(k=>{
     document.getElementById('adj-'+k).value = adjust[k];
-    document.getElementById('val-'+k).textContent = (k!=='grain' && adjust[k]>0 ? '+' : '') + adjust[k];
+    paintAdjVal(k);
   });
   updateAdjDot();
 }
