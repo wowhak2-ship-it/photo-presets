@@ -584,7 +584,7 @@
   /* отступы задаются ниже составным селектором — .ov-dock обнуляет боковые */
   .batch-status{font-size:12.5px; color:var(--dim); text-align:center; margin:4px 0 10px; min-height:16px;}
   .batch-btns{display:flex; gap:8px;}
-  .batch-btns .crop-btn{flex:1;}
+  .batch-btns .crop-btn{flex:1; justify-content:center;}
   .batch-sheet{width:100%; margin-top:8px; background:transparent; border:1px solid var(--line-2);
     color:var(--gold); font-size:13px; font-weight:600; letter-spacing:.02em;
     padding:12px; border-radius:13px; cursor:pointer;}
@@ -712,10 +712,15 @@
   .collage.open{display:flex;}
   .col-stage{flex:1; min-height:0; display:grid; place-items:center;
     padding:calc(66px + env(safe-area-inset-top)) 18px 10px;}
-  .col-stage canvas{max-width:100%; max-height:100%; border-radius:4px;
-    box-shadow:0 18px 44px rgba(0,0,0,.5);}
+  /* Размер холста ставится из JS явными пикселями. max-height:100% здесь не работает:
+     через flex-обёртку с автоматической высотой проценту не от чего считаться, и
+     вертикальный коллаж уезжал под панель — та же ловушка, что была с фото в редакторе. */
+  .col-stage canvas{display:block; border-radius:4px; box-shadow:0 18px 44px rgba(0,0,0,.5);}
   .col-dock{padding:12px 0 calc(16px + env(safe-area-inset-bottom));}
   .col-empty{font-size:13px; line-height:1.5; color:var(--faint); text-align:center; padding:6px 20px 10px;}
+  .col-hint{font-family:var(--mono); font-size:8.5px; letter-spacing:.14em; color:var(--faint);
+    text-align:center; padding:2px 20px 8px; text-transform:uppercase;}
+  .col-stage canvas{touch-action:none;}   /* жесты наши: браузер не должен их перехватывать */
   .col-line{display:flex; align-items:center; gap:10px; padding:5px 16px;}
   .col-lbl{flex:0 0 54px; font-family:var(--mono); font-size:8.5px; letter-spacing:.18em; color:var(--dim);}
   .col-chips{flex:1; min-width:0; display:flex; gap:6px; overflow-x:auto; padding:2px 0;
@@ -735,7 +740,9 @@
   .col-line input[type=range]{flex:1; height:30px;}
   .col-val{flex:0 0 26px; text-align:right; font-family:var(--mono); font-size:12px; color:var(--gold);}
   .col-btns{display:flex; gap:8px; padding:8px 16px 0;}
-  .col-btns .crop-btn{flex:1;}
+  /* растянутая кнопка прижимает текст влево: .crop-btn — inline-flex без выравнивания
+     по главной оси, и на flex:1 надпись съезжает от центра */
+  .col-btns .crop-btn{flex:1; justify-content:center;}
 
   .retouch{position:fixed; inset:0; z-index:60; background:var(--bg-deep);
     background-image:radial-gradient(120% 55% at 50% 0%, #16181F 0%, var(--bg) 50%, var(--bg-deep) 100%);
@@ -1181,6 +1188,7 @@
   <div class="col-stage"><canvas id="colCanvas"></canvas></div>
   <div class="ov-dock col-dock">
     <div class="col-empty" id="colEmpty">Выберите от двух до четырёх кадров</div>
+    <div class="col-hint" id="colHint" style="display:none">Двигайте кадр пальцем, двумя — приближайте</div>
     <div class="col-line">
       <span class="col-lbl">ФОРМАТ</span>
       <div class="col-chips" id="colFormats"></div>
@@ -1188,6 +1196,10 @@
     <div class="col-line">
       <span class="col-lbl">СЕТКА</span>
       <div class="col-chips" id="colLayouts"></div>
+    </div>
+    <div class="col-line">
+      <span class="col-lbl">УГЛЫ</span>
+      <div class="col-chips" id="colCorners"></div>
     </div>
     <div class="col-line">
       <span class="col-lbl">ЗАЗОР</span>
@@ -4176,18 +4188,32 @@ const COL_LAYOUTS = {
     [[0,0,1,.5],[0,.5,.5,.5],[.5,.5,.5,.5]],
     [[0,0,.5,.5],[.5,0,.5,.5],[0,.5,1,.5]],
     [[0,0,.56,1],[.56,0,.44,.5],[.56,.5,.44,.5]],
+    [[0,0,.44,.5],[0,.5,.44,.5],[.44,0,.56,1]],
+    [[0,0,1,.6],[0,.6,.5,.4],[.5,.6,.5,.4]],
     [[0,0,1,1/3],[0,1/3,1,1/3],[0,2/3,1,1/3]],
     [[0,0,1/3,1],[1/3,0,1/3,1],[2/3,0,1/3,1]]
   ],
   4: [
     [[0,0,.5,.5],[.5,0,.5,.5],[0,.5,.5,.5],[.5,.5,.5,.5]],
+    [[0,0,.5,.58],[.5,0,.5,.42],[0,.58,.5,.42],[.5,.42,.5,.58]],
     [[0,0,.56,1],[.56,0,.44,1/3],[.56,1/3,.44,1/3],[.56,2/3,.44,1/3]],
     [[0,0,1,.55],[0,.55,1/3,.45],[1/3,.55,1/3,.45],[2/3,.55,1/3,.45]],
+    [[0,0,1,.4],[0,.4,.5,.32],[.5,.4,.5,.32],[0,.72,1,.28]],
     [[0,0,1,.25],[0,.25,1,.25],[0,.5,1,.25],[0,.75,1,.25]],
     [[0,0,.25,1],[.25,0,.25,1],[.5,0,.25,1],[.75,0,.25,1]]
   ]
 };
-let colImgs = [], colFmt = 1, colLayout = 0, colGap = 12;
+// Радиус кадра — в долях его меньшей стороны, иначе на маленьком кадре скругление
+// съедало бы угол, а на большом терялось.
+const COL_CORNERS = [ { name:'СКРУГЛЁННЫЕ', r:0.022 }, { name:'ПРЯМЫЕ', r:0 } ];
+let colImgs = [], colFmt = 1, colLayout = 0, colGap = 12, colCorner = 0;
+// Как кадр сидит в своей ячейке: сдвиг в долях ячейки и увеличение от «вписано по
+// заполнению». Без этого лицо, оказавшееся не в центре снимка, срезалось краем ячейки.
+let colPos = [];
+function colPosOf(i){
+  if(!colPos[i]) colPos[i] = { ox:0, oy:0, scale:1 };
+  return colPos[i];
+}
 const colEl = document.getElementById('collage');
 
 function colDraw(cv, W, H, gap){
@@ -4206,13 +4232,20 @@ function colDraw(cv, W, H, gap){
     const w = Math.round(r[2]*W - (r[0] > 0 ? half : gap) - (r[0]+r[2] < .999 ? half : gap));
     const h = Math.round(r[3]*H - (r[1] > 0 ? half : gap) - (r[1]+r[3] < .999 ? half : gap));
     if(w <= 0 || h <= 0) return;
-    const bw = bm.width, bh = bm.height, target = w/h;
-    let sw = bw, sh = bh, sx = 0, sy = 0;
-    if(bw/bh > target){ sw = Math.round(bh*target); sx = (bw - sw) >> 1; }
-    else { sh = Math.round(bw/target); sy = (bh - sh) >> 1; }
+    const bw = bm.width, bh = bm.height;
+    const st = colPosOf(i);
+    // за основу берём заполнение ячейки, поверх — увеличение и сдвиг, заданные пальцем
+    const s = Math.max(w/bw, h/bh) * st.scale;
+    const dw = bw*s, dh = bh*s;
+    // дальше края не пускаем: иначе в углу ячейки открылась бы дыра
+    const maxX = Math.max(0, (dw - w)/2), maxY = Math.max(0, (dh - h)/2);
+    const offX = Math.max(-maxX, Math.min(maxX, st.ox*w));
+    const offY = Math.max(-maxY, Math.min(maxY, st.oy*h));
+    const rad = Math.round(Math.min(w, h) * COL_CORNERS[colCorner].r);
     c.save();
-    roundRect(c, x, y, w, h, 6); c.clip();
-    c.drawImage(bm, sx, sy, sw, sh, x, y, w, h);
+    if(rad > 0){ roundRect(c, x, y, w, h, rad); c.clip(); }
+    else { c.beginPath(); c.rect(x, y, w, h); c.clip(); }
+    c.drawImage(bm, x + (w - dw)/2 + offX, y + (h - dh)/2 + offY, dw, dh);
     c.restore();
   });
 }
@@ -4221,6 +4254,7 @@ function colRender(){
   const cv = document.getElementById('colCanvas');
   const has = colImgs.length >= 2;
   document.getElementById('colEmpty').style.display = has ? 'none' : 'block';
+  document.getElementById('colHint').style.display = has ? 'block' : 'none';
   cv.style.display = has ? 'block' : 'none';
   document.getElementById('colSave').disabled = !has;
   document.getElementById('colShare').style.visibility = has ? 'visible' : 'hidden';
@@ -4228,6 +4262,38 @@ function colRender(){
   // превью считаем в уменьшенном холсте: полный 9:16 пересчитывался бы на каждый шаг ползунка
   const k = 720 / Math.max(f.w, f.h);
   colDraw(cv, Math.round(f.w*k), Math.round(f.h*k), Math.round(colGap*k*2));
+  colFit();
+}
+// Вписываем превью в свободное место сами: считаем, сколько его осталось между шапкой
+// и панелью, и ставим размер в пикселях.
+function colFit(){
+  const cv = document.getElementById('colCanvas');
+  const box = document.querySelector('.col-stage');
+  if(!cv || !box || !cv.width) return;
+  const cs = getComputedStyle(box);
+  const availW = box.clientWidth  - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const availH = box.clientHeight - parseFloat(cs.paddingTop)  - parseFloat(cs.paddingBottom);
+  if(availW <= 0 || availH <= 0) return;
+  const ar = cv.width / cv.height;
+  let w = availW, h = w/ar;
+  if(h > availH){ h = availH; w = h*ar; }
+  cv.style.width = Math.round(w) + 'px';
+  cv.style.height = Math.round(h) + 'px';
+}
+addEventListener('resize', ()=>{ if(colEl.classList.contains('open')) colFit(); });
+// Раскладка и формат вместе решают, какой формы выйдет кадр: четыре строки в 16:9
+// дают ленточки, четыре колонки в 9:16 — спички. Ничего не прячем — выбор за человеком,
+// но сетки, где кадр остаётся кадром, показываем первыми.
+function colUsableLayouts(){
+  const f = COL_FORMATS[colFmt];
+  const list = COL_LAYOUTS[colImgs.length] || [];
+  return list.map((cells, i)=>({
+    i,
+    worst: cells.reduce((acc, r)=>{
+      const ar = (r[2]*f.w) / (r[3]*f.h);
+      return Math.max(acc, ar > 1 ? ar : 1/ar);
+    }, 0)
+  })).sort((a, b)=> a.worst - b.worst).map(v=> v.i);
 }
 function colBuildChips(){
   const fh = document.getElementById('colFormats');
@@ -4236,13 +4302,25 @@ function colBuildChips(){
     const b = document.createElement('button');
     b.className = 'col-chip' + (i === colFmt ? ' on' : '');
     b.textContent = f.name;
-    b.onclick = ()=>{ colFmt = i; colBuildChips(); colRender(); };
+    b.onclick = ()=>{ colFmt = i; colBuildChips(); colRender(); };   // сетки пересобираются под формат
     fh.appendChild(b);
+  });
+  const ch = document.getElementById('colCorners');
+  ch.innerHTML = '';
+  COL_CORNERS.forEach((v, i)=>{
+    const b = document.createElement('button');
+    b.className = 'col-chip' + (i === colCorner ? ' on' : '');
+    b.textContent = v.name;
+    b.onclick = ()=>{ colCorner = i; colBuildChips(); colRender(); };
+    ch.appendChild(b);
   });
   const lh = document.getElementById('colLayouts');
   lh.innerHTML = '';
-  const list = COL_LAYOUTS[colImgs.length] || [];
-  list.forEach((cells, i)=>{
+  const all = COL_LAYOUTS[colImgs.length] || [];
+  const usable = colUsableLayouts();          // все сетки, удачные для формата — впереди
+  if(!all[colLayout]) colLayout = usable[0] || 0;
+  usable.forEach(i=>{
+    const cells = all[i];
     const b = document.createElement('button');
     b.className = 'col-chip' + (i === colLayout ? ' on' : '');
     // схему рисуем теми же долями, что и сам коллаж: чип показывает, что получится
@@ -4274,6 +4352,7 @@ async function colTake(files){
     }
   }
   colLayout = 0;
+  colPos = [];                               // новые кадры — новая посадка в ячейках
   colBuildChips(); colRender();
 }
 function batchStatusless(t){ toast(t); }
@@ -4293,6 +4372,82 @@ async function colBlob(){
   cv.width = 0; cv.height = 0;
   return blob;
 }
+// Пальцем двигаем кадр внутри его ячейки, двумя — приближаем. Ячейку выбираем по месту
+// касания: раскладка задана долями, поэтому достаточно перевести точку в доли холста.
+(function(){
+  const cv = document.getElementById('colCanvas');
+  const touches = new Map();
+  let cell = -1, base = null;
+
+  const rel = e=>{ const r = cv.getBoundingClientRect();
+    return { x:(e.clientX - r.left)/r.width, y:(e.clientY - r.top)/r.height, w:r.width, h:r.height }; };
+  const cellAt = (nx, ny)=>{
+    const cells = (COL_LAYOUTS[colImgs.length] || [])[colLayout] || [];
+    for(let i=0;i<cells.length;i++){
+      const r = cells[i];
+      if(nx >= r[0] && nx <= r[0]+r[2] && ny >= r[1] && ny <= r[1]+r[3]) return i;
+    }
+    return -1;
+  };
+  const dist = ()=>{
+    const p = [...touches.values()];
+    return p.length < 2 ? 0 : Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+  };
+  const mid = ()=>{
+    const p = [...touches.values()];
+    return { x:(p[0].x + p[1].x)/2, y:(p[0].y + p[1].y)/2 };
+  };
+
+  cv.addEventListener('pointerdown', e=>{
+    if(!colImgs.length) return;
+    cv.setPointerCapture(e.pointerId);
+    touches.set(e.pointerId, { x:e.clientX, y:e.clientY });
+    const p = rel(e);
+    if(cell < 0) cell = cellAt(p.x, p.y);
+    if(cell < 0) return;
+    const st = colPosOf(cell);
+    base = { ox:st.ox, oy:st.oy, scale:st.scale, x:e.clientX, y:e.clientY, d:dist(), m:touches.size > 1 ? mid() : null };
+    e.preventDefault();
+  });
+
+  cv.addEventListener('pointermove', e=>{
+    if(cell < 0 || !touches.has(e.pointerId) || !base) return;
+    touches.set(e.pointerId, { x:e.clientX, y:e.clientY });
+    const cells = (COL_LAYOUTS[colImgs.length] || [])[colLayout] || [];
+    const r = cells[cell]; if(!r) return;
+    const box = cv.getBoundingClientRect();
+    const cellW = box.width * r[2], cellH = box.height * r[3];
+    const st = colPosOf(cell);
+
+    if(touches.size > 1){
+      const d = dist();
+      if(base.d > 0 && d > 0) st.scale = Math.max(1, Math.min(4, base.scale * (d / base.d)));
+      const m = mid();
+      if(base.m){
+        st.ox = base.ox + (m.x - base.m.x)/cellW;
+        st.oy = base.oy + (m.y - base.m.y)/cellH;
+      }
+    } else {
+      st.ox = base.ox + (e.clientX - base.x)/cellW;
+      st.oy = base.oy + (e.clientY - base.y)/cellH;
+    }
+    colRender();
+    e.preventDefault();
+  }, { passive:false });
+
+  const end = e=>{
+    touches.delete(e.pointerId);
+    if(!touches.size){ cell = -1; base = null; }
+    else if(cell >= 0){                     // палец убрали, второй остался — продолжаем от него
+      const st = colPosOf(cell);
+      const p = [...touches.values()][0];
+      base = { ox:st.ox, oy:st.oy, scale:st.scale, x:p.x, y:p.y, d:0, m:null };
+    }
+  };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
+})();
+
 document.getElementById('colPick').onclick = ()=> document.getElementById('colFile').click();
 document.getElementById('colFile').onchange = e=>{ const fs = e.target.files; e.target.value = ''; colTake(fs); };
 document.getElementById('colClose').onclick = closeCollage;
