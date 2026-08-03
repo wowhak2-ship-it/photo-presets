@@ -414,11 +414,28 @@
   .tab.has-adj .dot{display:block;}
 
   /* manual adjustments panel */
+  /* Одиннадцать ползунков выше экрана, и панель выдавливала снимок за край — а править
+     свет, не видя кадра, невозможно. Панель занимает не больше трети высоты и
+     прокручивается внутри себя; фото остаётся на месте. */
   .adjust-panel{position:relative; z-index:2; display:none; flex-direction:column; gap:3px;
-    padding:8px 20px calc(10px + env(safe-area-inset-bottom));}
-  .adj-row{display:flex; align-items:center; gap:12px; height:38px;}
+    padding:8px 20px calc(10px + env(safe-area-inset-bottom));
+    max-height:29vh; overflow-y:auto; overscroll-behavior:contain;
+    scrollbar-width:none; -webkit-overflow-scrolling:touch;}
+  .adjust-panel::-webkit-scrollbar{display:none;}
+  /* «Сохранить как пресет» — главное действие панели, и оно не должно уезжать в конец
+     прокрутки: держим его прижатым к нижнему краю, поверх уходящих под него ползунков */
+  .adjust-panel .adj-acts{position:sticky; bottom:0; z-index:1; flex:0 0 auto;
+    margin:2px -20px 0; padding:8px 20px calc(4px + env(safe-area-inset-bottom));
+    background:linear-gradient(transparent, var(--bg) 18%);}
+  /* flex-строки по умолчанию сжимаются — в панели с ограниченной высотой они наезжали
+     друг на друга вместо того, чтобы дать прокрутку */
+  .adj-row{display:flex; align-items:center; gap:12px; height:38px; flex:0 0 38px;}
   .adj-row .albl{flex:0 0 104px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     font-size:11px; letter-spacing:.04em; color:var(--dim); font-weight:600; text-transform:uppercase;}
+  /* одиннадцать ползунков подряд не читаются — разбиваем на группы по смыслу */
+  .adj-group{flex:0 0 auto; font-family:var(--mono); font-size:8px; letter-spacing:.22em; color:var(--faint);
+    padding:10px 2px 2px; border-top:1px solid rgba(255,255,255,.05); margin-top:4px;}
+  .adj-group:first-child{border-top:0; margin-top:0; padding-top:2px;}
   .adj-row input[type=range]{flex:1; height:38px;}
   /* Тронутое видно по цифре: нетронутый ноль сидит тихо, изменённое горит золотом.
      Иначе с шести ползунков не понять, что именно ты уже подвинул. */
@@ -1074,10 +1091,19 @@
 <footer id="chips"></footer>
 
 <div class="adjust-panel" id="panelAdjust">
+  <div class="adj-group">СВЕТ</div>
   <div class="adj-row"><span class="albl">Экспозиция</span><input type="range" id="adj-exposure" min="-100" max="100" value="0"><span class="aval" id="val-exposure">0</span></div>
   <div class="adj-row"><span class="albl">Контраст</span><input type="range" id="adj-contrast" min="-100" max="100" value="0"><span class="aval" id="val-contrast">0</span></div>
+  <div class="adj-row"><span class="albl">Тени</span><input type="range" id="adj-shadows" min="-100" max="100" value="0"><span class="aval" id="val-shadows">0</span></div>
+  <div class="adj-row"><span class="albl">Света</span><input type="range" id="adj-highlights" min="-100" max="100" value="0"><span class="aval" id="val-highlights">0</span></div>
+  <div class="adj-group">ЦВЕТ</div>
   <div class="adj-row"><span class="albl">Тепло</span><input type="range" id="adj-temp" min="-100" max="100" value="0"><span class="aval" id="val-temp">0</span></div>
+  <div class="adj-row"><span class="albl">Оттенок</span><input type="range" id="adj-tint" min="-100" max="100" value="0"><span class="aval" id="val-tint">0</span></div>
   <div class="adj-row"><span class="albl">Насыщенность</span><input type="range" id="adj-saturation" min="-100" max="100" value="0"><span class="aval" id="val-saturation">0</span></div>
+  <div class="adj-group">ТОНИРОВАНИЕ</div>
+  <div class="adj-row"><span class="albl">Тон теней</span><input type="range" id="adj-splitSh" min="-100" max="100" value="0"><span class="aval" id="val-splitSh">0</span></div>
+  <div class="adj-row"><span class="albl">Тон светов</span><input type="range" id="adj-splitHi" min="-100" max="100" value="0"><span class="aval" id="val-splitHi">0</span></div>
+  <div class="adj-group">ФАКТУРА</div>
   <div class="adj-row"><span class="albl">Зерно</span><input type="range" id="adj-grain" min="0" max="100" value="0"><span class="aval" id="val-grain">0</span></div>
   <div class="adj-row"><span class="albl">Свечение</span><input type="range" id="adj-bloom" min="0" max="100" value="0"><span class="aval" id="val-bloom">0</span></div>
   <div class="adj-acts">
@@ -1830,13 +1856,21 @@ function applyHsl(img, T, y0, y1){
 
 // Manual adjustments layered on top of the preset (all 0 = no-op). Ranges: exposure/contrast/temp/saturation -100..100, grain 0..100
 function applyAdjust(img, a, y0, y1){
-  if(!(a.exposure||a.contrast||a.temp||a.saturation||a.grain)) return img;
+  if(!(a.exposure||a.contrast||a.temp||a.saturation||a.grain
+       ||a.shadows||a.highlights||a.tint||a.splitSh||a.splitHi)) return img;
   const d = img.data;
   const ex = 1 + a.exposure/100*0.5;   // 0.5..1.5 brightness multiplier
   const c  = a.contrast/100*0.6;       // -0.6..0.6 around mid grey
   const tp = a.temp/100*28;            // -28..28 warm/cool
   const sat = 1 + a.saturation/100;    // 0..2
   const gr = a.grain/100*80;           // 0..80 noise amplitude
+  // Тени и света тянутся по ВЕСУ яркости, а не порогом: у порога на плавном небе
+  // проступает шов. Вес квадратичный — середина кадра почти не двигается, и правка
+  // не оборачивается общим осветлением.
+  const sh = (a.shadows||0)/100, hg = (a.highlights||0)/100;
+  const tn = (a.tint||0)/100*24;       // зелёный ↔ пурпурный: вторая ось баланса белого
+  const spS = (a.splitSh||0)/100, spH = (a.splitHi||0)/100;   // раздельное тонирование
+  const tones = sh || hg || spS || spH;
   const W = img.width;                 // зерно того же размера, что и у пресета
   const cell = gr ? Math.max(W, img.height)/GRAIN_ACROSS : 1;      // та же доля кадра, что и у пресета
   // Зерно раскладываем построчно, как у пресета. Раньше здесь на КАЖДЫЙ пиксель считалось
@@ -1866,6 +1900,13 @@ function applyAdjust(img, a, y0, y1){
     for(let x=0; x<W; x++, p+=4){
       let R = d[p]*ex, G = d[p+1]*ex, B = d[p+2]*ex;
       R += tp; B -= tp;
+      if(tn){ R += tn*0.5; B += tn*0.5; G -= tn*0.5; }
+      if(tones){
+        const L = (R+G+B)/765;                    // 0..1, до контраста — он бы исказил вес
+        const wS = (1-L)*(1-L), wH = L*L;
+        if(sh || hg){ const add = (sh*wS + hg*wH)*115; R+=add; G+=add; B+=add; }
+        if(spS || spH){ const t = (spS*wS + spH*wH)*26; R+=t; B-=t; }
+      }
       if(c){ R=(R-128)*(1+c)+128; G=(G-128)*(1+c)+128; B=(B-128)*(1+c)+128; }
       if(sat!==1){ const avg=(R+G+B)/3; R=avg+(R-avg)*sat; G=avg+(G-avg)*sat; B=avg+(B-avg)*sat; }
       if(gr){ const g = gLine[x]; R+=g; G+=g; B+=g; }
@@ -2063,8 +2104,12 @@ let selected = 0, intensity = 100, sourceCanvas = null, compareMode = false, com
 // Свечение стоит в этом ряду особняком: остальные правки считаются по пикселям, а оно
 // размывает и накладывает целый кадр — поэтому applyAdjust его не трогает, зато пресет
 // и файл набора уносят его вместе с остальными. Без него чужой светящийся вид не продать.
-const ADJ_KEYS = ['exposure','contrast','temp','saturation','grain','bloom'];
-let adjust = { exposure:0, contrast:0, temp:0, saturation:0, grain:0, bloom:0 };
+// НОВЫЕ ключи дописываются В КОНЕЦ: ссылка на пресет пишет значения подряд по этому
+// списку, и разосланные ранее ссылки читаются дальше — недостающее просто станет нулём.
+const ADJ_KEYS = ['exposure','contrast','temp','saturation','grain','bloom',
+                  'shadows','highlights','tint','splitSh','splitHi'];
+let adjust = { exposure:0, contrast:0, temp:0, saturation:0, grain:0, bloom:0,
+               shadows:0, highlights:0, tint:0, splitSh:0, splitHi:0 };
 const stage = document.getElementById('stage');
 const sctx = stage.getContext('2d', { willReadFrequently:true });
 
@@ -3161,7 +3206,8 @@ async function sharePresets(list, slug, pack){
 // Базовый лук ищем ПО ИМЕНИ. Если список встроенных когда-нибудь изменится или
 // перетасуется, сохранённый пресет не начнёт молча показывать чужую плёнку.
 function myBase(p){ const i = LOOKS.findIndex(l=> l.name === p.base); return i < 0 ? 0 : i; }
-const ZERO_ADJ = { exposure:0, contrast:0, temp:0, saturation:0, grain:0, bloom:0 };
+const ZERO_ADJ = { exposure:0, contrast:0, temp:0, saturation:0, grain:0, bloom:0,
+                   shadows:0, highlights:0, tint:0, splitSh:0, splitHi:0 };
 // Отрисовка пресета в миниатюру: тот же порядок, что в processedData.
 function myRender(id, p, orig){
   const look = LOOKS[myBase(p)], mix = (p.intensity == null ? 100 : p.intensity)/100;
@@ -3174,7 +3220,9 @@ function myRender(id, p, orig){
 }
 // Короткая расшифровка рецепта — и в диалоге, и в списке настроек человек видит,
 // что пресет реально делает, а не только как он называется.
-const ADJ_RU = { exposure:'экспозиция', contrast:'контраст', temp:'тепло', saturation:'насыщенность', grain:'зерно', bloom:'свечение' };
+const ADJ_RU = { exposure:'экспозиция', contrast:'контраст', temp:'тепло', saturation:'насыщенность',
+  grain:'зерно', bloom:'свечение', shadows:'тени', highlights:'света', tint:'оттенок',
+  splitSh:'тон теней', splitHi:'тон светов' };
 function myRecipeText(p){
   const parts = [ (p.base || LOOKS[0].name).toUpperCase() ];
   const inten = p.intensity == null ? 100 : p.intensity;
