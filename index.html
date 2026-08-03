@@ -190,11 +190,28 @@
   /* Инструментов стало семь, и в одну строку на 360 px они уже не помещались — подписи
      слипались, крайняя кнопка упиралась в край. Раскладываем сеткой в две строки и
      группируем по смыслу: сверху работа с кадром и лицом, снизу работа с цветом. */
-  /* Панель — не пульт из одинаковых клавиш, а шкала: тон и цвет крупно наверху,
-     под краевой меткой — рабочая мелочь. Рамки убраны, разделяет воздух. */
-  .toolbar{position:relative; z-index:2; display:none; flex-direction:column;
-    padding:8px 14px 7px; border-bottom:1px solid rgba(255,255,255,.06);}
-  .toolbar.on{display:flex;}
+  /* Ряд разделов: одно место, откуда доступно всё редактирование. Подчёркивание вместо
+     заливки — тот же язык, что у выбранного инструмента и у риски на шкале. */
+  .secs{position:relative; z-index:2; display:none; gap:2px; padding:6px 10px 0;}
+  body.editing .secs{display:flex;}
+  .secs button{flex:1; position:relative; background:transparent; border:0; color:var(--dim);
+    font-size:11px; font-weight:600; letter-spacing:.02em; padding:9px 2px 11px; cursor:pointer;
+    white-space:nowrap; min-width:0;}
+  .secs button.on{color:var(--gold);}
+  .secs button.on::after{content:""; position:absolute; left:50%; bottom:3px; width:18px; height:2px;
+    margin-left:-9px; border-radius:1px; background:var(--gold);}
+  .secs .dot{position:absolute; top:6px; right:calc(50% - 22px); width:5px; height:5px; border-radius:50%;
+    background:var(--china); opacity:0; transition:opacity .15s;}
+  .secs .dot.on{opacity:1;}
+  /* содержимое разделов: показан ровно один */
+  .dock .sec{display:none;}
+  .dock .sec.on{display:flex;}
+  #secFilms.sec.on{display:block;}
+  #secColor.sec.on, #secCurve.sec.on{flex-direction:column; padding:6px 20px calc(8px + env(safe-area-inset-bottom));}
+  #secCurve .cv-pad{margin:0 auto;}
+
+  .toolbar{position:relative; z-index:2; flex-direction:column;
+    padding:8px 14px 7px;}
   .tool-main{display:grid; grid-template-columns:repeat(3, 1fr); gap:4px;}
   .tool-rest{display:grid; grid-template-columns:repeat(6, 1fr); gap:1px;}
   /* краевая метка — та же, что идёт по краю плёнки на контактном листе */
@@ -1027,25 +1044,19 @@
 </main>
 
 <div class="dock" id="dock">
-<!-- Инструменты разложены по весу, а не ровной сеткой: тон и цвет — то, ради чего
-     сюда заходят, они идут первым рядом и крупнее. Остальное — рабочие мелочи. -->
-<div class="toolbar" id="toolbar">
- <div class="tool-main">
-  <button class="tool" id="tabAdjust">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15.5" cy="16" r="2.6"/></svg>
-    Настройки<span class="dot"></span>
-  </button>
-  <button class="tool" data-go="curve">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V3M3 21h18"/><path d="M3 18c5 0 6-11 11-11 3 0 4 3 7 3"/></svg>
-    Кривая
-  </button>
-  <button class="tool" data-go="hsl">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 3.6v16.8M3.6 12h16.8M6 6l12 12M18 6L6 18"/></svg>
-    Цвета
-  </button>
- </div>
- <!-- по краю плёнки печатают её тип и номер кадра; здесь — то, что правда о снимке -->
- <div class="tool-edge"><span id="toolEdge">—</span></div>
+<!-- Один ряд разделов вместо россыпи окон: плёнка, свет, цвет и кривая живут на одном
+     месте, снимок при этом не уходит с экрана. Полноэкранными остались только те
+     инструменты, которым правда нужен весь экран, — кадр, ретушь и съёмка. -->
+<nav class="secs" id="secs">
+  <button data-sec="films" class="on">Плёнки</button>
+  <button data-sec="light">Свет<span class="dot" id="secLightDot"></span></button>
+  <button data-sec="color">Цвет<span class="dot" id="secColorDot"></span></button>
+  <button data-sec="curve">Кривая<span class="dot" id="secCurveDot"></span></button>
+  <button data-sec="more">Ещё</button>
+</nav>
+<!-- по краю плёнки печатают её тип и номер кадра; здесь — то, что правда о снимке -->
+<div class="tool-edge"><span id="toolEdge">—</span></div>
+<div class="toolbar sec" data-sec="more" id="toolbar">
  <div class="tool-rest">
   <button class="tool sm" id="compare">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
@@ -1087,10 +1098,40 @@
   </div>
 </div>
 
-<div class="perf" id="perf"></div>
-<footer id="chips"></footer>
+<div class="sec on" data-sec="films" id="secFilms">
+  <div class="perf" id="perf"></div>
+  <footer id="chips"></footer>
+</div>
 
-<div class="adjust-panel" id="panelAdjust">
+<!-- Цвета и кривая переехали сюда из отдельных полноэкранных окон: они правят снимок
+     сразу, и прятать его ради них было незачем. -->
+<div class="sec" data-sec="color" id="secColor">
+  <div class="hs-bands" id="hsBands"></div>
+  <div class="hs-name" id="hsName">Красный</div>
+  <div class="adj-row"><span class="albl">Тон</span><input type="range" id="hs-hue" min="-100" max="100" value="0"><span class="aval" id="hsv-hue">0</span></div>
+  <div class="adj-row"><span class="albl">Насыщенность</span><input type="range" id="hs-sat" min="-100" max="100" value="0"><span class="aval" id="hsv-sat">0</span></div>
+  <div class="adj-row"><span class="albl">Яркость</span><input type="range" id="hs-lum" min="-100" max="100" value="0"><span class="aval" id="hsv-lum">0</span></div>
+  <div class="cv-acts">
+    <button class="adj-reset" id="hsResetOne">Сбросить цвет</button>
+    <button class="adj-reset" id="hsResetAll">Сбросить всё</button>
+  </div>
+</div>
+
+<div class="sec" data-sec="curve" id="secCurve">
+  <div class="cv-pad"><canvas id="cvBoard"></canvas></div>
+  <div class="cv-chans" id="cvChans">
+    <button data-ch="rgb" class="on">RGB</button>
+    <button data-ch="r">R</button>
+    <button data-ch="g">G</button>
+    <button data-ch="b">B</button>
+  </div>
+  <div class="cv-acts">
+    <button class="adj-reset" id="cvResetCh">Сбросить канал</button>
+    <button class="adj-reset" id="cvResetAll">Сбросить всё</button>
+  </div>
+</div>
+
+<div class="adjust-panel sec" data-sec="light" id="panelAdjust">
   <div class="adj-group">СВЕТ</div>
   <div class="adj-row"><span class="albl">Экспозиция</span><input type="range" id="adj-exposure" min="-100" max="100" value="0"><span class="aval" id="val-exposure">0</span></div>
   <div class="adj-row"><span class="albl">Контраст</span><input type="range" id="adj-contrast" min="-100" max="100" value="0"><span class="aval" id="val-contrast">0</span></div>
@@ -1152,54 +1193,10 @@
   </div>
 </div>
 
-<div class="hsl" id="hsl">
-  <div class="ov-top">
-    <button class="ov-back" id="hsCancel" aria-label="Отмена">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-    </button>
-    <span class="crop-top">Цвета</span>
-    <button class="ov-act gold" id="hsApply">Готово</button>
-  </div>
-  <div class="hs-body"><div class="ov-frame"><canvas id="hsShot"></canvas><button class="ov-cmp" id="hsCmp">До/После</button></div></div>
-  <div class="ov-dock hs-dock">
-    <div class="hs-bands" id="hsBands"></div>
-    <div class="hs-name" id="hsName">Красный</div>
-    <div class="adj-row"><span class="albl">Тон</span><input type="range" id="hs-hue" min="-100" max="100" value="0"><span class="aval" id="hsv-hue">0</span></div>
-    <div class="adj-row"><span class="albl">Насыщенность</span><input type="range" id="hs-sat" min="-100" max="100" value="0"><span class="aval" id="hsv-sat">0</span></div>
-    <div class="adj-row"><span class="albl">Яркость</span><input type="range" id="hs-lum" min="-100" max="100" value="0"><span class="aval" id="hsv-lum">0</span></div>
-    <div class="cv-acts">
-      <button class="adj-reset" id="hsResetOne">Сбросить цвет</button>
-      <button class="adj-reset" id="hsResetAll">Сбросить всё</button>
-    </div>
-  </div>
-</div>
-
-<div class="curve" id="curve">
-  <div class="ov-top">
-    <button class="ov-back" id="cvCancel" aria-label="Отмена">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-    </button>
-    <span class="crop-top">Кривая</span>
-    <button class="ov-act gold" id="cvApply">Готово</button>
-  </div>
-  <div class="cv-body">
-    <div class="cv-shot"><div class="ov-frame"><canvas id="cvShot"></canvas><button class="ov-cmp" id="cvCmp">До/После</button></div></div>
-    <div class="cv-pad"><canvas id="cvBoard"></canvas></div>
-  </div>
-  <div class="ov-dock cv-dock">
-    <div class="cv-chans" id="cvChans">
-      <button data-ch="rgb" class="on">RGB</button>
-      <button data-ch="r">R</button>
-      <button data-ch="g">G</button>
-      <button data-ch="b">B</button>
-    </div>
-    <div class="cv-hint" id="cvHint">Тап по полю — новая точка, тап по точке — убрать</div>
-    <div class="cv-acts">
-      <button class="adj-reset" id="cvResetCh">Сбросить канал</button>
-      <button class="adj-reset" id="cvResetAll">Сбросить всё</button>
-    </div>
-  </div>
-</div>
+<!-- Окна «Цвета» и «Кривая» разобраны: их содержимое живёт разделами нижней панели.
+     Скрытые холсты остаются, чтобы старый код рисования не спотыкался о пустоту. -->
+<canvas id="hsShot" hidden></canvas>
+<canvas id="cvShot" hidden></canvas>
 
 <div class="batch" id="batch">
   <div class="cam-top">
@@ -2591,6 +2588,33 @@ function goHome(){
   if(sourceCanvas && Math.abs(sheetColW() - hlBuiltFor) > 8) setTimeout(buildHomeLooks, 0);
   if(compareMode){ compareMode = false; compareBtn.classList.remove('active'); cmpOverlay.classList.remove('on'); render(); }
 }
+// ─── Разделы нижней панели ───
+// Плёнка, свет, цвет и кривая — это не отдельные экраны, а взгляды на один и тот же
+// снимок. Держим их в одной панели: кадр остаётся перед глазами, ничего не всплывает
+// поверх и не требует «Готово».
+let secNow = 'films';
+function setSection(name){
+  secNow = name;
+  document.querySelectorAll('#secs button').forEach(b=> b.classList.toggle('on', b.dataset.sec === name));
+  document.querySelectorAll('.dock .sec').forEach(el=> el.classList.toggle('on', el.dataset.sec === name));
+  if(name === 'color') openHsl();
+  if(name === 'curve') openCurve();
+  if(name === 'light') syncAdjustUI();
+  syncSecDots();
+  fitStage();
+}
+// Точка у раздела значит «здесь что-то правлено» — иначе о своих же правках забываешь.
+function syncSecDots(){
+  const d = (id, on)=>{ const el = document.getElementById(id); if(el) el.classList.toggle('on', !!on); };
+  d('secLightDot', ADJ_KEYS.some(k=> adjust[k] !== 0));
+  d('secColorDot', hslTouched());
+  d('secCurveDot', curveTouched());
+}
+document.getElementById('secs').onclick = e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  setSection(b.dataset.sec);
+};
+
 function applyPendingTool(){
   const t = pendingTool; pendingTool = null;
   // retouch/crop are full-screen overlays over the CURRENT screen:
@@ -2598,8 +2622,8 @@ function applyPendingTool(){
   if(t==='retouch'){ openRetouch(); return; }
   if(t==='shadows'){ openShadows(); return; }
   if(t==='crop'){ openCrop(); return; }
-  if(t==='curve'){ openCurve(); return; }
-  if(t==='hsl'){ openHsl(); return; }
+  if(t==='curve'){ goEditor(); setSection('curve'); return; }
+  if(t==='hsl'){ goEditor(); setSection('color'); return; }
   if(t==='batch'){ openBatch(); return; }
   if(t==='collage'){ openCollage(); return; }
   if(!t) return;   // выбрали фото просто через «Галерея»/«Камера» — остаёмся на главной, фото уже подхвачено лентой луков
@@ -2745,26 +2769,11 @@ bindSlider(document.getElementById('intensity'), ()=>{
 
 // ─── Tabs (presets / adjust) + manual adjustment sliders ───
 let curTab = 'presets';
+// Осталось от прежних вкладок: теперь это просто переход к нужному разделу панели.
 function setTab(name){
   curTab = name;
-  document.querySelectorAll('.tab').forEach(t=> t.classList.toggle('active', t.dataset.tab===name));
-  const pres = name==='presets';
-  document.getElementById('sliderRow').style.display = 'none';   // интенсивность теперь жест по кадру
-  document.getElementById('perf').style.display   = pres?'flex':'none';
-  document.getElementById('chips').style.display  = pres?'flex':'none';
-  document.getElementById('panelAdjust').style.display = pres?'none':'flex';
-  const hint = document.getElementById('intHint');
-  if(hint) hint.style.display = pres?'block':'none';            // подсказка только в режиме луков
-  const demo = document.getElementById('swipeDemo');            // и показ жеста вместе с ней
-  if(demo) demo.style.display = (pres && !swipeLearned) ? 'block' : 'none';
-  const tAdj = document.getElementById('tabAdjust');            // инструмент подсвечен, пока открыт
-  if(tAdj) tAdj.classList.toggle('active', !pres);
-  fitStage();   // panel height differs per tab → re-fit the photo
-  if(compareMode) drawCompare();
+  setSection(name === 'adjust' ? 'light' : 'films');
 }
-document.querySelectorAll('.tab').forEach(t=> t.onclick = ()=> setTab(t.dataset.tab));
-// «Настройки» — четвёртый инструмент в ряду: тумблер между луками и ручной коррекцией
-document.getElementById('tabAdjust').onclick = ()=> setTab(curTab === 'adjust' ? 'presets' : 'adjust');
 
 function updateAdjDot(){
   const on = ADJ_KEYS.some(k=> adjust[k]!==0);
@@ -3831,15 +3840,8 @@ let hsBand = HSL_BANDS[0].key, hsBackup = null;
     host.appendChild(el);
   });
 })();
-function hsDrawShot(){
-  const src = previewSrc || sourceCanvas;
-  if(!src) return;
-  if(hsShot.width !== src.width || hsShot.height !== src.height){
-    hsShot.width = src.width; hsShot.height = src.height;
-    hsShot.parentElement.style.aspectRatio = src.width + ' / ' + src.height;
-  }
-  hsShot.getContext('2d').putImageData(processedData(src), 0, 0);
-}
+// Снимок теперь один на всех — тот, что на экране. Отдельное превью цветов не нужно.
+function hsDrawShot(){ render(); }
 // Сколько КАЖДОГО цвета в кадре. Без этого ползунок «Зелёный» на снимке с листвой
 // берёт треть эффекта (настоящая листва лежит около 83°, то есть на две трети в Жёлтом),
 // и человек решает, что инструмент сломан. Считаем по уменьшенной копии — дёшево.
@@ -3911,8 +3913,7 @@ function holdCompare(btn, off, redraw){
   btn.addEventListener('pointercancel', up);
   btn.addEventListener('pointerleave', up);
 }
-holdCompare(document.getElementById('hsCmp'),
-  on=>{ hslTables = on ? null : buildHslTables(); }, ()=> hsDrawShot());
+// «До/После» больше не дублируется в каждом окне — он один, в разделе «Ещё».
 document.getElementById('hsBands').onclick = e=>{
   const b = e.target.closest('button'); if(!b) return;
   hsBand = b.dataset.band; hsSync();
@@ -3931,20 +3932,13 @@ document.getElementById('hsResetOne').onclick = ()=>{
 document.getElementById('hsResetAll').onclick = ()=>{
   HSL_BANDS.forEach(b=> HSL_PARTS.forEach(k=> hsl[b.key][k] = 0)); hsCommit(); render();
 };
+// Раздел открывается прямо в панели: доли цветов пересчитываем на текущем кадре,
+// ползунки подтягиваем под выбранную полосу.
 function openHsl(){
   if(!sourceCanvas) return;
-  ensureTrap();
-  hsBackup = JSON.parse(JSON.stringify(hsl));
-  hsEl.classList.add('open');
   hsMeasure();
-  requestAnimationFrame(()=>{ hsDrawShot(); hsSync(); });
+  requestAnimationFrame(hsSync);
 }
-function closeHsl(){ hsEl.classList.remove('open'); }
-document.getElementById('hsCancel').onclick = ()=>{
-  if(hsBackup) hsl = hsBackup;
-  buildHslTables(); editedCanvas = null; closeHsl(); render();
-};
-document.getElementById('hsApply').onclick = ()=>{ closeHsl(); goEditor(); };
 
 // ─── Экран кривой ───
 // Под кривой рисуем гистограмму ТЕКУЩЕГО кадра — иначе тянешь вслепую и не видишь,
@@ -4033,24 +4027,12 @@ function cvNear(p){
   return best;
 }
 // Живое превью: считаем по уменьшенной копии, поэтому кривую можно тянуть непрерывно.
-const cvShot = document.getElementById('cvShot');
-function cvDrawShot(){
-  const src = previewSrc || sourceCanvas;
-  if(!src) return;
-  // сверяем И ширину, И высоту: у горизонтального и квадратного кадра ширина совпадает,
-  // и по одной ширине высота холста осталась бы от прошлого снимка
-  if(cvShot.width !== src.width || cvShot.height !== src.height){
-    cvShot.width = src.width; cvShot.height = src.height;
-    cvShot.parentElement.style.aspectRatio = src.width + ' / ' + src.height;
-  }
-  cvShot.getContext('2d').putImageData(processedData(src), 0, 0);
-}
+// Правка кривой видна на самом снимке — отдельное превью ушло вместе с окном.
+function cvDrawShot(){ render(); }
 function cvCommit(){
   buildCurveLuts(); editedCanvas = null;
   cvDrawShot(); cvDraw();
 }
-holdCompare(document.getElementById('cvCmp'),
-  on=>{ curveLuts = on ? null : buildCurveLuts(); }, ()=> cvDrawShot());
 cvBoard.addEventListener('pointerdown', e=>{
   e.preventDefault();
   try{ cvBoard.setPointerCapture(e.pointerId); }catch(_){}
@@ -4096,21 +4078,13 @@ document.getElementById('cvResetCh').onclick = ()=>{ curve[cvChan] = flatCurve()
 document.getElementById('cvResetAll').onclick = ()=>{
   CURVE_KEYS.forEach(k=> curve[k] = flatCurve()); cvCommit(); render();
 };
+// Гистограмму считаем при открытии раздела: она про текущий кадр, а он мог смениться.
 function openCurve(){
   if(!sourceCanvas) return;
-  ensureTrap();
-  cvBackup = JSON.parse(JSON.stringify(curve));  // «Отмена» должна честно возвращать как было
-  cvChan = 'rgb'; cvDrag = null;
-  cvEl.classList.add('open');
-  requestAnimationFrame(()=>{ cvBuildHist(); cvDrawShot(); cvDraw(); });
+  cvDrag = null;
+  requestAnimationFrame(()=>{ cvBuildHist(); cvDraw(); });
 }
-function closeCurve(){ cvEl.classList.remove('open'); }
-document.getElementById('cvCancel').onclick = ()=>{
-  curve = cvBackup || { rgb:flatCurve(), r:flatCurve(), g:flatCurve(), b:flatCurve() };
-  buildCurveLuts(); editedCanvas = null; closeCurve(); render();
-};
-document.getElementById('cvApply').onclick = ()=>{ closeCurve(); goEditor(); };
-addEventListener('resize', ()=>{ if(cvEl.classList.contains('open')) cvDraw(); });
+addEventListener('resize', ()=>{ if(secNow === 'curve') cvDraw(); });
 
 // ─── Пачка: тот же вид на всю съёмку ───
 // Съёмка — это всегда серия, а не один кадр, поэтому найденный вид должен ложиться
