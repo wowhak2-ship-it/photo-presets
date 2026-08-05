@@ -1153,12 +1153,14 @@
   <div class="adj-row"><span class="albl">Тепло</span><input type="range" id="adj-temp" min="-100" max="100" value="0"><span class="aval" id="val-temp">0</span></div>
   <div class="adj-row"><span class="albl">Оттенок</span><input type="range" id="adj-tint" min="-100" max="100" value="0"><span class="aval" id="val-tint">0</span></div>
   <div class="adj-row"><span class="albl">Насыщенность</span><input type="range" id="adj-saturation" min="-100" max="100" value="0"><span class="aval" id="val-saturation">0</span></div>
+  <div class="adj-row"><span class="albl">Сочность</span><input type="range" id="adj-vibrance" min="-100" max="100" value="0"><span class="aval" id="val-vibrance">0</span></div>
   <div class="adj-group">ТОНИРОВАНИЕ</div>
   <div class="adj-row"><span class="albl">Тон теней</span><input type="range" id="adj-splitSh" min="-100" max="100" value="0"><span class="aval" id="val-splitSh">0</span></div>
   <div class="adj-row"><span class="albl">Тон светов</span><input type="range" id="adj-splitHi" min="-100" max="100" value="0"><span class="aval" id="val-splitHi">0</span></div>
   <div class="adj-group">ФАКТУРА</div>
   <div class="adj-row"><span class="albl">Зерно</span><input type="range" id="adj-grain" min="0" max="100" value="0"><span class="aval" id="val-grain">0</span></div>
   <div class="adj-row"><span class="albl">Свечение</span><input type="range" id="adj-bloom" min="0" max="100" value="0"><span class="aval" id="val-bloom">0</span></div>
+  <div class="adj-row"><span class="albl">Виньетка</span><input type="range" id="adj-vignette" min="0" max="100" value="0"><span class="aval" id="val-vignette">0</span></div>
 </div>
 <!-- Кнопки вынесены ИЗ прокрутки: внутри неё они вставали посреди списка и он выглядел
      законченным там, где на самом деле продолжался. -->
@@ -1868,7 +1870,7 @@ function applyHsl(img, T, y0, y1){
 // Manual adjustments layered on top of the preset (all 0 = no-op). Ranges: exposure/contrast/temp/saturation -100..100, grain 0..100
 function applyAdjust(img, a, y0, y1){
   if(!(a.exposure||a.contrast||a.temp||a.saturation||a.grain
-       ||a.shadows||a.highlights||a.tint||a.splitSh||a.splitHi)) return img;
+       ||a.shadows||a.highlights||a.tint||a.splitSh||a.splitHi||a.vibrance||a.vignette)) return img;
   const d = img.data;
   const ex = 1 + a.exposure/100*0.5;   // 0.5..1.5 brightness multiplier
   const c  = a.contrast/100*0.6;       // -0.6..0.6 around mid grey
@@ -1878,11 +1880,17 @@ function applyAdjust(img, a, y0, y1){
   // Тени и света тянутся по ВЕСУ яркости, а не порогом: у порога на плавном небе
   // проступает шов. Вес квадратичный — середина кадра почти не двигается, и правка
   // не оборачивается общим осветлением.
+  const vb = (a.vibrance||0)/100;      // сочность: тянет только бледные цвета
   const sh = (a.shadows||0)/100, hg = (a.highlights||0)/100;
   const tn = (a.tint||0)/100*24;       // зелёный ↔ пурпурный: вторая ось баланса белого
   const spS = (a.splitSh||0)/100, spH = (a.splitHi||0)/100;   // раздельное тонирование
   const tones = sh || hg || spS || spH;
   const W = img.width;                 // зерно того же размера, что и у пресета
+  // Виньетка считается от ЦЕЛОГО кадра, а не от куска: при пакетной обработке картинка
+  // приходит полосами, и центр надо брать общий, иначе каждая полоса потемнеет по краям.
+  const vg = (a.vignette||0)/100 * 0.75;
+  const vcx = W/2, vcy = img.height/2;
+  const vmax = vcx*vcx + vcy*vcy;
   const cell = gr ? Math.max(W, img.height)/GRAIN_ACROSS : 1;      // та же доля кадра, что и у пресета
   // Зерно раскладываем построчно, как у пресета. Раньше здесь на КАЖДЫЙ пиксель считалось
   // четыре хэша (grainAt) — на 12-мегапиксельном кадре это 48 миллионов хэшей и львиная
@@ -1919,7 +1927,18 @@ function applyAdjust(img, a, y0, y1){
         if(spS || spH){ const t = (spS*wS + spH*wH)*26; R+=t; B-=t; }
       }
       if(c){ R=(R-128)*(1+c)+128; G=(G-128)*(1+c)+128; B=(B-128)*(1+c)+128; }
-      if(sat!==1){ const avg=(R+G+B)/3; R=avg+(R-avg)*sat; G=avg+(G-avg)*sat; B=avg+(B-avg)*sat; }
+      if(sat!==1 || vb){
+        // Сочность добавляется тем сильнее, чем бледнее цвет: уже насыщенное остаётся
+        // как есть. Поэтому кожа не краснеет, а небо и листва оживают — та же формула,
+        // что внутри плёнок.
+        const avg=(R+G+B)/3;
+        const mx = R>G ? (R>B?R:B) : (G>B?G:B), mn = R<G ? (R<B?R:B) : (G<B?G:B);
+        let cur = (mx-mn)/160; if(cur>1) cur=1; else if(cur<0) cur=0;
+        const s = sat + vb*(1-cur);
+        R=avg+(R-avg)*s; G=avg+(G-avg)*s; B=avg+(B-avg)*s;
+      }
+      if(vg){ const dx = x - vcx, dy = y - vcy;
+              const f = 1 - vg*((dx*dx + dy*dy)/vmax); R*=f; G*=f; B*=f; }
       if(gr){ const g = gLine[x]; R+=g; G+=g; B+=g; }
       d[p]=R<0?0:R>255?255:R; d[p+1]=G<0?0:G>255?255:G; d[p+2]=B<0?0:B>255?255:B;
     }
@@ -2118,9 +2137,9 @@ let selected = 0, intensity = 100, sourceCanvas = null, compareMode = false, com
 // НОВЫЕ ключи дописываются В КОНЕЦ: ссылка на пресет пишет значения подряд по этому
 // списку, и разосланные ранее ссылки читаются дальше — недостающее просто станет нулём.
 const ADJ_KEYS = ['exposure','contrast','temp','saturation','grain','bloom',
-                  'shadows','highlights','tint','splitSh','splitHi'];
+                  'shadows','highlights','tint','splitSh','splitHi','vibrance','vignette'];
 let adjust = { exposure:0, contrast:0, temp:0, saturation:0, grain:0, bloom:0,
-               shadows:0, highlights:0, tint:0, splitSh:0, splitHi:0 };
+               shadows:0, highlights:0, tint:0, splitSh:0, splitHi:0, vibrance:0, vignette:0 };
 const stage = document.getElementById('stage');
 const sctx = stage.getContext('2d', { willReadFrequently:true });
 
@@ -2836,7 +2855,7 @@ function bindSlider(el, onInput){
 }
 // Односторонние ползунки начинаются с нуля и растут вправо — риска середины им не нужна,
 // а плюс перед числом был бы бессмысленным: меньше нуля они не бывают.
-const ADJ_ONE_WAY = ['grain','bloom'];
+const ADJ_ONE_WAY = ['grain','bloom','vignette'];
 function adjValText(k){
   return (ADJ_ONE_WAY.indexOf(k) < 0 && adjust[k] > 0 ? '+' : '') + adjust[k];
 }
@@ -3249,7 +3268,7 @@ async function sharePresets(list, slug, pack){
 // перетасуется, сохранённый пресет не начнёт молча показывать чужую плёнку.
 function myBase(p){ const i = LOOKS.findIndex(l=> l.name === p.base); return i < 0 ? 0 : i; }
 const ZERO_ADJ = { exposure:0, contrast:0, temp:0, saturation:0, grain:0, bloom:0,
-                   shadows:0, highlights:0, tint:0, splitSh:0, splitHi:0 };
+                   shadows:0, highlights:0, tint:0, splitSh:0, splitHi:0, vibrance:0, vignette:0 };
 // Отрисовка пресета в миниатюру: тот же порядок, что в processedData.
 function myRender(id, p, orig){
   const look = LOOKS[myBase(p)], mix = (p.intensity == null ? 100 : p.intensity)/100;
@@ -3264,7 +3283,7 @@ function myRender(id, p, orig){
 // что пресет реально делает, а не только как он называется.
 const ADJ_RU = { exposure:'экспозиция', contrast:'контраст', temp:'тепло', saturation:'насыщенность',
   grain:'зерно', bloom:'свечение', shadows:'тени', highlights:'света', tint:'оттенок',
-  splitSh:'тон теней', splitHi:'тон светов' };
+  splitSh:'тон теней', splitHi:'тон светов', vibrance:'сочность', vignette:'виньетка' };
 function myRecipeText(p){
   const parts = [ (p.base || LOOKS[0].name).toUpperCase() ];
   const inten = p.intensity == null ? 100 : p.intensity;
