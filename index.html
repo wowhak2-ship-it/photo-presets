@@ -441,15 +441,24 @@
   .adjust-panel::-webkit-scrollbar{display:none;}
   /* «Сохранить как пресет» — главное действие панели, и оно не должно уезжать в конец
      прокрутки: держим его прижатым к нижнему краю, поверх уходящих под него ползунков */
-  .adjust-panel .adj-acts{position:sticky; bottom:0; z-index:1; flex:0 0 auto;
-    margin:2px -20px 0; padding:8px 20px calc(4px + env(safe-area-inset-bottom));
-    background:linear-gradient(transparent, var(--bg) 18%);}
+  #adjActs.sec.on{display:flex; padding:6px 20px calc(10px + env(safe-area-inset-bottom));}
   /* flex-строки по умолчанию сжимаются — в панели с ограниченной высотой они наезжали
      друг на друга вместо того, чтобы дать прокрутку */
   .adj-row{display:flex; align-items:center; gap:12px; height:38px; flex:0 0 38px;}
   .adj-row .albl{flex:0 0 104px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     font-size:11px; letter-spacing:.04em; color:var(--dim); font-weight:600; text-transform:uppercase;}
   /* одиннадцать ползунков подряд не читаются — разбиваем на группы по смыслу */
+  /* Значение ползунка поверх кадра: цифра под пальцем не читается, а судить о правке
+     нужно глядя на снимок. Плашка не перехватывает касания и гаснет, как отпустишь. */
+  .adj-hud{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) scale(.96);
+    z-index:4; pointer-events:none; text-align:center; opacity:0; transition:opacity .12s, transform .12s;}
+  .adj-hud.on{opacity:1; transform:translate(-50%,-50%) scale(1);}
+  .adj-hud s{display:block; font-family:var(--mono); font-size:10px; letter-spacing:.24em;
+    text-decoration:none; color:rgba(255,255,255,.72); text-transform:uppercase;
+    text-shadow:0 1px 8px rgba(0,0,0,.9);}
+  .adj-hud b{display:block; margin-top:2px; font-size:54px; font-weight:700; line-height:1;
+    color:rgba(255,255,255,.9); font-variant-numeric:tabular-nums;
+    text-shadow:0 2px 18px rgba(0,0,0,.85);}
   .adj-group{flex:0 0 auto; font-family:var(--mono); font-size:8px; letter-spacing:.22em; color:var(--faint);
     padding:10px 2px 2px; border-top:1px solid rgba(255,255,255,.05); margin-top:4px;}
   .adj-group:first-child{border-top:0; margin-top:0; padding-top:2px;}
@@ -1035,6 +1044,9 @@
     <span class="sd-trail"></span>
     <span class="sd-touch"></span>
   </div>
+  <!-- Пока ведёшь ползунок, его цифра остаётся под пальцем в самом низу экрана.
+       Дублируем её поверх кадра — крупно и прозрачно, чтобы не закрывать снимок. -->
+  <div class="adj-hud" id="adjHud" aria-hidden="true"><s id="adjHudName">ТЕНИ</s><b id="adjHudVal">0</b></div>
   <div class="int-hint" id="intHint" style="display:none">Свайп — сила пресета</div>
   <div class="int-gauge" id="intGauge"><b id="intGaugeVal">100</b><div class="igbar"><div class="igfill" id="intGaugeFill"></div></div></div>
   <div id="empty">
@@ -1147,10 +1159,12 @@
   <div class="adj-group">ФАКТУРА</div>
   <div class="adj-row"><span class="albl">Зерно</span><input type="range" id="adj-grain" min="0" max="100" value="0"><span class="aval" id="val-grain">0</span></div>
   <div class="adj-row"><span class="albl">Свечение</span><input type="range" id="adj-bloom" min="0" max="100" value="0"><span class="aval" id="val-bloom">0</span></div>
-  <div class="adj-acts">
-    <button class="adj-reset" id="adjReset">Сбросить</button>
-    <button class="adj-reset adj-keep" id="adjKeep">Сохранить как пресет</button>
-  </div>
+</div>
+<!-- Кнопки вынесены ИЗ прокрутки: внутри неё они вставали посреди списка и он выглядел
+     законченным там, где на самом деле продолжался. -->
+<div class="adj-acts sec" data-sec="light" id="adjActs">
+  <button class="adj-reset" id="adjReset">Сбросить</button>
+  <button class="adj-reset adj-keep" id="adjKeep">Сохранить как пресет</button>
 </div>
 </div><!-- /dock -->
 
@@ -2793,12 +2807,31 @@ function settleRender(){
     scrubbing = false; render();
   }, 140);
 }
+// Значение ведомого ползунка — поверх кадра. Имя и цифру берём из его же строки,
+// поэтому это работает для любого ползунка: и света, и цвета.
+let adjHudT = 0;
+function adjHud(el, show){
+  const hud = document.getElementById('adjHud');
+  if(!hud) return;
+  const row = el.closest('.adj-row');
+  if(!row) return;
+  clearTimeout(adjHudT);
+  if(show){
+    const name = row.querySelector('.albl');
+    const val = row.querySelector('.aval');
+    document.getElementById('adjHudName').textContent = name ? name.textContent : '';
+    document.getElementById('adjHudVal').textContent = val ? val.textContent : el.value;
+    hud.classList.add('on');
+  } else {
+    adjHudT = setTimeout(()=> hud.classList.remove('on'), 450);   // задержка: цифру видно после отпускания
+  }
+}
 function bindSlider(el, onInput){
-  el.addEventListener('pointerdown', ()=>{ adjDragging = true; });
-  const up = ()=>{ adjDragging = false; settleRender(); };
+  el.addEventListener('pointerdown', ()=>{ adjDragging = true; adjHud(el, true); });
+  const up = ()=>{ adjDragging = false; adjHud(el, false); settleRender(); };
   el.addEventListener('pointerup', up);
   el.addEventListener('pointercancel', up);
-  el.addEventListener('input', ()=>{ onInput(); scrubbing = true; render(); settleRender(); });
+  el.addEventListener('input', ()=>{ onInput(); adjHud(el, true); scrubbing = true; render(); settleRender(); });
   el.addEventListener('change', settleRender);
 }
 // Односторонние ползунки начинаются с нуля и растут вправо — риска середины им не нужна,
