@@ -1522,6 +1522,8 @@
 <div class="back-toast" id="backToast">Нажмите ещё раз для выхода</div>
 
 <input type="file" id="file" accept="image/*" hidden>
+<!-- capture говорит телефону открыть его собственную камеру, а не выбор файлов -->
+<input type="file" id="camFile" accept="image/*" capture="environment" hidden>
 <input type="file" id="mypFile" accept="application/json,.json" hidden>
 <input type="file" id="batchFile" accept="image/*" multiple hidden>
 
@@ -2601,14 +2603,21 @@ function pickFrame(e){
   setIntensity(100);
 }
 
-document.getElementById('file').onchange = async e=>{
-  const f = e.target.files[0]; if(!f) return;
+// Снимок из галереи и снимок с камеры телефона приходят одинаково — файлом, поэтому
+// путь у них один.
+async function takePhotoFile(f){
+  if(!f) return;
   const my = claimLoad();                     // выбор человека отменяет всё, что грузится сейчас
   sourceExif = await fileExif(f);             // данные съёмки берём до того, как файл станет картинкой
   const img = new Image();
   img.onload = ()=>{ if(!loadIsCurrent(my)) return; setSource(img); closeOnb(); applyPendingTool(); };
   img.src = URL.createObjectURL(f);
-};
+}
+document.getElementById('file').onchange = e=>{ const f = e.target.files[0]; e.target.value=''; takePhotoFile(f); };
+// Снимаем РОДНОЙ камерой телефона, а не своим видоискателем: у неё вся оптика,
+// HDR и ночной режим, и снимок приходит в полном качестве. Свой видоискатель отдавал
+// то, что успел прочитать браузер, — заметно хуже того, что телефон умеет.
+document.getElementById('camFile').onchange = e=>{ const f = e.target.files[0]; e.target.value=''; takePhotoFile(f); };
 
 // ─── Home (landing) ↔ editor ───
 let pendingTool = null;
@@ -2669,7 +2678,7 @@ function runTool(tool){
   pendingTool = tool; applyPendingTool();
 }
 document.getElementById('homePick').onclick = ()=>{ pendingTool = null; document.getElementById('file').click(); };
-document.getElementById('homeCam').onclick = ()=> openCamera();
+document.getElementById('homeCam').onclick = ()=>{ pendingTool = null; document.getElementById('camFile').click(); };
 document.querySelectorAll('[data-go]').forEach(b=> b.onclick = ()=> runTool(b.dataset.go));
 document.getElementById('backBtn').onclick = goHome;
 
