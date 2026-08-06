@@ -3630,6 +3630,10 @@ fetch('./sw.js').then(r=>r.text()).then(t=>{               // версия — �
 
 // ─── Экспорт: показываем готовый кадр и даём выбрать размер перед выпуском ───
 const expEl = document.getElementById('export');
+// Качество JPEG для готовых снимков. Пересохранение всегда что-то теряет, а кадр
+// после нас идёт клиенту или в печать — поэтому жмём слабее обычного: волосы,
+// ткань и зерно переживают это заметно лучше, цена — примерно треть веса файла.
+const JPEG_Q = 0.97;
 let expMax = 0;                                    // 0 = оригинал, иначе длинная сторона
 
 // готовый кадр с применённым луком, при желании уменьшенный
@@ -3824,7 +3828,7 @@ async function expBlob(cb){
   c.toBlob(async b=>{
     const withData = b ? await withMeta(b, sourceExif, c.width, c.height) : b;
     done(); if(withData) cb(withData);
-  }, 'image/jpeg', 0.95);
+  }, 'image/jpeg', JPEG_Q);
 }
 
 function expRefresh(){
@@ -3847,7 +3851,7 @@ function expRefresh(){
     const approx = (ow*oh) === (c.width*c.height) ? ' · ' : ' · ≈ ';
     document.getElementById('expWeight').textContent =
       ow + '×' + oh + approx + (est/1048576).toFixed(1) + ' МБ';
-  }, 'image/jpeg', 0.95);
+  }, 'image/jpeg', JPEG_Q);
 }
 function openExport(){
   if(!fullSource) return;
@@ -4251,7 +4255,7 @@ async function batchRun(){
     try{
       const src = await fileToCanvas(it.file);
       const out = await buildExportAsync(expMax, src);
-      const raw = await new Promise(r=> out.toBlob(r, 'image/jpeg', 0.95));
+      const raw = await new Promise(r=> out.toBlob(r, 'image/jpeg', JPEG_Q));
       it.blob = await withMeta(raw, await fileExif(it.file), out.width, out.height);
       if(src !== out){ src.width = 0; src.height = 0; }
       out.width = 0; out.height = 0;           // холсты отпускаем сразу, иначе память кончится
