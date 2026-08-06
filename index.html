@@ -2605,9 +2605,13 @@ function pickFrame(e){
 
 // Снимок из галереи и снимок с камеры телефона приходят одинаково — файлом, поэтому
 // путь у них один.
+// Исходный файл держим при себе: если человек ничего не менял, честнее отдать его как
+// есть, чем пересжимать заново и терять качество на пустом месте.
+let sourceFile = null;
 async function takePhotoFile(f){
   if(!f) return;
   const my = claimLoad();                     // выбор человека отменяет всё, что грузится сейчас
+  sourceFile = f;
   sourceExif = await fileExif(f);             // данные съёмки берём до того, как файл станет картинкой
   const img = new Image();
   img.onload = ()=>{ if(!loadIsCurrent(my)) return; setSource(img); closeOnb(); applyPendingTool(); };
@@ -3802,9 +3806,20 @@ async function buildExportAsync(maxDim, base, onProgress){
   return out;
 }
 
+// Правил ли человек вообще что-нибудь: плёнка, её сила, ползунки, кривая, цвета,
+// кадрирование и ретушь. Если нет — пересжимать нечего.
+function nothingEdited(){
+  return !myActive && selected === 0 && intensity === 100
+      && ADJ_KEYS.every(k=> !adjust[k])
+      && !curveTouched() && !hslTouched()
+      && (!editOps || !editOps.length);
+}
 let expBusy = false;
 async function expBlob(cb){
   if(expBusy) return;
+  // Ничего не тронуто и размер не урезаем — отдаём ИСХОДНЫЙ файл байт в байт.
+  // Перерисовывать его заново значило бы потерять качество ни за что.
+  if(sourceFile && !expMax && nothingEdited()){ cb(sourceFile); return; }
   expBusy = true;
   const save = document.getElementById('expSave'), share = document.getElementById('expShare');
   const saveT = save.textContent, shareT = share.textContent;
