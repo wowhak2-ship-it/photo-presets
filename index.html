@@ -3118,7 +3118,10 @@ MYP.importFrom = function(text){
     taken.add(name.toLowerCase());
     list.push({ id:'p' + Date.now() + '_' + added, name, base:p.base,
                 intensity:p.intensity, adjust:p.adjust,
-                curve:p.curve || null, hsl:p.hsl || null, date:Date.now() });
+                curve:p.curve || null, hsl:p.hsl || null, date:Date.now(),
+                // помним, из какого набора пришёл вид: по этому витрина понимает,
+                // остался ли набор в ленте или человек его вычистил
+                pack: (data && data.pack && data.pack.id) ? String(data.pack.id).slice(0,64) : null });
     added++;
   }
   if(!added) return { error:'В файле нет подходящих пресетов' };
@@ -3539,7 +3542,12 @@ const PACKS = {
   }
 };
 function packCard(p){
-  const owned = PACKS.owned().includes(p.id);
+  // «Ваш» — это когда виды набора ПРАВДА лежат в ленте. Одной отметки о покупке мало:
+  // человек мог вычистить их из своих пресетов, и тогда витрина обязана снова
+  // предложить поставить набор, а не молчать, что он уже есть.
+  const отмечен = PACKS.owned().includes(p.id);
+  const вЛенте = MYP.all().some(x=> x.pack === p.id);
+  const owned = отмечен && вЛенте;
   const el = document.createElement('div'); el.className = 'pack';
   if(p.cover){
     const img = document.createElement('img'); img.className = 'pack-cover';
