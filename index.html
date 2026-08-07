@@ -666,6 +666,9 @@
   .pack-ab{font-size:12.5px; line-height:1.45; color:var(--faint); margin-top:7px;}
   .pack-foot{display:flex; align-items:center; gap:10px; margin-top:auto; padding-top:11px;}
   .pack-price{font-family:var(--mono); font-size:13px; font-weight:600; color:var(--text);}
+  .pack-price.free{font-size:9px; letter-spacing:.16em; color:#7FBF6A;
+    border:1px solid rgba(127,191,106,.45); background:rgba(127,191,106,.10);
+    border-radius:8px; padding:5px 9px;}
   .pack-buy{margin-left:auto; background:var(--gold); color:var(--gold-ink); border:0;
     font-size:12.5px; font-weight:700; letter-spacing:.03em; padding:9px 15px; border-radius:11px; cursor:pointer;}
   .pack-buy:active{transform:scale(.98);}
@@ -3552,9 +3555,13 @@ function packCard(p){
   if(p.about){ const ab = document.createElement('div'); ab.className = 'pack-ab';
                ab.textContent = p.about; tx.appendChild(ab); }
   const foot = document.createElement('div'); foot.className = 'pack-foot';
-  const pr = document.createElement('span'); pr.className = 'pack-price';
+  const pr = document.createElement('span');
+  // «Бесплатно» набранное как цена читается как цена — то есть проходит мимо глаз.
+  // У даровых наборов это метка, и она видна раньше, чем название.
+  const free = !owned && !!p.file;
+  pr.className = 'pack-price' + (free ? ' free' : '');
   pr.textContent = owned ? (p.count ? p.count + ' в ленте' : 'установлен')
-                         : (p.price || '');
+                         : (free ? 'БЕСПЛАТНО' : (p.price || ''));
   foot.appendChild(pr);
   if(owned){
     const ok = document.createElement('span'); ok.className = 'pack-owned'; ok.textContent = 'ВАШ';
