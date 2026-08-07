@@ -3559,6 +3559,25 @@ function packCard(p){
   if(owned){
     const ok = document.createElement('span'); ok.className = 'pack-owned'; ok.textContent = 'ВАШ';
     foot.appendChild(ok);
+  } else if(p.file){
+    // Бесплатный набор незачем гонять через оплату — ставим прямо отсюда, одним касанием.
+    const go = document.createElement('button'); go.className = 'pack-buy'; go.textContent = 'Установить';
+    go.onclick = async ()=>{
+      go.disabled = true; const было = go.textContent; go.textContent = 'Ставлю…';
+      try{
+        const txt = await (await fetch('./' + p.file + '?v=' + Date.now(), { cache:'no-store' })).text();
+        const res = MYP.importFrom(txt);
+        if(res.error) throw new Error(res.error);
+        PACKS.own((res.pack && res.pack.id) || p.id);
+        renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
+        toast('Набор в ленте: ' + res.added + ' видов');
+        renderPacks();
+      }catch(e){
+        go.disabled = false; go.textContent = было;
+        toast('Не удалось поставить набор');
+      }
+    };
+    foot.appendChild(go);
   } else if(p.buy){
     const go = document.createElement('button'); go.className = 'pack-buy'; go.textContent = 'Купить';
     go.onclick = ()=> window.open(p.buy, '_blank', 'noopener');

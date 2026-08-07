@@ -1,0 +1,358 @@
+{
+  "app": "presety",
+  "v": 2,
+  "pack": {
+    "id": "vitrina-stiley-4",
+    "name": "Витрина стилей",
+    "count": 4,
+    "author": "Пресеты"
+  },
+  "presets": [
+    {
+      "name": "Кино",
+      "base": "Оригинал",
+      "intensity": 100,
+      "adjust": {
+        "exposure": -6,
+        "contrast": 14,
+        "temp": 4,
+        "saturation": -12,
+        "grain": 2,
+        "bloom": 0,
+        "shadows": 22,
+        "highlights": -26,
+        "tint": -4,
+        "splitSh": -55,
+        "splitHi": 45,
+        "vibrance": 26,
+        "vignette": 24
+      },
+      "curve": {
+        "rgb": [
+          [
+            0,
+            8
+          ],
+          [
+            58,
+            52
+          ],
+          [
+            128,
+            130
+          ],
+          [
+            200,
+            208
+          ],
+          [
+            255,
+            246
+          ]
+        ],
+        "b": [
+          [
+            0,
+            18
+          ],
+          [
+            128,
+            132
+          ],
+          [
+            255,
+            240
+          ]
+        ]
+      },
+      "hsl": {
+        "red": {
+          "hue": 4,
+          "sat": 6,
+          "lum": 2
+        },
+        "orange": {
+          "hue": -4,
+          "sat": 14,
+          "lum": 6
+        },
+        "yellow": {
+          "hue": -10,
+          "sat": -20,
+          "lum": 0
+        },
+        "green": {
+          "hue": 22,
+          "sat": -30,
+          "lum": -4
+        },
+        "aqua": {
+          "hue": -8,
+          "sat": 22,
+          "lum": 0
+        },
+        "blue": {
+          "hue": -14,
+          "sat": 16,
+          "lum": -2
+        }
+      }
+    },
+    {
+      "name": "Тихий люкс",
+      "base": "Оригинал",
+      "intensity": 100,
+      "adjust": {
+        "exposure": -14,
+        "contrast": 12,
+        "temp": 6,
+        "saturation": -26,
+        "grain": 3,
+        "bloom": 0,
+        "shadows": -14,
+        "highlights": -18,
+        "tint": 2,
+        "splitSh": -10,
+        "splitHi": 22,
+        "vibrance": 18,
+        "vignette": 40
+      },
+      "curve": {
+        "rgb": [
+          [
+            0,
+            4
+          ],
+          [
+            56,
+            44
+          ],
+          [
+            128,
+            122
+          ],
+          [
+            200,
+            200
+          ],
+          [
+            255,
+            240
+          ]
+        ],
+        "r": [
+          [
+            0,
+            2
+          ],
+          [
+            128,
+            130
+          ],
+          [
+            255,
+            248
+          ]
+        ]
+      },
+      "hsl": {
+        "red": {
+          "hue": 0,
+          "sat": -8,
+          "lum": -4
+        },
+        "orange": {
+          "hue": -2,
+          "sat": 4,
+          "lum": 2
+        },
+        "yellow": {
+          "hue": -12,
+          "sat": -34,
+          "lum": -8
+        },
+        "green": {
+          "hue": -14,
+          "sat": -30,
+          "lum": -12
+        },
+        "aqua": {
+          "hue": 0,
+          "sat": -26,
+          "lum": -6
+        },
+        "blue": {
+          "hue": 0,
+          "sat": -18,
+          "lum": -6
+        }
+      }
+    },
+    {
+      "name": "Сливки",
+      "base": "Оригинал",
+      "intensity": 100,
+      "adjust": {
+        "exposure": 14,
+        "contrast": -22,
+        "temp": 14,
+        "saturation": -14,
+        "grain": 0,
+        "bloom": 22,
+        "shadows": 42,
+        "highlights": -14,
+        "tint": 4,
+        "splitSh": 8,
+        "splitHi": 26,
+        "vibrance": 20,
+        "vignette": 0
+      },
+      "curve": {
+        "rgb": [
+          [
+            0,
+            26
+          ],
+          [
+            60,
+            92
+          ],
+          [
+            128,
+            152
+          ],
+          [
+            200,
+            212
+          ],
+          [
+            255,
+            244
+          ]
+        ],
+        "b": [
+          [
+            0,
+            20
+          ],
+          [
+            128,
+            122
+          ],
+          [
+            255,
+            236
+          ]
+        ]
+      },
+      "hsl": {
+        "red": {
+          "hue": 0,
+          "sat": -6,
+          "lum": 8
+        },
+        "orange": {
+          "hue": 0,
+          "sat": 8,
+          "lum": 14
+        },
+        "yellow": {
+          "hue": -4,
+          "sat": -16,
+          "lum": 10
+        },
+        "green": {
+          "hue": -6,
+          "sat": -24,
+          "lum": 8
+        },
+        "aqua": {
+          "hue": 0,
+          "sat": -22,
+          "lum": 8
+        },
+        "blue": {
+          "hue": 0,
+          "sat": -20,
+          "lum": 10
+        }
+      }
+    },
+    {
+      "name": "Минимал",
+      "base": "Оригинал",
+      "intensity": 100,
+      "adjust": {
+        "exposure": 8,
+        "contrast": -6,
+        "temp": 0,
+        "saturation": -34,
+        "grain": 0,
+        "bloom": 0,
+        "shadows": 24,
+        "highlights": -12,
+        "tint": 0,
+        "splitSh": 0,
+        "splitHi": 0,
+        "vibrance": 12,
+        "vignette": 0
+      },
+      "curve": {
+        "rgb": [
+          [
+            0,
+            6
+          ],
+          [
+            64,
+            76
+          ],
+          [
+            128,
+            140
+          ],
+          [
+            200,
+            216
+          ],
+          [
+            255,
+            255
+          ]
+        ]
+      },
+      "hsl": {
+        "red": {
+          "hue": 0,
+          "sat": -18,
+          "lum": 6
+        },
+        "orange": {
+          "hue": 0,
+          "sat": -10,
+          "lum": 10
+        },
+        "yellow": {
+          "hue": 0,
+          "sat": -34,
+          "lum": 8
+        },
+        "green": {
+          "hue": 0,
+          "sat": -38,
+          "lum": 8
+        },
+        "aqua": {
+          "hue": 0,
+          "sat": -30,
+          "lum": 8
+        },
+        "blue": {
+          "hue": 0,
+          "sat": -26,
+          "lum": 10
+        }
+      }
+    }
+  ]
+}
