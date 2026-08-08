@@ -223,10 +223,24 @@
   #secCurve .cv-pad{margin:2px auto 12px;}
   #secCurve .cv-chans{margin-top:2px;}
 
-  /* «До/После» в шапке. Активное состояние заметное: сравнение — режим, а не тап,
-     и из него надо уметь выйти, не гадая, включено оно или нет.
-     40px — это не размер значка, а размер зоны под палец: значок остаётся мелким,
-     промахнуться по кнопке нельзя. */
+  /* «До/После» — НА ФОТО, а не значком в шапке. Значком его не замечали: в ряду с
+     «назад» и «Сохранить» он читался как служебная мелочь. Здесь это подписанная
+     кнопка у нижнего края кадра — там, куда и так смотрят, оценивая результат. */
+  .cmp-fab{position:absolute; left:14px; bottom:14px; z-index:6;
+    display:none; align-items:center; gap:7px; padding:10px 15px 10px 12px;
+    border-radius:999px; cursor:pointer;
+    background:var(--glass); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+    border:1px solid var(--glass-line); color:var(--text);
+    font-family:var(--mono); font-size:10px; letter-spacing:.14em; font-weight:600;
+    box-shadow:0 4px 14px rgba(0,0,0,.45); line-height:1;}
+  .cmp-fab.on{display:inline-flex;}
+  .cmp-fab svg{width:16px; height:16px; flex:none;}
+  .cmp-fab:active{transform:scale(.96);}
+  .cmp-fab.active{background:var(--gold); border-color:transparent; color:var(--gold-ink);}
+  .cmp-fab-r{left:auto; right:14px;}
+  @media (prefers-reduced-motion:reduce){ .cmp-fab:active{transform:none;} }
+
+  /* Рука остаётся значком в шапке ретуши — это переключатель, а не главное действие */
   .hdr-cmp{min-width:40px; min-height:40px; display:inline-flex; align-items:center;
     justify-content:center; margin-left:2px;}
   .hdr-cmp svg{width:19px; height:19px;}
@@ -1033,13 +1047,6 @@
   <button class="icon-btn" id="backBtn" aria-label="Домой">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
   </button>
-  <!-- «До/После» жило в разделе «Ещё». Сравнивать хочется на каждом шаге правки, а
-       не сходив за этим в отдельную вкладку, поэтому кнопка в шапке и видна всегда.
-       Стоит СЛЕВА, рядом с «назад»: у «Сохранить» она попадала под тот же палец, и
-       вместо сравнения снимок улетал в галерею. -->
-  <button class="icon-btn hdr-cmp" id="compare" aria-label="До и после" style="display:none">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
-  </button>
   <div class="hdr-title" id="hdrTitle">Редактор</div>
   <button class="ed-save" id="save" style="display:none">Сохранить</button>
 </header>
@@ -1128,6 +1135,10 @@
       <div id="cmpDiv"><div id="cmpHandle">‹ ›</div></div>
     </div>
   </div>
+  <button class="cmp-fab" id="compare">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
+    ДО / ПОСЛЕ
+  </button>
   <div class="stage-vig" id="stageVig" style="display:none"></div>
   <div class="swipe-demo" id="swipeDemo" style="display:none" aria-hidden="true">
     <span class="sd-trail"></span>
@@ -1553,14 +1564,6 @@
     </button>
     <!-- та же кнопка и на том же месте, что в редакторе: сравнение должно быть под
          одним и тем же пальцем на любом экране, а не своё в каждом окне -->
-    <button class="icon-btn hdr-cmp" id="rtCompare" aria-label="До и после">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
-    </button>
-    <!-- Рука. Появляется только на приближённом кадре: пока кадр целиком на экране,
-         двигать нечего. Включена — палец таскает фото и НЕ мажет. -->
-    <button class="icon-btn hdr-cmp" id="rtPanBtn" aria-label="Двигать фото" style="display:none">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V5.6a1.6 1.6 0 0 1 3.2 0V11"/><path d="M12.2 11V4.6a1.6 1.6 0 0 1 3.2 0V11"/><path d="M15.4 11.4V7.2a1.6 1.6 0 0 1 3.2 0V15a6 6 0 0 1-6 6h-1.2a5 5 0 0 1-3.8-1.8l-2.9-3.6a1.6 1.6 0 0 1 2.4-2.1L9 15.2V8.6a1.6 1.6 0 0 1 0-.2"/></svg>
-    </button>
     <span class="rt-top" id="rtTop">Ретушь</span>
     <button class="ov-act gold" id="rtApply">Применить</button>
   </div>
@@ -1570,6 +1573,17 @@
     <div class="rt-holder" id="rtHolder">
       <canvas id="rtCanvas"></canvas>
     </div>
+    <!-- Те же подписанные кнопки, что в редакторе, и на том же месте кадра -->
+    <button class="cmp-fab" id="rtCompare">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
+      ДО / ПОСЛЕ
+    </button>
+    <!-- Рука — только в кисти и штампе. В «Тенях» мазать нечем, поэтому там палец
+         двигает кадр сам, и кнопка не нужна вовсе. -->
+    <button class="cmp-fab cmp-fab-r" id="rtPanBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V5.6a1.6 1.6 0 0 1 3.2 0V11"/><path d="M12.2 11V4.6a1.6 1.6 0 0 1 3.2 0V11"/><path d="M15.4 11.4V7.2a1.6 1.6 0 0 1 3.2 0V15a6 6 0 0 1-6 6h-1.2a5 5 0 0 1-3.8-1.8l-2.9-3.6a1.6 1.6 0 0 1 2.4-2.1L9 15.2"/></svg>
+      ДВИГАТЬ
+    </button>
     <!-- Шторка сравнения лежит СНАРУЖИ увеличиваемого слоя. Внутри него она ехала и
          росла вместе с фото: на приближённом кадре подписи «ДО»/«ПОСЛЕ» оказывались
          прямо на лице. Здесь они в экранных координатах — всегда у верхнего края. -->
@@ -2329,7 +2343,7 @@ function setSource(img){
   stage.style.display = 'block';
   document.getElementById('save').style.display = 'inline-flex';
   document.getElementById('dock').classList.add('on');
-  document.getElementById('compare').style.display = 'inline-flex';   // сравнивать есть с чем
+  document.getElementById('compare').classList.add('on');   // сравнивать есть с чем
   // строка вкладок скрыта: переключение живёт в кнопке «Настройки» в ряду инструментов
   setTab('presets');
   // Кадр на экран СРАЗУ, до сборки миниатюр. Выше мы поменяли размер stage — он очищен,
@@ -5444,6 +5458,7 @@ function openRetouch(){
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
   retouchEl.classList.add('open');
+  document.getElementById('rtCompare').classList.add('on');
   layoutRetouch(); rtResetZoom(); rtSetTool('heal');
 }
 // отдельная карточка «Тени» на главной — тот же оверлей ретуши, но сразу в режиме
@@ -5503,12 +5518,16 @@ const rtPtrs = new Map();
 function rtSyncPan(){
   const b = document.getElementById('rtPanBtn');
   if(!b) return;
-  const можно = rtScale > 1;
-  b.style.display = можно ? 'inline-flex' : 'none';
+  // В «Тенях» мазать нечем, поэтому палец там таскает кадр без всякого режима —
+  // и кнопка не нужна. Она только для кисти и штампа, где ведение это прицеливание.
+  const можно = rtScale > 1 && rtTool !== 'bags';
+  b.classList.toggle('on', можно);
   if(!можно) rtPanMode = false;
   b.classList.toggle('active', rtPanMode);
-  rtCanvas.style.cursor = rtPanMode ? 'grab' : 'crosshair';
+  rtCanvas.style.cursor = (rtPanMode || rtTool === 'bags') ? 'grab' : 'crosshair';
 }
+// таскать одним пальцем можно: включённой рукой либо в «Тенях», где кисти нет
+function rtCanPan1(){ return rtScale > 1 && (rtPanMode || rtTool === 'bags'); }
 // положение шторки берём от кадра, а не от экрана: холст может быть приближён и сдвинут
 function rtCmpAt(e){
   const r = rtCanvas.getBoundingClientRect();
@@ -5542,7 +5561,7 @@ rtCanvas.addEventListener('pointerdown', e=>{
     // Одним пальцем кадр двигается ТОЛЬКО в режиме руки. Пробовал различать по движению
     // («поехал палец — значит тащит») — не годится: умная кисть целится именно ведением,
     // и вместо замазки уезжало фото. Поэтому режим явный, кнопкой.
-    rtPan1 = (rtPanMode && rtScale > 1) ? { x0:e.clientX, y0:e.clientY, tx0:rtTx, ty0:rtTy, on:true } : null;
+    rtPan1 = rtCanPan1() ? { x0:e.clientX, y0:e.clientY, tx0:rtTx, ty0:rtTy, on:true } : null;
     if(!rtPan1 && rtTool === 'heal'){ rtDrawing = true; rtLastE = e; rtShowCursor(e); }  // aim only — heal fires on release
   }
 });
@@ -5628,6 +5647,7 @@ function rtPlaceMarkers(){
 function rtSetTool(tool){
   rtCmpOff();          // смена инструмента выходит из сравнения
   rtTool=tool;
+  rtSyncPan();         // в «Тенях» руки нет, в кисти есть
   document.querySelectorAll('.rt-mode').forEach(b=>b.classList.toggle('active', b.dataset.tool===tool));
   const stamp=tool==='stamp', bags=tool==='bags';
   rtModes.classList.toggle('stamp', stamp);
