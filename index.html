@@ -1556,6 +1556,11 @@
     <button class="icon-btn hdr-cmp" id="rtCompare" aria-label="До и после">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
     </button>
+    <!-- Рука. Появляется только на приближённом кадре: пока кадр целиком на экране,
+         двигать нечего. Включена — палец таскает фото и НЕ мажет. -->
+    <button class="icon-btn hdr-cmp" id="rtPanBtn" aria-label="Двигать фото" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V5.6a1.6 1.6 0 0 1 3.2 0V11"/><path d="M12.2 11V4.6a1.6 1.6 0 0 1 3.2 0V11"/><path d="M15.4 11.4V7.2a1.6 1.6 0 0 1 3.2 0V15a6 6 0 0 1-6 6h-1.2a5 5 0 0 1-3.8-1.8l-2.9-3.6a1.6 1.6 0 0 1 2.4-2.1L9 15.2V8.6a1.6 1.6 0 0 1 0-.2"/></svg>
+    </button>
     <span class="rt-top" id="rtTop">Ретушь</span>
     <button class="ov-act gold" id="rtApply">Применить</button>
   </div>
@@ -1564,12 +1569,14 @@
     <canvas class="ov-bg" id="rtBg" aria-hidden="true"></canvas>
     <div class="rt-holder" id="rtHolder">
       <canvas id="rtCanvas"></canvas>
-      <!-- шторка сравнения — та же, что в редакторе: одна привычка на всё приложение -->
-      <div id="rtCmp">
-        <span class="cmp-lab b">ДО</span>
-        <span class="cmp-lab a">ПОСЛЕ</span>
-        <div id="rtCmpDiv"><div id="rtCmpHandle">‹ ›</div></div>
-      </div>
+    </div>
+    <!-- Шторка сравнения лежит СНАРУЖИ увеличиваемого слоя. Внутри него она ехала и
+         росла вместе с фото: на приближённом кадре подписи «ДО»/«ПОСЛЕ» оказывались
+         прямо на лице. Здесь они в экранных координатах — всегда у верхнего края. -->
+    <div id="rtCmp">
+      <span class="cmp-lab b">ДО</span>
+      <span class="cmp-lab a">ПОСЛЕ</span>
+      <div id="rtCmpDiv"><div id="rtCmpHandle">‹ ›</div></div>
     </div>
     <div class="rt-cursor" id="rtCursor"></div>
     <div class="rt-marker rt-src" id="rtSrc"><b>Источник</b></div>
@@ -2195,7 +2202,14 @@ const LOOKS = [
 const NUM_F = ['ноль','одна','две','три','четыре','пять','шесть','семь','восемь','девять','десять',
   'одиннадцать','двенадцать','тринадцать','четырнадцать','пятнадцать','шестнадцать','семнадцать',
   'восемнадцать','девятнадцать','двадцать'];
-function filmCount(){ return LOOKS.filter(l=> l.name !== 'Оригинал').length; }
+// Считаем и встроенные плёнки, и свои пресеты: поставил набор — обещание на стартовом
+// экране должно вырасти вместе с лентой, а не остаться навсегда «восемь».
+// try — потому что первый вызов идёт раньше, чем объявлено хранилище своих пресетов.
+function filmCount(){
+  let свои = 0;
+  try{ свои = MYP.all().length; }catch(_){}
+  return LOOKS.filter(l=> l.name !== 'Оригинал').length + свои;
+}
 function filmsPhrase(n){
   const t = n % 100, o = n % 10;
   const word = (t >= 11 && t <= 14) ? 'плёнок'
@@ -3555,6 +3569,7 @@ document.getElementById('cdlgInput').onkeydown = e=>{ if(e.key === 'Enter') cdlg
 
 // ─── Список своих пресетов в настройках ───
 function renderMyList(){
+  syncOnbTitle();          // видов стало больше или меньше — обещание на старте следом
   const host = document.getElementById('mypList');
   if(!host) return;
   const list = MYP.all();
@@ -5481,8 +5496,19 @@ function rtUpdateLoupe(e, ar){
 }
 function rtHideLoupe(){ rtLoupe.classList.remove('on'); }
 // pointers: 1 finger draws, 2 fingers pinch-zoom + pan
-let rtScale = 1, rtTx = 0, rtTy = 0, rtPinch = null, rtPan1 = null, rtCmpDrag = false;
+let rtScale = 1, rtTx = 0, rtTy = 0, rtPinch = null, rtPan1 = null, rtCmpDrag = false, rtPanMode = false;
 const rtPtrs = new Map();
+// Кнопка-рука появляется, только когда есть что двигать, — на неприближённом кадре
+// она была бы кнопкой без действия.
+function rtSyncPan(){
+  const b = document.getElementById('rtPanBtn');
+  if(!b) return;
+  const можно = rtScale > 1;
+  b.style.display = можно ? 'inline-flex' : 'none';
+  if(!можно) rtPanMode = false;
+  b.classList.toggle('active', rtPanMode);
+  rtCanvas.style.cursor = rtPanMode ? 'grab' : 'crosshair';
+}
 // положение шторки берём от кадра, а не от экрана: холст может быть приближён и сдвинут
 function rtCmpAt(e){
   const r = rtCanvas.getBoundingClientRect();
@@ -5490,7 +5516,11 @@ function rtCmpAt(e){
   rtCmpDraw();
 }
 const rtHolder = document.getElementById('rtHolder');
-function rtApplyTransform(){ rtHolder.style.transform = `translate(${rtTx}px,${rtTy}px) scale(${rtScale})`; }
+function rtApplyTransform(){
+  rtHolder.style.transform = `translate(${rtTx}px,${rtTy}px) scale(${rtScale})`;
+  rtSyncPan();          // кнопка-рука зависит от масштаба
+  rtCmpPlace();         // шторка живёт в экранных координатах — её надо переставить
+}
 function rtResetZoom(){ rtScale = 1; rtTx = 0; rtTy = 0; rtApplyTransform(); }
 function rtClampPan(){
   const a = document.getElementById('rtArea').getBoundingClientRect();
@@ -5509,12 +5539,11 @@ rtCanvas.addEventListener('pointerdown', e=>{
     rtPinch = { d0:Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y), s0:rtScale,
                 mx:(p[0].x+p[1].x)/2, my:(p[0].y+p[1].y)/2, tx0:rtTx, ty0:rtTy };
   } else if(rtPtrs.size === 1){
-    // Один палец на приближённом кадре может значить и «замазать здесь», и «подвинь
-    // фото». Различаем не режимом, а движением: замазка и так срабатывает НА ОТПУСКАНИИ,
-    // поэтому короткий тап остаётся замазкой, а поехавший палец — перетаскиванием.
-    // Двумя пальцами таскать по-прежнему можно, но теперь это не единственный способ.
-    rtPan1 = rtScale > 1 ? { x0:e.clientX, y0:e.clientY, tx0:rtTx, ty0:rtTy, on:false } : null;
-    if(rtTool === 'heal'){ rtDrawing = true; rtLastE = e; rtShowCursor(e); }  // aim only — heal fires on release
+    // Одним пальцем кадр двигается ТОЛЬКО в режиме руки. Пробовал различать по движению
+    // («поехал палец — значит тащит») — не годится: умная кисть целится именно ведением,
+    // и вместо замазки уезжало фото. Поэтому режим явный, кнопкой.
+    rtPan1 = (rtPanMode && rtScale > 1) ? { x0:e.clientX, y0:e.clientY, tx0:rtTx, ty0:rtTy, on:true } : null;
+    if(!rtPan1 && rtTool === 'heal'){ rtDrawing = true; rtLastE = e; rtShowCursor(e); }  // aim only — heal fires on release
   }
 });
 rtCanvas.addEventListener('pointermove', e=>{
@@ -5529,19 +5558,10 @@ rtCanvas.addEventListener('pointermove', e=>{
     rtTx = rtPinch.tx0 + (mx - rtPinch.mx); rtTy = rtPinch.ty0 + (my - rtPinch.my);
     rtClampPan(); rtApplyTransform();
   } else if(rtPtrs.size === 1 && rtPan1){
-    const dx = e.clientX - rtPan1.x0, dy = e.clientY - rtPan1.y0;
-    // 12 px — палец при обычном тапе столько не проходит, а намеренное движение проходит сразу
-    if(!rtPan1.on && Math.hypot(dx, dy) > 12){
-      rtPan1.on = true;
-      rtDrawing = false; rtHideCursor();     // это перетаскивание, а не наводка — замазки не будет
-    }
-    if(rtPan1.on){
-      e.preventDefault();
-      rtTx = rtPan1.tx0 + dx; rtTy = rtPan1.ty0 + dy;
-      rtClampPan(); rtApplyTransform();
-    } else if(rtDrawing){
-      e.preventDefault(); rtLastE = e; rtShowCursor(e);
-    }
+    e.preventDefault();
+    rtTx = rtPan1.tx0 + (e.clientX - rtPan1.x0);
+    rtTy = rtPan1.ty0 + (e.clientY - rtPan1.y0);
+    rtClampPan(); rtApplyTransform();
   } else if(rtDrawing && rtPtrs.size === 1){
     e.preventDefault(); rtLastE = e; rtShowCursor(e);   // keep aiming, heal only on release
   }
@@ -5892,8 +5912,25 @@ document.getElementById('rtBags').oninput = e=>{
 let rtOrig = null, rtCmpTmp = null, rtCmpOn = false, rtCmpPos = 0.5;
 const rtCompareBtn = document.getElementById('rtCompare');
 const rtCmpEl = document.getElementById('rtCmp');
+// Разделитель и подписи стоят в координатах ЭКРАНА, а кадр может быть приближён и
+// сдвинут — поэтому положение считаем от того, где холст сейчас реально виден.
+function rtCmpPlace(){
+  if(!rtCmpOn) return;
+  const area = document.getElementById('rtArea').getBoundingClientRect();
+  const cv = rtCanvas.getBoundingClientRect();
+  const div = document.getElementById('rtCmpDiv');
+  const x = cv.left - area.left + rtCmpPos * cv.width;
+  div.style.left = Math.max(0, Math.min(area.width, x)) + 'px';
+  // Подписи — у верха видимой части кадра, но НЕ выше шапки: на приближённом снимке
+  // кадр уходит под неё, и «ДО» пряталось за кнопкой «назад».
+  const bar = document.querySelector('#retouch .ov-top');
+  const низШапки = bar ? bar.getBoundingClientRect().bottom - area.top : 0;
+  const top = Math.max(низШапки + 10, Math.round(cv.top - area.top + 10));
+  document.querySelectorAll('#rtCmp .cmp-lab').forEach(l=> l.style.top = top + 'px');
+}
 function rtCmpDraw(){
   if(!rtCmpOn || !rtCmpTmp) return;
+  rtCmpPlace();
   const ctx = rtCanvas.getContext('2d'), w = rtCanvas.width, h = rtCanvas.height;
   const splitX = Math.round(Math.max(0, Math.min(1, rtCmpPos)) * w);
   ctx.clearRect(0,0,w,h);
@@ -5903,7 +5940,6 @@ function rtCmpDraw(){
     ctx.drawImage(rtCmpTmp, 0, 0);                   // справа — что стало
     ctx.restore();
   }
-  document.getElementById('rtCmpDiv').style.left = (rtCmpPos*100)+'%';
 }
 function rtCmpOff(){
   if(!rtCmpOn) return;
@@ -5911,6 +5947,12 @@ function rtCmpOff(){
   if(rtCmpTmp){ const ctx = rtCanvas.getContext('2d');
     ctx.clearRect(0,0,rtCanvas.width,rtCanvas.height); ctx.drawImage(rtCmpTmp, 0, 0); rtCmpTmp = null; }
 }
+document.getElementById('rtPanBtn').onclick = ()=>{
+  rtPanMode = !rtPanMode;
+  if(rtPanMode) rtCmpOff();       // рука и сравнение — разные занятия
+  rtDrawing = false; rtHideCursor();
+  rtSyncPan();
+};
 rtCompareBtn.onclick = ()=>{
   if(rtCmpOn) return rtCmpOff();
   if(!rtOrig) return;
