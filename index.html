@@ -208,7 +208,9 @@
   .dock .sec.on{display:flex;}
   #secFilms.sec.on{display:block;}
   #secColor.sec.on, #secCurve.sec.on{flex-direction:column; padding:6px 20px calc(8px + env(safe-area-inset-bottom));}
-  #secCurve .cv-pad{margin:0 auto;}
+  /* доска не должна упираться в кнопки: нижний край кривой — рабочая зона, а не поле */
+  #secCurve .cv-pad{margin:2px auto 12px;}
+  #secCurve .cv-chans{margin-top:2px;}
 
   .toolbar{position:relative; z-index:2; flex-direction:column;
     padding:8px 14px 7px;}
@@ -4072,7 +4074,10 @@ function openHsl(){
 const cvEl = document.getElementById('curve'), cvBoard = document.getElementById('cvBoard');
 const cvCtx = cvBoard.getContext('2d');
 let cvChan = 'rgb', cvHist = null, cvDrag = null, cvBackup = null;
-const CV_PAD = 14;                              // поле вокруг сетки, чтобы точку у края было чем взять
+// Поле вокруг сетки. Было 14 — на доске в 258 точек это всего десять пикселей, и чёрная
+// точка сидела в самом углу: палец её не брал, хотя тянется она правильно. Сетка стала
+// чуть мельче, зато крайние точки лежат в глубине доски и ловятся.
+const CV_PAD = 28;
 
 function cvSize(){
   const r = cvBoard.getBoundingClientRect();
@@ -4148,7 +4153,7 @@ function cvPoint(e){
 }
 function cvNear(p){
   const pts = curve[cvChan];
-  let best = -1, bd = 20;                        // 20 единиц ≈ палец
+  let best = -1, bd = 30;                        // радиус захвата под палец, а не под курсор
   pts.forEach((pt,i)=>{ const d = Math.hypot(pt[0]-p[0], pt[1]-p[1]); if(d < bd){ bd = d; best = i; } });
   return best;
 }
