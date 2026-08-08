@@ -169,6 +169,17 @@
     width:40px; height:40px; border-radius:50%; background:#fff; color:#111; font-size:15px; font-weight:700;
     display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(0,0,0,.4);}
 
+  /* шторка сравнения в ретуши — те же метки и тот же разделитель, что в редакторе */
+  #rtCmp{position:absolute; inset:0; display:none; pointer-events:none; z-index:3;}
+  #rtCmp.on{display:block;}
+  #rtCmp .cmp-lab{top:12px;}
+  #rtCmpDiv{position:absolute; top:0; bottom:0; width:2px; background:#fff;
+    transform:translateX(-1px); box-shadow:0 0 8px rgba(0,0,0,.5);}
+  #rtCmpHandle{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:40px; height:40px; border-radius:50%; background:#fff; color:#111;
+    font-size:15px; font-weight:700; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 10px rgba(0,0,0,.4);}
+
   #empty{display:flex; flex-direction:column; align-items:center; gap:12px; color:var(--dim); text-align:center;}
   #empty svg{width:46px; height:46px; opacity:.7;}
 
@@ -213,7 +224,12 @@
   #secCurve .cv-chans{margin-top:2px;}
 
   /* «До/После» в шапке. Активное состояние заметное: сравнение — режим, а не тап,
-     и из него надо уметь выйти, не гадая, включено оно или нет. */
+     и из него надо уметь выйти, не гадая, включено оно или нет.
+     40px — это не размер значка, а размер зоны под палец: значок остаётся мелким,
+     промахнуться по кнопке нельзя. */
+  .hdr-cmp{min-width:40px; min-height:40px; display:inline-flex; align-items:center;
+    justify-content:center; margin-left:2px;}
+  .hdr-cmp svg{width:19px; height:19px;}
   .hdr-cmp.active{color:var(--gold-ink); background:var(--gold); border-color:transparent;}
   /* краевая метка — та же, что идёт по краю плёнки на контактном листе */
   .tool-edge{display:flex; align-items:center; gap:9px; margin:6px 2px 5px;}
@@ -860,6 +876,11 @@
   .rt-tools{display:flex; align-items:center; justify-content:center; gap:14px; padding:4px 22px 2px;}
   .rt-sliders{display:flex; flex-direction:column; gap:0; padding:4px 22px 0;}
   .rt-srow{display:flex; align-items:center; gap:10px; height:30px;}
+  /* В «Тенях» ползунок один, и он оказывался вплотную к кнопкам — палец, ведущий
+     ползунок к краю, задевал «Отменить». Разводим их так же, как доску кривой. */
+  .retouch.shadows-only .rt-sliders{padding-bottom:26px;}
+  .retouch.shadows-only .rt-srow{height:42px;}
+  .retouch.shadows-only .rt-tools{padding-top:14px;}
   .rt-srow span{flex:0 0 80px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); font-weight:600;}
   .rt-srow input[type=range]{flex:1; height:30px;}
   .rt-srow input[type=range]::-webkit-slider-thumb{height:20px; margin-top:-8.5px;}
@@ -1012,13 +1033,14 @@
   <button class="icon-btn" id="backBtn" aria-label="Домой">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
   </button>
-  <div class="hdr-title" id="hdrTitle">Редактор</div>
   <!-- «До/После» жило в разделе «Ещё». Сравнивать хочется на каждом шаге правки, а
-       не сходив за этим в отдельную вкладку, поэтому кнопка переехала в шапку и
-       видна из любого раздела. -->
+       не сходив за этим в отдельную вкладку, поэтому кнопка в шапке и видна всегда.
+       Стоит СЛЕВА, рядом с «назад»: у «Сохранить» она попадала под тот же палец, и
+       вместо сравнения снимок улетал в галерею. -->
   <button class="icon-btn hdr-cmp" id="compare" aria-label="До и после" style="display:none">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
   </button>
+  <div class="hdr-title" id="hdrTitle">Редактор</div>
   <button class="ed-save" id="save" style="display:none">Сохранить</button>
 </header>
 
@@ -1488,6 +1510,8 @@
     <button class="ov-back" id="cropCancel" aria-label="Отмена">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
+    <!-- В «Кадре» сравнения нет намеренно: цвет здесь не меняется, а «до» — это
+         снимок за рамкой, он и так виден на экране целиком. -->
     <span class="crop-top">Кадр</span>
     <button class="ov-act gold" id="cropApply">Применить</button>
   </div>
@@ -1527,6 +1551,11 @@
     <button class="ov-back" id="rtCancel" aria-label="Отмена">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
+    <!-- та же кнопка и на том же месте, что в редакторе: сравнение должно быть под
+         одним и тем же пальцем на любом экране, а не своё в каждом окне -->
+    <button class="icon-btn hdr-cmp" id="rtCompare" aria-label="До и после">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
+    </button>
     <span class="rt-top" id="rtTop">Ретушь</span>
     <button class="ov-act gold" id="rtApply">Применить</button>
   </div>
@@ -1535,6 +1564,12 @@
     <canvas class="ov-bg" id="rtBg" aria-hidden="true"></canvas>
     <div class="rt-holder" id="rtHolder">
       <canvas id="rtCanvas"></canvas>
+      <!-- шторка сравнения — та же, что в редакторе: одна привычка на всё приложение -->
+      <div id="rtCmp">
+        <span class="cmp-lab b">ДО</span>
+        <span class="cmp-lab a">ПОСЛЕ</span>
+        <div id="rtCmpDiv"><div id="rtCmpHandle">‹ ›</div></div>
+      </div>
     </div>
     <div class="rt-cursor" id="rtCursor"></div>
     <div class="rt-marker rt-src" id="rtSrc"><b>Источник</b></div>
@@ -1553,8 +1588,8 @@
       <div class="rt-srow"><span>Сила</span><input type="range" id="rtStr" min="20" max="100" value="100"><b id="rtStrV">100</b></div>
       <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Тени</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
     </div>
+    <!-- «До / После» отсюда убрано: кнопка теперь в шапке, как и в редакторе -->
     <div class="rt-tools">
-      <button class="rt-undo" id="rtCompare">До / После</button>
       <button class="rt-undo" id="rtUndo" disabled>Отменить</button>
     </div>
   </div>
@@ -5403,7 +5438,7 @@ function openShadows(){
   retouchEl.classList.add('shadows-only');
   rtSetTool('bags');
 }
-function closeRetouch(){ retouchEl.classList.remove('open'); retouchEl.classList.remove('shadows-only'); }
+function closeRetouch(){ rtCmpOff(); retouchEl.classList.remove('open'); retouchEl.classList.remove('shadows-only'); }
 function rtBrushR(){ const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width; return rtSize * (rtCanvas.width/disp) * 0.5; }
 function rtAt(e){ const r = rtCanvas.getBoundingClientRect();
   const bx = (e.clientX-r.left)*(rtCanvas.width/r.width), by = (e.clientY-r.top)*(rtCanvas.height/r.height);
@@ -5446,7 +5481,14 @@ function rtUpdateLoupe(e, ar){
 }
 function rtHideLoupe(){ rtLoupe.classList.remove('on'); }
 // pointers: 1 finger draws, 2 fingers pinch-zoom + pan
-let rtScale = 1, rtTx = 0, rtTy = 0, rtPinch = null; const rtPtrs = new Map();
+let rtScale = 1, rtTx = 0, rtTy = 0, rtPinch = null, rtPan1 = null, rtCmpDrag = false;
+const rtPtrs = new Map();
+// положение шторки берём от кадра, а не от экрана: холст может быть приближён и сдвинут
+function rtCmpAt(e){
+  const r = rtCanvas.getBoundingClientRect();
+  rtCmpPos = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  rtCmpDraw();
+}
 const rtHolder = document.getElementById('rtHolder');
 function rtApplyTransform(){ rtHolder.style.transform = `translate(${rtTx}px,${rtTy}px) scale(${rtScale})`; }
 function rtResetZoom(){ rtScale = 1; rtTx = 0; rtTy = 0; rtApplyTransform(); }
@@ -5457,6 +5499,8 @@ function rtClampPan(){
 }
 rtCanvas.addEventListener('pointerdown', e=>{
   e.preventDefault();
+  // в режиме сравнения палец двигает шторку, а не мажет
+  if(rtCmpOn){ try{ rtCanvas.setPointerCapture(e.pointerId); }catch(_){} rtCmpDrag = true; rtCmpAt(e); return; }
   rtPtrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
   try{ rtCanvas.setPointerCapture(e.pointerId); }catch(_){}
   if(rtPtrs.size === 2){
@@ -5464,11 +5508,17 @@ rtCanvas.addEventListener('pointerdown', e=>{
     const p = [...rtPtrs.values()];
     rtPinch = { d0:Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y), s0:rtScale,
                 mx:(p[0].x+p[1].x)/2, my:(p[0].y+p[1].y)/2, tx0:rtTx, ty0:rtTy };
-  } else if(rtPtrs.size === 1 && rtTool === 'heal'){
-    rtDrawing = true; rtLastE = e; rtShowCursor(e);   // aim only — heal fires on release
+  } else if(rtPtrs.size === 1){
+    // Один палец на приближённом кадре может значить и «замазать здесь», и «подвинь
+    // фото». Различаем не режимом, а движением: замазка и так срабатывает НА ОТПУСКАНИИ,
+    // поэтому короткий тап остаётся замазкой, а поехавший палец — перетаскиванием.
+    // Двумя пальцами таскать по-прежнему можно, но теперь это не единственный способ.
+    rtPan1 = rtScale > 1 ? { x0:e.clientX, y0:e.clientY, tx0:rtTx, ty0:rtTy, on:false } : null;
+    if(rtTool === 'heal'){ rtDrawing = true; rtLastE = e; rtShowCursor(e); }  // aim only — heal fires on release
   }
 });
 rtCanvas.addEventListener('pointermove', e=>{
+  if(rtCmpOn){ if(rtCmpDrag){ e.preventDefault(); rtCmpAt(e); } return; }
   if(!rtPtrs.has(e.pointerId)) return;
   rtPtrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(rtPinch && rtPtrs.size >= 2){
@@ -5478,14 +5528,31 @@ rtCanvas.addEventListener('pointermove', e=>{
     rtScale = Math.max(1, Math.min(4, rtPinch.s0 * d/rtPinch.d0));
     rtTx = rtPinch.tx0 + (mx - rtPinch.mx); rtTy = rtPinch.ty0 + (my - rtPinch.my);
     rtClampPan(); rtApplyTransform();
+  } else if(rtPtrs.size === 1 && rtPan1){
+    const dx = e.clientX - rtPan1.x0, dy = e.clientY - rtPan1.y0;
+    // 12 px — палец при обычном тапе столько не проходит, а намеренное движение проходит сразу
+    if(!rtPan1.on && Math.hypot(dx, dy) > 12){
+      rtPan1.on = true;
+      rtDrawing = false; rtHideCursor();     // это перетаскивание, а не наводка — замазки не будет
+    }
+    if(rtPan1.on){
+      e.preventDefault();
+      rtTx = rtPan1.tx0 + dx; rtTy = rtPan1.ty0 + dy;
+      rtClampPan(); rtApplyTransform();
+    } else if(rtDrawing){
+      e.preventDefault(); rtLastE = e; rtShowCursor(e);
+    }
   } else if(rtDrawing && rtPtrs.size === 1){
     e.preventDefault(); rtLastE = e; rtShowCursor(e);   // keep aiming, heal only on release
   }
 });
 function rtEnd(e){
-  const finishHeal = rtDrawing && rtTool === 'heal' && rtLastE && rtPtrs.size === 1;
+  if(rtCmpOn){ rtCmpDrag = false; return; }
+  const panned = rtPan1 && rtPan1.on;
+  const finishHeal = !panned && rtDrawing && rtTool === 'heal' && rtLastE && rtPtrs.size === 1;
   rtPtrs.delete(e.pointerId);
   if(rtPtrs.size < 2) rtPinch = null;
+  if(rtPtrs.size === 0) rtPan1 = null;
   if(rtPtrs.size === 0){
     if(finishHeal){   // heal exactly where you aimed, on release
       rtUndo.push(rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height));
@@ -5505,6 +5572,7 @@ rtCanvas.addEventListener('wheel', e=>{
   if(rtScale === 1){ rtTx = 0; rtTy = 0; } rtClampPan(); rtApplyTransform();
 }, {passive:false});
 document.getElementById('rtUndo').onclick = ()=>{
+  rtCmpOff();
   if(!rtUndo.length) return;
   rtCanvas.getContext('2d').putImageData(rtUndo.pop(), 0, 0);
   rtOps.pop();   // снимок и запись в журнале идут парой
@@ -5538,6 +5606,7 @@ function rtPlaceMarkers(){
   rtDrawMarkers();
 }
 function rtSetTool(tool){
+  rtCmpOff();          // смена инструмента выходит из сравнения
   rtTool=tool;
   document.querySelectorAll('.rt-mode').forEach(b=>b.classList.toggle('active', b.dataset.tool===tool));
   const stamp=tool==='stamp', bags=tool==='bags';
@@ -5615,8 +5684,12 @@ function bagsRegions(lms, W, H){
     // самая тёмная складка; чинил это дважды точечно (хвостики, разный blur) — оба раза частично.
     // У эллипса по построению нет углов вообще, поэтому вся граница получает одинаково плавное
     // перо — весь класс этого бага исчезает, а не глушится в конкретной точке.
-    const bandCx = ecx + dx*eyeW*0.38, bandCy = ecy + dy*eyeW*0.38;   // центр — примерно середина былой полосы 0.22..0.62
-    const rx = eyeW*0.66, ry = eyeW*0.32, rot = Math.atan2(ay, ax);
+    // Полоса прижата к НИЖНЕМУ ВЕКУ. Была 0.06..0.70 ширины глаза вниз — это уже щека,
+    // и эффект расползался туда, где тени нет (жена: «применяется не только на веко»).
+    // Стало 0.06..0.46: складка под ресницами целиком, щека — нет. По горизонтали тоже
+    // уже (0.58 вместо 0.66), чтобы не залезать на спинку носа.
+    const bandCx = ecx + dx*eyeW*0.26, bandCy = ecy + dy*eyeW*0.26;
+    const rx = eyeW*0.58, ry = eyeW*0.20, rot = Math.atan2(ay, ax);
     const poly = [];
     for(let i=0;i<20;i++){
       const t = i/20*Math.PI*2, lx = Math.cos(t)*rx, ly = Math.sin(t)*ry;
@@ -5643,10 +5716,11 @@ function bagsBuildZone(r, cv){
   if(bw<8 || bh<8) return null;
   const mc = document.createElement('canvas'); mc.width=bw; mc.height=bh;
   const mctx = mc.getContext('2d');
-  // перо мягче, чем изначально (0.14), чтобы не было жёсткого обрыва тона на переходе;
-  // не сильнее — иначе тонкая игла полумесяца у самих уголков (см. хвостики выше) гасится
-  // почти до нуля, оставляя необработанным именно то место, где чаще всего темнее всего
-  mctx.filter = 'blur(' + Math.max(3, Math.round(eyeW*0.24)) + 'px)';
+  // Перо считаем ОТ ВЫСОТЫ ПОЛОСЫ, а не от ширины глаза. Когда полосу прижали к веку
+  // (полувысота стала 0.20 ширины глаза), прежнее перо 0.24 оказалось шире самой полосы
+  // и съедало её целиком: маска не набирала и половины непрозрачности, эффект выходил
+  // вдвое слабее заявленного. Половина полувысоты даёт мягкий край и плотную середину.
+  mctx.filter = 'blur(' + Math.max(3, Math.round(eyeW*0.10)) + 'px)';
   mctx.fillStyle = '#fff'; mctx.beginPath();
   r.poly.forEach((p,i)=> i ? mctx.lineTo(p.x-bx, p.y-by) : mctx.moveTo(p.x-bx, p.y-by));
   mctx.closePath(); mctx.fill();
@@ -5737,12 +5811,13 @@ function bagsApply(t, cv, data){
       // Раньше здесь стоял общий множитель 0.68 — им лечили «белое пятно», но
       // пятно шло не отсюда, а от возврата текстуры ниже, и заодно ослаблялись
       // ВСЕ тени: лёгкая (13 единиц яркости) убиралась всего на пять.
-      // Глухого потолка 0.68 больше нет: им лечили «белое пятно», а лечится оно
-      // ограничением подъёма ниже. Ниже делителя 10 эффект уже не растёт — упирается
-      // в саму карту, поэтому дальше задирать нечего.
-      const a = ageom * local * t;
+      // Потолок 0.78: до самого тона щеки доводить нельзя — кожа под глазом
+      // естественно чуть темнее, и полное выравнивание читается как выбеленное пятно
+      // (жена сказала прямо: «выбеляет»). Прежние 0.68 душили эффект не здесь, а вместе
+      // с неверным делителем выше — теперь сила берётся оттуда, а тут только предел.
+      const a = ageom * local * t * 0.78;
       if(a < 0.004) continue;
-      const aClamped = Math.min(1, a), hk = 1 - 0.3*aClamped;
+      const aClamped = Math.min(0.78, a), hk = 1 - 0.3*aClamped;
       // сдвиг тона к ЦВЕТУ щеки (не только к яркости) — снимает и синеву/желтизну круга, не только темноту
       const lr=low[i], lg=low[i+1], lb=low[i+2];
       const nr = lr + (cR-lr)*aClamped, ng = lg + (cG-lg)*aClamped, nb = lb + (cB-lb)*aClamped;
@@ -5804,29 +5879,51 @@ async function bagsEnter(){
   bagsBusy = false;
 }
 document.getElementById('rtBags').oninput = e=>{
+  rtCmpOff();          // тронули ползунок — сравнивать больше нечего, показываем результат
   const v = +e.target.value;
   document.getElementById('rtBagsV').textContent = v;
   bagsApply(v/100);
   rtBagsOp = v ? { t:'bags', faces:rtFaces, amount:v/100 } : null;
 };
 
-// before/after: hold to see the pristine original, release for the retouched result
-let rtOrig = null, rtCmpTmp = null;
+// ─── «До/После» в ретуши ───
+// Раньше здесь было «зажми и держи», а в редакторе — шторка с перетаскиванием. Один
+// и тот же вопрос «что я изменил» решался двумя разными жестами; теперь жест один.
+let rtOrig = null, rtCmpTmp = null, rtCmpOn = false, rtCmpPos = 0.5;
 const rtCompareBtn = document.getElementById('rtCompare');
-rtCompareBtn.addEventListener('pointerdown', e=>{
-  e.preventDefault(); if(!rtOrig) return;
-  rtCmpTmp = document.createElement('canvas'); rtCmpTmp.width = rtCanvas.width; rtCmpTmp.height = rtCanvas.height;
+const rtCmpEl = document.getElementById('rtCmp');
+function rtCmpDraw(){
+  if(!rtCmpOn || !rtCmpTmp) return;
+  const ctx = rtCanvas.getContext('2d'), w = rtCanvas.width, h = rtCanvas.height;
+  const splitX = Math.round(Math.max(0, Math.min(1, rtCmpPos)) * w);
+  ctx.clearRect(0,0,w,h);
+  ctx.drawImage(rtOrig, 0, 0);                       // слева — как было
+  if(splitX < w){
+    ctx.save(); ctx.beginPath(); ctx.rect(splitX, 0, w-splitX, h); ctx.clip();
+    ctx.drawImage(rtCmpTmp, 0, 0);                   // справа — что стало
+    ctx.restore();
+  }
+  document.getElementById('rtCmpDiv').style.left = (rtCmpPos*100)+'%';
+}
+function rtCmpOff(){
+  if(!rtCmpOn) return;
+  rtCmpOn = false; rtCmpEl.classList.remove('on'); rtCompareBtn.classList.remove('active');
+  if(rtCmpTmp){ const ctx = rtCanvas.getContext('2d');
+    ctx.clearRect(0,0,rtCanvas.width,rtCanvas.height); ctx.drawImage(rtCmpTmp, 0, 0); rtCmpTmp = null; }
+}
+rtCompareBtn.onclick = ()=>{
+  if(rtCmpOn) return rtCmpOff();
+  if(!rtOrig) return;
+  rtCmpTmp = document.createElement('canvas');
+  rtCmpTmp.width = rtCanvas.width; rtCmpTmp.height = rtCanvas.height;
   rtCmpTmp.getContext('2d').drawImage(rtCanvas, 0, 0);
-  const ctx = rtCanvas.getContext('2d'); ctx.clearRect(0,0,rtCanvas.width,rtCanvas.height); ctx.drawImage(rtOrig, 0, 0);
-  rtCompareBtn.classList.add('active');
-});
-function rtCompareRestore(){ if(rtCmpTmp){ const ctx = rtCanvas.getContext('2d');
-  ctx.clearRect(0,0,rtCanvas.width,rtCanvas.height); ctx.drawImage(rtCmpTmp, 0, 0); rtCmpTmp = null; rtCompareBtn.classList.remove('active'); } }
-rtCompareBtn.addEventListener('pointerup', rtCompareRestore);
-rtCompareBtn.addEventListener('pointercancel', rtCompareRestore);
-rtCompareBtn.addEventListener('pointerleave', rtCompareRestore);
+  rtCmpOn = true; rtCmpPos = 0.5;
+  rtCmpEl.classList.add('on'); rtCompareBtn.classList.add('active');
+  rtCmpDraw();
+};
 document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
+  rtCmpOff();          // применяем результат, а не то, что показывает шторка
   sourceCanvas.getContext('2d').drawImage(rtCanvas, 0, 0);   // bake retouch into the source
   editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp);   // те же правки повторим на оригинале
   rtOps = []; rtBagsOp = null;
