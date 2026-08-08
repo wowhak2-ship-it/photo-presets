@@ -1400,13 +1400,9 @@
       <div class="set-note">Уйдёт в поле авторства сохранённого снимка. Дата съёмки, камера, выдержка и ISO переносятся из исходника сами.</div>
     </div>
 
-    <div class="set-group">
-      <div class="set-gl">КАМЕРА</div>
-      <button class="set-row" id="rowGrid">
-        <span class="set-name">Сетка кадра</span>
-        <span class="tgl" id="tglGrid"><i></i></span>
-      </button>
-    </div>
+    <!-- Настройка «Сетка кадра» убрана: она рисовала сетку в СВОЁМ видоискателе,
+         а снимаем мы теперь родной камерой телефона — у неё своя сетка в своих
+         настройках. Переключатель остался бы кнопкой, которая ничего не делает. -->
 
     <div class="set-group">
       <div class="set-gl">ПРИЛОЖЕНИЕ</div>
@@ -3547,12 +3543,6 @@ const SET = {
 const SIZE_STEPS = [0, 2048, 1080];                      // 0 = оригинал
 const sizeName = m => m === 0 ? 'Оригинал' : (m + ' px');
 
-function applyCamGrid(){
-  const on = SET.get('camGrid', true);
-  const g = document.querySelector('.cam-grid');
-  if(g) g.style.display = on ? 'block' : 'none';
-  document.getElementById('tglGrid').classList.toggle('on', on);
-}
 function applyDefSize(){
   document.getElementById('setSizeVal').innerHTML = sizeName(SET.get('expSize', 0)) + '<i>›</i>';
 }
@@ -3720,14 +3710,11 @@ document.getElementById('openSettings').onclick = ()=>{
   document.getElementById('settings').classList.add('open');
   // карточку установки показываем, только если браузер реально предложил установку
   document.getElementById('pwaCard').style.display = deferredPrompt ? 'flex' : 'none';
-  applyCamGrid(); applyDefSize(); renderMyList();
+  applyDefSize(); renderMyList();
   document.getElementById('setAuthor').value = SET.get('author', '');
 };
 document.getElementById('setAuthor').oninput = e=>{ SET.set('author', e.target.value.trim().slice(0,48)); };
 document.getElementById('setClose').onclick = ()=> document.getElementById('settings').classList.remove('open');
-document.getElementById('rowGrid').onclick = ()=>{
-  SET.set('camGrid', !SET.get('camGrid', true)); applyCamGrid();
-};
 document.getElementById('rowSize').onclick = ()=>{
   const cur = SET.get('expSize', 0);
   SET.set('expSize', SIZE_STEPS[(SIZE_STEPS.indexOf(cur) + 1) % SIZE_STEPS.length]);
