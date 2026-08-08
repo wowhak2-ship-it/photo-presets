@@ -360,6 +360,19 @@
   .onb-primary:active,.onb-second:active{transform:scale(.97);}
   .onb-perm{color:var(--faint); font-size:10.5px; line-height:1.5; margin-top:16px; max-width:270px;}
 
+  /* ── «открываю снимок» ── */
+  /* Поверх всего, включая стартовый экран: распаковка идёт и с него, и из редактора. */
+  .photo-wait{position:fixed; inset:0; z-index:120; display:none;
+    align-items:center; justify-content:center; gap:10px;
+    background:rgba(12,12,13,.72); backdrop-filter:blur(2px);
+    color:var(--text); font-family:var(--mono); font-size:11px; letter-spacing:.12em;}
+  .photo-wait.on{display:flex;}
+  .photo-wait span{width:14px; height:14px; border-radius:50%;
+    border:2px solid rgba(255,255,255,.25); border-top-color:var(--text);
+    animation:pw-spin .7s linear infinite;}
+  @keyframes pw-spin{to{transform:rotate(360deg);}}
+  @media (prefers-reduced-motion:reduce){ .photo-wait span{animation-duration:2s;} }
+
   /* ── настройки приложения ── */
   /* на контактном листе шестерёнка не должна спорить с логотипом — без рамки и фона */
   .icon-btn{width:28px; height:28px; border-radius:8px; background:transparent;
@@ -1342,6 +1355,11 @@
   </div>
   <div class="onb-perm">Нужен доступ к галерее и камере. Фото обрабатываются на телефоне и никуда не отправляются.</div>
 </div>
+
+<!-- Снимок с телефона распаковывается не мгновенно. Пока это идёт, экран обязан
+     показывать, что работа началась: молчание человек читает как «не сработало»
+     и жмёт кнопку снова. -->
+<div class="photo-wait" id="onbWait"><span></span>Открываю снимок…</div>
 
 <div class="settings" id="settings">
   <div class="cam-top">
@@ -2613,20 +2631,52 @@ function pickFrame(e){
 // Исходный файл держим при себе: если человек ничего не менял, честнее отдать его как
 // есть, чем пересжимать заново и терять качество на пустом месте.
 let sourceFile = null;
+// Снимок распаковывается двумя путями. Сначала createImageBitmap: он умеет форматы,
+// которые <img> на телефоне не берёт, и работает не в главном потоке. Если не вышел —
+// пробуем обычной картинкой. Оба молчать не имеют права: раньше нечитаемый файл
+// (телефонный HEIF, снимок, который система успела прибрать) не давал НИЧЕГО — ни кадра,
+// ни сообщения. Со стороны это выглядело как «иногда не загружается».
+async function decodePhoto(f){
+  try{
+    const bmp = await createImageBitmap(f);
+    if(bmp && bmp.width) return bmp;
+  }catch(_){}
+  const url = URL.createObjectURL(f);
+  try{
+    const img = new Image();
+    await new Promise((ok, bad)=>{ img.onload = ok; img.onerror = bad; img.src = url; });
+    if(!img.naturalWidth) throw 0;
+    return img;
+  } finally { URL.revokeObjectURL(url); }     // без этого каждый выбранный снимок остаётся в памяти
+}
 async function takePhotoFile(f){
   if(!f) return;
   const my = claimLoad();                     // выбор человека отменяет всё, что грузится сейчас
   sourceFile = f;
-  sourceExif = await fileExif(f);             // данные съёмки берём до того, как файл станет картинкой
-  const img = new Image();
-  img.onload = ()=>{ if(!loadIsCurrent(my)) return; setSource(img); closeOnb(); applyPendingTool(); };
-  img.src = URL.createObjectURL(f);
+  sourceExif = null;
+  const wait = document.getElementById('onbWait');
+  if(wait) wait.classList.add('on');          // распаковка занимает секунды — молчать нельзя
+  let img;
+  try{ img = await decodePhoto(f); }
+  catch(_){
+    if(wait) wait.classList.remove('on');
+    if(loadIsCurrent(my)) toast('Этот снимок не открылся — попробуйте другой');
+    return;
+  }
+  if(wait) wait.classList.remove('on');
+  if(!loadIsCurrent(my)) return;              // пока распаковывали, выбрали другой кадр
+  setSource(img); closeOnb(); applyPendingTool();
+  // Данные съёмки нужны только при сохранении, а читаются полным файлом. На критическом
+  // пути им делать нечего: из-за них кадр ждал, пока с телефона вычитаются мегабайты.
+  exifReady = fileExif(f).then(x=>{ if(loadIsCurrent(my)) sourceExif = x; });
 }
-document.getElementById('file').onchange = e=>{ const f = e.target.files[0]; e.target.value=''; takePhotoFile(f); };
+// Поле чистим ПОСЛЕ того, как файл забран в работу: обнуление value отпускает выбранное,
+// и на Android прочитать такой файл потом удаётся не всегда.
+document.getElementById('file').onchange = e=>{ const f = e.target.files[0]; takePhotoFile(f).finally(()=>{ e.target.value=''; }); };
 // Снимаем РОДНОЙ камерой телефона, а не своим видоискателем: у неё вся оптика,
 // HDR и ночной режим, и снимок приходит в полном качестве. Свой видоискатель отдавал
 // то, что успел прочитать браузер, — заметно хуже того, что телефон умеет.
-document.getElementById('camFile').onchange = e=>{ const f = e.target.files[0]; e.target.value=''; takePhotoFile(f); };
+document.getElementById('camFile').onchange = e=>{ const f = e.target.files[0]; takePhotoFile(f).finally(()=>{ e.target.value=''; }); };
 
 // ─── Home (landing) ↔ editor ───
 let pendingTool = null;
@@ -3023,6 +3073,7 @@ function jpegWithMeta(u8, blocks){
   return out;
 }
 let sourceExif = null;                        // EXIF открытого сейчас снимка
+let exifReady = Promise.resolve();             // чтение EXIF идёт в фоне; сохранение его дожидается
 async function fileExif(file){
   try{ return exifOf(new Uint8Array(await file.arrayBuffer())); }catch(_){ return null; }
 }
@@ -3556,12 +3607,13 @@ const PACKS = {
   }
 };
 function packCard(p){
-  // «Ваш» — это когда виды набора ПРАВДА лежат в ленте. Одной отметки о покупке мало:
-  // человек мог вычистить их из своих пресетов, и тогда витрина обязана снова
-  // предложить поставить набор, а не молчать, что он уже есть.
+  // Виды набора удаляются поштучно, поэтому «есть» и «нет» — не всё состояние: чаще
+  // всего в ленте остаётся ЧАСТЬ. Раньше карточка в этом случае говорила «ВАШ» и
+  // прятала кнопку — вернуть выброшенные виды было нечем, пока не удалишь и остальные.
+  // Поэтому считаем, сколько видов набора правда лежит в ленте, и ставить даём всегда.
   const отмечен = PACKS.owned().includes(p.id);
-  const вЛенте = MYP.all().some(x=> x.pack === p.id);
-  const owned = отмечен && вЛенте;
+  const вЛенте = MYP.all().filter(x=> x.pack === p.id).length;
+  const owned = отмечен && вЛенте > 0;
   const el = document.createElement('div'); el.className = 'pack';
   if(p.cover){
     const img = document.createElement('img'); img.className = 'pack-cover';
@@ -3582,15 +3634,22 @@ function packCard(p){
   // У даровых наборов это метка, и она видна раньше, чем название.
   const free = !owned && !!p.file;
   pr.className = 'pack-price' + (free ? ' free' : '');
-  pr.textContent = owned ? (p.count ? p.count + ' в ленте' : 'установлен')
+  // Число берём из ленты, а не из описания набора: после чистки «4 в ленте» при одном
+  // оставшемся виде — просто неправда, а человек по этой строке и решает, всё ли на месте.
+  pr.textContent = owned ? (вЛенте + ' в ленте')
                          : (free ? 'БЕСПЛАТНО' : (p.price || ''));
   foot.appendChild(pr);
   if(owned){
     const ok = document.createElement('span'); ok.className = 'pack-owned'; ok.textContent = 'ВАШ';
     foot.appendChild(ok);
-  } else if(p.file){
+  }
+  if(p.file){
     // Бесплатный набор незачем гонять через оплату — ставим прямо отсюда, одним касанием.
-    const go = document.createElement('button'); go.className = 'pack-buy'; go.textContent = 'Установить';
+    // Кнопка есть и у уже стоящего набора: это единственный способ вернуть удалённый вид.
+    // Повторная установка не плодит копии — importFrom обновляет свои виды на месте.
+    const целиком = owned && вЛенте >= (p.count || вЛенте);
+    const go = document.createElement('button'); go.className = 'pack-buy';
+    go.textContent = !owned ? 'Установить' : (целиком ? 'Обновить' : 'Вернуть');
     go.onclick = async ()=>{
       go.disabled = true; const было = go.textContent; go.textContent = 'Ставлю…';
       try{
@@ -3599,7 +3658,7 @@ function packCard(p){
         if(res.error) throw new Error(res.error);
         PACKS.own((res.pack && res.pack.id) || p.id);
         renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
-        toast('Набор в ленте: ' + (res.added + (res.updated || 0)) + ' видов');
+        toast(res.added ? ('Видов в ленте: +' + res.added) : 'Набор обновлён');
         renderPacks();
       }catch(e){
         go.disabled = false; go.textContent = было;
@@ -3889,6 +3948,9 @@ async function expBlob(cb){
     if(base && base !== fullSource && base !== c){ base.width = 0; base.height = 0; }
   }
   c.toBlob(async b=>{
+    // данные съёмки читаются в фоне и к сохранению могут быть ещё не готовы — дожидаемся,
+    // иначе быстро сохранённый кадр уходил бы без даты и камеры
+    try{ await exifReady; }catch(_){}
     const withData = b ? await withMeta(b, sourceExif, c.width, c.height) : b;
     done(); if(withData) cb(withData);
   }, 'image/jpeg', JPEG_Q);
