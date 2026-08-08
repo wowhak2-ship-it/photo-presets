@@ -142,7 +142,11 @@
   .pill.ghost{background:transparent; color:var(--gold); border-color:rgba(224,162,74,.45);}
   .pill:active{transform:scale(.97);}
 
-  main{position:relative; z-index:1; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:0; overflow:hidden;}
+  /* clip, а не hidden: размытая подложка под кадром растянута в 1.3 раза и торчит за
+     края. При hidden она прячется, но контейнер остаётся прокручиваемым — палец увозил
+     весь кадр вбок на полсотни пикселей. clip обрезает и НЕ создаёт прокрутку.
+     hidden оставлен первым как запасной для старых браузеров. */
+  main{position:relative; z-index:1; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:0; overflow:hidden; overflow:clip;}
   /* кадр целиком, а пустоту заполняет он же — размытый и притушенный */
   #stageBg{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:-1;
     filter:blur(28px) brightness(.5); transform:scale(1.3); display:none;}
@@ -937,7 +941,12 @@
   .sheet-right{display:flex; align-items:center; gap:10px;}
   .roll{font-family:var(--mono); font-size:9.5px; letter-spacing:.12em; color:var(--dim);}
 
-  .contact-sheet{display:grid; grid-template-columns:repeat(3,1fr); gap:12px;}
+  /* minmax(0,1fr), а не просто 1fr: у «1fr» нижняя граница — размер содержимого, а
+     содержимое здесь ХОЛСТ со своей шириной в пикселях. Стоило числу пресетов вырасти
+     и ширине листа чуть измениться, как холсты старого размера распирали колонки
+     изнутри — лист вылезал за экран и его можно было таскать пальцем вбок.
+     С нулевым минимумом колонка ужимается свободно, а холст следует за ней (width:100%). */
+  .contact-sheet{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
   .look-card{position:relative; border-radius:3px; border:0; background:transparent;
     cursor:pointer; padding:0; transition:transform .15s; animation:rise .32s ease backwards;}
   .look-card:active{transform:scale(.96);}
