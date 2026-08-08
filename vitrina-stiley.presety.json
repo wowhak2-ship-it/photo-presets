@@ -2,228 +2,48 @@
   "app": "presety",
   "v": 2,
   "pack": {
-    "id": "vitrina-stiley-4",
+    "id": "vitrina-6",
     "name": "Витрина стилей",
-    "count": 4,
+    "count": 6,
     "author": "Пресеты"
   },
   "presets": [
     {
-      "name": "Кино",
+      "name": "Тёплая плёнка",
       "base": "Оригинал",
       "intensity": 100,
       "adjust": {
-        "exposure": -6,
-        "contrast": 14,
-        "temp": 4,
-        "saturation": -12,
-        "grain": 2,
+        "exposure": 5,
+        "contrast": -12,
+        "temp": 8,
+        "saturation": -6,
+        "grain": 4,
         "bloom": 0,
-        "shadows": 22,
-        "highlights": -26,
-        "tint": -4,
-        "splitSh": -55,
-        "splitHi": 45,
-        "vibrance": 26,
-        "vignette": 24
+        "shadows": 14,
+        "highlights": -22,
+        "tint": 3,
+        "splitSh": 4,
+        "splitHi": 12,
+        "vibrance": 14,
+        "vignette": 6
       },
       "curve": {
         "rgb": [
           [
             0,
-            8
+            16
           ],
           [
-            58,
-            52
-          ],
-          [
-            128,
-            130
-          ],
-          [
-            200,
-            208
-          ],
-          [
-            255,
-            246
-          ]
-        ],
-        "b": [
-          [
-            0,
-            18
+            52,
+            58
           ],
           [
             128,
             132
           ],
           [
-            255,
-            240
-          ]
-        ]
-      },
-      "hsl": {
-        "red": {
-          "hue": 4,
-          "sat": 6,
-          "lum": 2
-        },
-        "orange": {
-          "hue": -4,
-          "sat": 14,
-          "lum": 6
-        },
-        "yellow": {
-          "hue": -10,
-          "sat": -20,
-          "lum": 0
-        },
-        "green": {
-          "hue": 22,
-          "sat": -30,
-          "lum": -4
-        },
-        "aqua": {
-          "hue": -8,
-          "sat": 22,
-          "lum": 0
-        },
-        "blue": {
-          "hue": -14,
-          "sat": 16,
-          "lum": -2
-        }
-      }
-    },
-    {
-      "name": "Тихий люкс",
-      "base": "Оригинал",
-      "intensity": 100,
-      "adjust": {
-        "exposure": -14,
-        "contrast": 12,
-        "temp": 6,
-        "saturation": -26,
-        "grain": 3,
-        "bloom": 0,
-        "shadows": -14,
-        "highlights": -18,
-        "tint": 2,
-        "splitSh": -10,
-        "splitHi": 22,
-        "vibrance": 18,
-        "vignette": 40
-      },
-      "curve": {
-        "rgb": [
-          [
-            0,
-            4
-          ],
-          [
-            56,
-            44
-          ],
-          [
-            128,
-            122
-          ],
-          [
             200,
-            200
-          ],
-          [
-            255,
-            240
-          ]
-        ],
-        "r": [
-          [
-            0,
-            2
-          ],
-          [
-            128,
-            130
-          ],
-          [
-            255,
-            248
-          ]
-        ]
-      },
-      "hsl": {
-        "red": {
-          "hue": 0,
-          "sat": -8,
-          "lum": -4
-        },
-        "orange": {
-          "hue": -2,
-          "sat": 4,
-          "lum": 2
-        },
-        "yellow": {
-          "hue": -12,
-          "sat": -34,
-          "lum": -8
-        },
-        "green": {
-          "hue": -14,
-          "sat": -30,
-          "lum": -12
-        },
-        "aqua": {
-          "hue": 0,
-          "sat": -26,
-          "lum": -6
-        },
-        "blue": {
-          "hue": 0,
-          "sat": -18,
-          "lum": -6
-        }
-      }
-    },
-    {
-      "name": "Сливки",
-      "base": "Оригинал",
-      "intensity": 100,
-      "adjust": {
-        "exposure": 14,
-        "contrast": -22,
-        "temp": 14,
-        "saturation": -14,
-        "grain": 0,
-        "bloom": 22,
-        "shadows": 42,
-        "highlights": -14,
-        "tint": 4,
-        "splitSh": 8,
-        "splitHi": 26,
-        "vibrance": 20,
-        "vignette": 0
-      },
-      "curve": {
-        "rgb": [
-          [
-            0,
-            26
-          ],
-          [
-            60,
-            92
-          ],
-          [
-            128,
-            152
-          ],
-          [
-            200,
-            212
+            202
           ],
           [
             255,
@@ -233,11 +53,11 @@
         "b": [
           [
             0,
-            20
+            22
           ],
           [
             128,
-            122
+            126
           ],
           [
             255,
@@ -247,112 +67,427 @@
       },
       "hsl": {
         "red": {
-          "hue": 0,
-          "sat": -6,
-          "lum": 8
+          "hue": 4,
+          "sat": 4,
+          "lum": 2
         },
         "orange": {
-          "hue": 0,
-          "sat": 8,
-          "lum": 14
+          "hue": -6,
+          "sat": 10,
+          "lum": 6
         },
         "yellow": {
-          "hue": -4,
-          "sat": -16,
-          "lum": 10
+          "hue": -18,
+          "sat": -18,
+          "lum": 2
         },
         "green": {
-          "hue": -6,
+          "hue": -30,
           "sat": -24,
-          "lum": 8
+          "lum": -2
         },
         "aqua": {
-          "hue": 0,
-          "sat": -22,
-          "lum": 8
+          "hue": -6,
+          "sat": -10,
+          "lum": 0
         },
         "blue": {
-          "hue": 0,
-          "sat": -20,
-          "lum": 10
+          "hue": -8,
+          "sat": -12,
+          "lum": -2
         }
       }
     },
     {
-      "name": "Минимал",
+      "name": "Холодная плёнка",
       "base": "Оригинал",
       "intensity": 100,
       "adjust": {
         "exposure": 8,
-        "contrast": -6,
-        "temp": 0,
-        "saturation": -34,
-        "grain": 0,
-        "bloom": 0,
-        "shadows": 24,
-        "highlights": -12,
-        "tint": 0,
-        "splitSh": 0,
-        "splitHi": 0,
-        "vibrance": 12,
+        "contrast": -8,
+        "temp": -4,
+        "saturation": -10,
+        "grain": 3,
+        "bloom": 6,
+        "shadows": 18,
+        "highlights": -18,
+        "tint": -4,
+        "splitSh": -16,
+        "splitHi": 8,
+        "vibrance": 16,
         "vignette": 0
       },
       "curve": {
         "rgb": [
           [
             0,
-            6
+            18
           ],
           [
-            64,
-            76
+            56,
+            64
           ],
           [
             128,
-            140
+            134
           ],
           [
             200,
-            216
+            204
           ],
           [
             255,
-            255
+            246
+          ]
+        ],
+        "g": [
+          [
+            0,
+            6
+          ],
+          [
+            128,
+            132
+          ],
+          [
+            255,
+            250
+          ]
+        ]
+      },
+      "hsl": {
+        "red": {
+          "hue": 2,
+          "sat": -4,
+          "lum": 2
+        },
+        "orange": {
+          "hue": -4,
+          "sat": 6,
+          "lum": 6
+        },
+        "yellow": {
+          "hue": 12,
+          "sat": -20,
+          "lum": 4
+        },
+        "green": {
+          "hue": 26,
+          "sat": -14,
+          "lum": 4
+        },
+        "aqua": {
+          "hue": 6,
+          "sat": 14,
+          "lum": 2
+        },
+        "blue": {
+          "hue": -6,
+          "sat": 6,
+          "lum": 0
+        }
+      }
+    },
+    {
+      "name": "Сливочный",
+      "base": "Оригинал",
+      "intensity": 100,
+      "adjust": {
+        "exposure": -4,
+        "contrast": 6,
+        "temp": 10,
+        "saturation": -22,
+        "grain": 2,
+        "bloom": 8,
+        "shadows": 10,
+        "highlights": -26,
+        "tint": 4,
+        "splitSh": -10,
+        "splitHi": 20,
+        "vibrance": 18,
+        "vignette": 22
+      },
+      "curve": {
+        "rgb": [
+          [
+            0,
+            14
+          ],
+          [
+            48,
+            44
+          ],
+          [
+            128,
+            124
+          ],
+          [
+            200,
+            198
+          ],
+          [
+            255,
+            240
+          ]
+        ],
+        "r": [
+          [
+            0,
+            8
+          ],
+          [
+            128,
+            132
+          ],
+          [
+            255,
+            248
+          ]
+        ]
+      },
+      "hsl": {
+        "red": {
+          "hue": 2,
+          "sat": -10,
+          "lum": -2
+        },
+        "orange": {
+          "hue": -4,
+          "sat": 8,
+          "lum": 8
+        },
+        "yellow": {
+          "hue": -16,
+          "sat": -34,
+          "lum": -4
+        },
+        "green": {
+          "hue": -20,
+          "sat": -38,
+          "lum": -8
+        },
+        "aqua": {
+          "hue": -8,
+          "sat": -28,
+          "lum": -4
+        },
+        "blue": {
+          "hue": -4,
+          "sat": -20,
+          "lum": -4
+        }
+      }
+    },
+    {
+      "name": "Светлый воздух",
+      "base": "Оригинал",
+      "intensity": 100,
+      "adjust": {
+        "exposure": 16,
+        "contrast": -18,
+        "temp": 4,
+        "saturation": -12,
+        "grain": 0,
+        "bloom": 14,
+        "shadows": 32,
+        "highlights": -20,
+        "tint": 2,
+        "splitSh": 6,
+        "splitHi": 14,
+        "vibrance": 14,
+        "vignette": 0
+      },
+      "curve": {
+        "rgb": [
+          [
+            0,
+            28
+          ],
+          [
+            60,
+            86
+          ],
+          [
+            128,
+            148
+          ],
+          [
+            200,
+            210
+          ],
+          [
+            255,
+            246
           ]
         ]
       },
       "hsl": {
         "red": {
           "hue": 0,
-          "sat": -18,
-          "lum": 6
+          "sat": -8,
+          "lum": 8
         },
         "orange": {
-          "hue": 0,
-          "sat": -10,
-          "lum": 10
+          "hue": -2,
+          "sat": 4,
+          "lum": 12
         },
         "yellow": {
-          "hue": 0,
-          "sat": -34,
-          "lum": 8
+          "hue": -6,
+          "sat": -22,
+          "lum": 10
         },
         "green": {
-          "hue": 0,
-          "sat": -38,
-          "lum": 8
+          "hue": -8,
+          "sat": -26,
+          "lum": 10
         },
         "aqua": {
           "hue": 0,
-          "sat": -30,
+          "sat": -18,
           "lum": 8
         },
         "blue": {
           "hue": 0,
-          "sat": -26,
-          "lum": 10
+          "sat": -14,
+          "lum": 8
         }
       }
+    },
+    {
+      "name": "Матовая",
+      "base": "Оригинал",
+      "intensity": 100,
+      "adjust": {
+        "exposure": 2,
+        "contrast": -6,
+        "temp": 6,
+        "saturation": -18,
+        "grain": 12,
+        "bloom": 0,
+        "shadows": 20,
+        "highlights": -14,
+        "tint": 0,
+        "splitSh": -8,
+        "splitHi": 16,
+        "vibrance": 10,
+        "vignette": 14
+      },
+      "curve": {
+        "rgb": [
+          [
+            0,
+            34
+          ],
+          [
+            56,
+            74
+          ],
+          [
+            128,
+            136
+          ],
+          [
+            200,
+            200
+          ],
+          [
+            255,
+            232
+          ]
+        ],
+        "b": [
+          [
+            0,
+            30
+          ],
+          [
+            128,
+            130
+          ],
+          [
+            255,
+            232
+          ]
+        ]
+      },
+      "hsl": {
+        "red": {
+          "hue": 0,
+          "sat": -12,
+          "lum": 0
+        },
+        "orange": {
+          "hue": -4,
+          "sat": 2,
+          "lum": 4
+        },
+        "yellow": {
+          "hue": -10,
+          "sat": -26,
+          "lum": 0
+        },
+        "green": {
+          "hue": -12,
+          "sat": -30,
+          "lum": -2
+        },
+        "aqua": {
+          "hue": -4,
+          "sat": -20,
+          "lum": 0
+        },
+        "blue": {
+          "hue": -6,
+          "sat": -16,
+          "lum": -2
+        }
+      }
+    },
+    {
+      "name": "Тёплый Ч/Б",
+      "base": "Ч/Б",
+      "intensity": 100,
+      "adjust": {
+        "exposure": 4,
+        "contrast": 14,
+        "temp": 0,
+        "saturation": 0,
+        "grain": 14,
+        "bloom": 0,
+        "shadows": 12,
+        "highlights": -18,
+        "tint": 0,
+        "splitSh": 10,
+        "splitHi": 22,
+        "vibrance": 0,
+        "vignette": 18
+      },
+      "curve": {
+        "rgb": [
+          [
+            0,
+            20
+          ],
+          [
+            50,
+            48
+          ],
+          [
+            128,
+            130
+          ],
+          [
+            200,
+            206
+          ],
+          [
+            255,
+            246
+          ]
+        ]
+      },
+      "hsl": null
     }
   ]
 }
