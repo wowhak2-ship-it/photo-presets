@@ -862,6 +862,15 @@
   .rt-area{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; padding:calc(76px + env(safe-area-inset-top)) 0 0; overflow:hidden;}
   .rt-holder{position:relative; line-height:0; touch-action:none; transform-origin:center center; will-change:transform;}
   #rtCanvas{display:block; touch-action:none; cursor:crosshair; z-index:1;}
+  /* выбор лица на групповом снимке */
+  .rt-faces{position:absolute; inset:0; z-index:4; pointer-events:none;}
+  .rt-faces button{position:absolute; transform:translate(-50%,-50%); pointer-events:auto;
+    width:34px; height:34px; border-radius:50%; cursor:pointer;
+    border:2px solid rgba(255,255,255,.85); background:rgba(0,0,0,.42);
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    color:#fff; font-family:var(--mono); font-size:12px; font-weight:700;
+    box-shadow:0 2px 10px rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center;}
+  .rt-faces button.on{background:var(--gold); border-color:transparent; color:var(--gold-ink);}
   .rt-cursor{position:absolute; left:0; top:0; width:0; height:0; border-radius:50%; z-index:3;
     border:1.5px solid rgba(255,255,255,.92); background:rgba(255,255,255,.1);
     box-shadow:0 0 0 1px rgba(0,0,0,.45), inset 0 0 6px rgba(0,0,0,.25);
@@ -1123,6 +1132,10 @@
     <button class="ht" data-go="shadows">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5s3.6-5 9-5 9 5 9 5-3.6 5-9 5-9-5-9-5z"/><circle cx="12" cy="10.5" r="2.3" fill="currentColor" stroke="none"/><path d="M7 17.6c1.8 1.5 8.2 1.5 10 0"/></svg>
       <b>Тени</b><i>под глазами</i>
+    </button>
+    <button class="ht" data-go="skin">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.9 0 7 3.1 7 7v3.4c0 4.2-3.1 7.6-7 7.6s-7-3.4-7-7.6V10c0-3.9 3.1-7 7-7z"/><path d="M9.2 10.4h.01M14.8 10.4h.01M12 14.6h.01"/></svg>
+      <b>Кожа</b><i>сгладить тон</i>
     </button>
     <button class="ht" data-go="crop">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
@@ -1637,6 +1650,9 @@
       <span class="cmp-lab a">ПОСЛЕ</span>
       <div id="rtCmpDiv"><div id="rtCmpHandle">‹ ›</div></div>
     </div>
+    <!-- На групповом кадре обрабатывать всех подряд нельзя: точки над лицами дают
+         выбрать нужное. Появляются, только если лиц больше одного. -->
+    <div class="rt-faces" id="rtFaces"></div>
     <div class="rt-cursor" id="rtCursor"></div>
     <div class="rt-marker rt-src" id="rtSrc"><b>Источник</b></div>
     <div class="rt-marker rt-tgt" id="rtTgt"><b>Замазать</b></div>
@@ -1653,6 +1669,7 @@
       <div class="rt-srow"><span>Жёсткость</span><input type="range" id="rtHard" min="0" max="100" value="45"><b id="rtHardV">45</b></div>
       <div class="rt-srow"><span>Сила</span><input type="range" id="rtStr" min="20" max="100" value="100"><b id="rtStrV">100</b></div>
       <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Тени</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
+      <div class="rt-srow" id="rtSkinRow" style="display:none"><span>Кожа</span><input type="range" id="rtSkin" min="0" max="100" value="0" disabled><b id="rtSkinV">0</b></div>
     </div>
     <!-- «До / После» отсюда убрано: кнопка теперь в шапке, как и в редакторе -->
     <div class="rt-tools">
@@ -2354,6 +2371,8 @@ function buildFullSource(){
                { hardness:op.hardness, strength:op.strength });
     } else if(op.t === 'bags'){
       bagsRun(own(), op.faces, op.amount);
+    } else if(op.t === 'skin'){
+      skinRun(own(), op.faces, op.amount);
     }
   }
   return c;   // без правок это сам оригинал — читаем из него, но не пишем в него
@@ -2875,6 +2894,7 @@ function applyPendingTool(){
   // Отмена returns where you came from (home), Применить lands in the editor
   if(t==='retouch'){ openRetouch(); return; }
   if(t==='shadows'){ openShadows(); return; }
+  if(t==='skin'){ openSkin(); return; }
   if(t==='crop'){ openCrop(); return; }
   if(t==='curve'){ goEditor(); setSection('curve'); return; }
   if(t==='hsl'){ goEditor(); setSection('color'); return; }
@@ -5513,7 +5533,7 @@ document.querySelectorAll('#cropRatios button').forEach(b => b.onclick = ()=>{
 // ─── Retouch (spot heal: tap/drag over blemishes; works on a copy, applied to sourceCanvas before the look) ───
 let rtSize = 22, rtHard = 45, rtStr = 100, rtUndo = [], rtDrawing = false, rtLastE = null;
 // журнал текущего сеанса ретуши — уедет в editOps, когда нажмут «Применить»
-let rtOps = [], rtBagsOp = null, rtFaces = null;
+let rtOps = [], rtBagsOp = null, rtSkinOp = null, rtFaces = null, skinData = null;
 function rtOpts(){ return { hardness: rtHard/100, strength: rtStr/100 }; }
 const retouchEl = document.getElementById('retouch'), rtCanvas = document.getElementById('rtCanvas');
 function layoutRetouch(){
@@ -5534,7 +5554,7 @@ function openRetouch(){
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
-  rtOps = []; rtBagsOp = null; rtFaces = null;
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtFaces = null; skinData = null;
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
   retouchEl.classList.add('open');
@@ -5547,6 +5567,13 @@ function openShadows(){
   openRetouch();
   retouchEl.classList.add('shadows-only');
   rtSetTool('bags');
+}
+// «Кожа» — своя карточка на главной. Оверлей тот же, что у ретуши (холст, зум,
+// сравнение, «Применить»), но из органов управления только один ползунок.
+function openSkin(){
+  openRetouch();
+  retouchEl.classList.add('shadows-only');
+  rtSetTool('skin');
 }
 function closeRetouch(){ rtCmpOff(); retouchEl.classList.remove('open'); retouchEl.classList.remove('shadows-only'); }
 function rtBrushR(){ const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width; return rtSize * (rtCanvas.width/disp) * 0.5; }
@@ -5729,18 +5756,21 @@ function rtSetTool(tool){
   rtTool=tool;
   rtSyncPan();         // в «Тенях» руки нет, в кисти есть
   document.querySelectorAll('.rt-mode').forEach(b=>b.classList.toggle('active', b.dataset.tool===tool));
-  const stamp=tool==='stamp', bags=tool==='bags';
+  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin';
+  const ползунок = bags || skin;               // режимы «один ползунок вместо кисти»
   rtModes.classList.toggle('stamp', stamp);
   rtSrc.classList.toggle('on', stamp); rtTgt.classList.toggle('on', stamp);
   rtSrc.style.pointerEvents=stamp?'auto':'none'; rtTgt.style.pointerEvents=stamp?'auto':'none';
   if(stamp) rtPlaceMarkers();
-  // «Синяки»: свой слайдер вместо кисти
-  document.querySelectorAll('.rt-srow').forEach(r=>{ if(r.id!=='rtBagsRow') r.style.display = bags?'none':'flex'; });
+  document.querySelectorAll('.rt-srow').forEach(r=>{
+    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow') r.style.display = ползунок?'none':'flex'; });
   document.getElementById('rtBagsRow').style.display = bags?'flex':'none';
-  document.getElementById('rtTop').textContent = bags ? 'Тени' : 'Ретушь';
-  const rtHint = document.getElementById('rtHint');   // подсказка нужна только кисти, не «Теням»
-  if(rtHint) rtHint.style.display = bags ? 'none' : 'block';
+  document.getElementById('rtSkinRow').style.display = skin?'flex':'none';
+  document.getElementById('rtTop').textContent = bags ? 'Тени' : skin ? 'Кожа' : 'Ретушь';
+  const rtHint = document.getElementById('rtHint');   // подсказка нужна только кисти
+  if(rtHint) rtHint.style.display = ползунок ? 'none' : 'block';
   if(bags) bagsEnter();
+  if(skin) skinEnter();
 }
 document.querySelectorAll('.rt-mode').forEach(b=> b.onclick=()=>rtSetTool(b.dataset.tool));
 function markerDrag(el,key){
@@ -5899,6 +5929,148 @@ function bagsPrepare(faces, cv){
   bagsData = regs.length ? {regs} : null;
   return regs.length;
 }
+// ─── Сглаживание кожи ───
+// Почему у большинства приложений получается пластик: они размывают кадр целиком.
+// Вместе с пятнами уходят поры, а без пор кожа перестаёт быть кожей — глаз это
+// считывает мгновенно, даже не понимая, что именно не так.
+//
+// Здесь снимок раскладывается на ТРИ полосы, и трогается только средняя:
+//   низкая  — форма лица и свет на нём (крупнее ~4% ширины лица) → не трогаем,
+//             иначе поплывёт объём и лицо станет плоским;
+//   средняя — неровности тона, пятна, покраснения → ГЛУШИМ, ради этого всё и делается;
+//   высокая — поры и волоски (тоньше ~0.6% ширины лица) → возвращаем ЦЕЛИКОМ,
+//             это и есть то, чего лишены «пластиковые» фильтры.
+const SKIN_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,
+                   400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+const SKIN_HOLES = [
+  [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246],        // левый глаз
+  [263,249,390,373,374,380,381,382,362,398,384,385,386,387,388,466],     // правый глаз
+  [61,146,91,181,84,17,314,405,321,375,291,409,270,269,267,0,37,39,40,185], // губы
+  [70,63,105,66,107], [336,296,334,293,300]                              // брови
+];
+function skinPrepare(faces, cv){
+  cv = cv || rtCanvas;
+  const W = cv.width, H = cv.height, zones = [];
+  for(const lms of (faces||[])){
+    if(!lms || !lms[SKIN_OVAL[0]]) continue;
+    const P = i => lms[i] ? {x:lms[i].x*W, y:lms[i].y*H} : null;
+    const oval = SKIN_OVAL.map(P).filter(Boolean);
+    if(oval.length < 8) continue;
+    let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+    oval.forEach(p=>{ x0=Math.min(x0,p.x); y0=Math.min(y0,p.y); x1=Math.max(x1,p.x); y1=Math.max(y1,p.y); });
+    const faceW = x1-x0;
+    if(faceW < 40) continue;                       // лицо мельче — сглаживать нечего
+    const pad = Math.round(faceW*0.10);
+    const bx = Math.max(0, Math.round(x0-pad)), by = Math.max(0, Math.round(y0-pad));
+    const bw = Math.min(W-bx, Math.round(x1-x0+pad*2)), bh = Math.min(H-by, Math.round(y1-y0+pad*2));
+    if(bw < 8 || bh < 8) continue;
+
+    // маска: овал лица минус глаза, губы и брови; перо мягкое, чтобы не было границы
+    const mc = document.createElement('canvas'); mc.width=bw; mc.height=bh;
+    const mx = mc.getContext('2d');
+    mx.filter = 'blur(' + Math.max(2, Math.round(faceW*0.035)) + 'px)';
+    mx.fillStyle = '#fff'; mx.beginPath();
+    oval.forEach((p,i)=> i ? mx.lineTo(p.x-bx, p.y-by) : mx.moveTo(p.x-bx, p.y-by));
+    mx.closePath(); mx.fill();
+    mx.globalCompositeOperation = 'destination-out';
+    for(const hole of SKIN_HOLES){
+      const pts = hole.map(P).filter(Boolean);
+      if(pts.length < 3) continue;
+      const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length, cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
+      mx.beginPath();
+      pts.forEach((p,i)=>{ const x=cx+(p.x-cx)*1.5, y=cy+(p.y-cy)*1.5;   // с запасом: ресницы и края губ тоже не трогаем
+                           i ? mx.lineTo(x-bx, y-by) : mx.moveTo(x-bx, y-by); });
+      mx.closePath(); mx.fill();
+    }
+    mx.globalCompositeOperation = 'source-over';
+    const mask = mx.getImageData(0,0,bw,bh).data;
+
+    const orig = cv.getContext('2d').getImageData(bx,by,bw,bh);
+    const размыть = (r)=>{ const c=document.createElement('canvas'); c.width=bw; c.height=bh;
+      const q=c.getContext('2d'); q.filter='blur('+r+'px)';
+      q.drawImage(cv, bx,by,bw,bh, 0,0,bw,bh); return q.getImageData(0,0,bw,bh).data; };
+    const mid = размыть(Math.max(1, Math.round(faceW*0.006)));   // граница пор
+    const low = размыть(Math.max(4, Math.round(faceW*0.085)));   // граница пятен
+    zones.push({bx,by,bw,bh,mask,orig,mid,low,faceW});
+  }
+  return zones.length ? zones : null;
+}
+function skinApply(t, cv, zones){
+  cv = cv || rtCanvas; zones = zones || skinData;
+  if(!zones || !t) return;
+  const ctx = cv.getContext('2d');
+  for(const z of zones){
+    const out = ctx.getImageData(z.bx, z.by, z.bw, z.bh), od = out.data;
+    const o = z.orig.data, mid = z.mid, low = z.low, m = z.mask;
+    for(let i=0;i<od.length;i+=4){
+      const a = m[i+3]/255; if(a < 0.02) continue;
+      // кожа или нет: у кожи красный выше зелёного, зелёный выше синего, и разброс
+      // умеренный. Волосы, брошь, ткань под это не подходят — их не трогаем.
+      const R=o[i], G=o[i+1], B=o[i+2];
+      const кожа = (R>=G && G>=B && R-B>8 && R-B<130 && R>50) ? 1
+                 : (R>G && R-B>4 && R-B<160) ? 0.5 : 0;
+      if(!кожа) continue;
+      // средняя полоса — то, что глушим; но если она ВЕЛИКА, это не пятно, а настоящий
+      // край (крыло носа, скула, прядь) — такие места сглаживать нельзя, поплывут черты
+      let сила = a * кожа * t;
+      const b0 = o[i]  -mid[i],   b1 = o[i+1]-mid[i+1], b2 = o[i+2]-mid[i+2];   // поры
+      const p0 = mid[i]-low[i],   p1 = mid[i+1]-low[i+1], p2 = mid[i+2]-low[i+2]; // пятна
+      // Порог отмерен по настоящему лицу: неровности тона живут в пределах ~25 единиц,
+      // а край крыла носа или прядь дают сильно больше. Ставить порог ниже нельзя —
+      // защита начинает срабатывать на самих пятнах, ради которых всё и затевалось.
+      const край = Math.max(Math.abs(p0), Math.abs(p1), Math.abs(p2));
+      if(край > 26) сила *= Math.max(0, 1 - (край-26)/44);
+      if(сила < 0.004) continue;
+      const k = 1 - сила;
+      od[i]   = clamp(low[i]   + p0*k + b0);      // поры возвращаются целиком
+      od[i+1] = clamp(low[i+1] + p1*k + b1);
+      od[i+2] = clamp(low[i+2] + p2*k + b2);
+    }
+    ctx.putImageData(out, z.bx, z.by);
+  }
+}
+function skinRun(cv, faces, amount){
+  if(!faces || !faces.length || !amount) return;
+  const z = skinPrepare(faces, cv);
+  if(z) skinApply(amount, cv, z);
+}
+
+// ─── Выбор лица на групповом снимке ───
+// Лиц может быть несколько, а обработать нужно одно. По умолчанию берём самое
+// крупное — почти всегда это главный герой кадра; остальные выбираются точкой.
+let rtFaceSel = 0;
+function faceCentre(lms, W, H){
+  let x=0, y=0, n=0, x0=1e9, x1=-1e9;
+  for(const p of lms){ x+=p.x; y+=p.y; n++;
+    if(p.x<x0) x0=p.x; if(p.x>x1) x1=p.x; }
+  return { x:(x/n)*W, y:(y/n)*H, w:(x1-x0)*W };
+}
+function biggestFace(faces, W, H){
+  let best=0, bw=-1;
+  faces.forEach((f,i)=>{ const c=faceCentre(f,W,H); if(c.w>bw){ bw=c.w; best=i; } });
+  return best;
+}
+// Точки стоят в координатах ЭКРАНА: холст может быть приближён и сдвинут.
+function rtDrawFaces(onPick){
+  const host = document.getElementById('rtFaces');
+  if(!host) return;
+  host.innerHTML = '';
+  if(!rtFaces || rtFaces.length < 2) return;      // одно лицо — выбирать не из чего
+  const area = document.getElementById('rtArea').getBoundingClientRect();
+  const cv = rtCanvas.getBoundingClientRect();
+  rtFaces.forEach((f,i)=>{
+    const c = faceCentre(f, rtCanvas.width, rtCanvas.height);
+    const b = document.createElement('button');
+    b.textContent = String(i+1);
+    b.className = i === rtFaceSel ? 'on' : '';
+    b.style.left = (cv.left - area.left + c.x/rtCanvas.width * cv.width) + 'px';
+    b.style.top  = (cv.top  - area.top  + c.y/rtCanvas.height * cv.height) + 'px';
+    b.onclick = ()=>{ if(i === rtFaceSel) return; rtFaceSel = i; onPick && onPick(); };
+    host.appendChild(b);
+  });
+}
+function rtClearFaces(){ const h=document.getElementById('rtFaces'); if(h) h.innerHTML=''; }
+
 function bagsApply(t, cv, data){
   cv = cv || rtCanvas; data = data || bagsData;
   if(!data) return;
@@ -5987,23 +6159,89 @@ async function bagsEnter(){
       res = kit.detect(t); faces = (res && res.faceLandmarks) || [];
     }
     rtFaces = faces;
-    if(!faces.length || !bagsPrepare(faces)){
+    rtFaceSel = faces.length ? biggestFace(faces, rtCanvas.width, rtCanvas.height) : 0;
+    if(!faces.length || !bagsPrepare([faces[rtFaceSel]])){
       top.textContent = 'Лицо не найдено';
       bagsBusy = false; return;
     }
     top.textContent = 'Тени';
     slider.disabled = false;
+    rtDrawFaces(bagsPickFace);
   } catch(e){
     top.textContent = 'Модель недоступна — проверьте интернет';
   }
   bagsBusy = false;
+}
+function bagsPickFace(){
+  const v = +document.getElementById('rtBags').value;
+  if(bagsData){ const ctx=rtCanvas.getContext('2d');
+    for(const r of bagsData.regs) ctx.putImageData(r.orig, r.bx, r.by); }
+  bagsPrepare([rtFaces[rtFaceSel]]);
+  rtDrawFaces(bagsPickFace);
+  if(v){ bagsApply(v/100); rtBagsOp = { t:'bags', faces:[rtFaces[rtFaceSel]], amount:v/100 }; }
 }
 document.getElementById('rtBags').oninput = e=>{
   rtCmpOff();          // тронули ползунок — сравнивать больше нечего, показываем результат
   const v = +e.target.value;
   document.getElementById('rtBagsV').textContent = v;
   bagsApply(v/100);
-  rtBagsOp = v ? { t:'bags', faces:rtFaces, amount:v/100 } : null;
+  rtBagsOp = v ? { t:'bags', faces:[rtFaces[rtFaceSel]], amount:v/100 } : null;
+};
+
+// ─── «Кожа» ───
+async function skinEnter(){
+  const slider = document.getElementById('rtSkin'), top = document.getElementById('rtTop');
+  slider.value = 0; document.getElementById('rtSkinV').textContent = '0'; slider.disabled = true;
+  skinData = null;
+  if(bagsBusy) return; bagsBusy = true;
+  try{
+    top.textContent = bagsKit ? 'Ищу лицо…' : 'Загружаю модель…';
+    const kit = await loadFaceKit();
+    if(rtTool !== 'skin'){ bagsBusy = false; return; }
+    top.textContent = 'Ищу лицо…';
+    let res = kit.detect(rtCanvas);
+    let faces = (res && res.faceLandmarks) || [];
+    if(!faces.length && rtCanvas.width > 900){
+      const t = document.createElement('canvas'); const s = 720/rtCanvas.width;
+      t.width = 720; t.height = Math.max(1, Math.round(rtCanvas.height*s));
+      t.getContext('2d').drawImage(rtCanvas, 0, 0, t.width, t.height);
+      res = kit.detect(t); faces = (res && res.faceLandmarks) || [];
+    }
+    rtFaces = faces;
+    rtFaceSel = faces.length ? biggestFace(faces, rtCanvas.width, rtCanvas.height) : 0;
+    skinData = faces.length ? skinPrepare([faces[rtFaceSel]]) : null;
+    if(!skinData){ top.textContent = 'Лицо не найдено'; bagsBusy = false; return; }
+    top.textContent = 'Кожа';
+    slider.disabled = false;
+    rtDrawFaces(skinPickFace);
+  } catch(e){
+    top.textContent = 'Модель недоступна — проверьте интернет';
+  }
+  bagsBusy = false;
+}
+function skinRestore(){                       // вернуть кадр к тому, что было до сглаживания
+  if(!skinData) return;
+  const ctx = rtCanvas.getContext('2d');
+  for(const z of skinData) ctx.putImageData(z.orig, z.bx, z.by);
+}
+// Выбрали другое лицо: снимаем эффект с прежнего, собираем зону нового, повторяем силу.
+function skinPickFace(){
+  const v = +document.getElementById('rtSkin').value;
+  skinRestore();
+  skinData = skinPrepare([rtFaces[rtFaceSel]]);
+  rtDrawFaces(skinPickFace);
+  if(v && skinData){ skinApply(v/100);
+    rtSkinOp = { t:'skin', faces:[rtFaces[rtFaceSel]], amount:v/100 }; }
+}
+document.getElementById('rtSkin').oninput = e=>{
+  rtCmpOff();
+  const v = +e.target.value;
+  document.getElementById('rtSkinV').textContent = v;
+  // база — всегда исходный кадр: иначе сглаживание накладывалось бы само на себя
+  // при каждом движении ползунка и за пару секунд превратило бы лицо в пластик
+  skinRestore();
+  skinApply(v/100);
+  rtSkinOp = v ? { t:'skin', faces:[rtFaces[rtFaceSel]], amount:v/100 } : null;
 };
 
 // ─── «До/После» в ретуши ───
@@ -6067,8 +6305,8 @@ document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
   rtCmpOff();          // применяем результат, а не то, что показывает шторка
   sourceCanvas.getContext('2d').drawImage(rtCanvas, 0, 0);   // bake retouch into the source
-  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp);   // те же правки повторим на оригинале
-  rtOps = []; rtBagsOp = null;
+  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(rtSkinOp);   // те же правки повторим на оригинале
+  rtOps = []; rtBagsOp = null; rtSkinOp = null;
   editedCanvas = null; makePreview(); buildChips(); buildHomeLooks(); render();
   closeRetouch(); goEditor();
 };
