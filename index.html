@@ -226,7 +226,8 @@
   /* «До/После» — НА ФОТО, а не значком в шапке. Значком его не замечали: в ряду с
      «назад» и «Сохранить» он читался как служебная мелочь. Здесь это подписанная
      кнопка у нижнего края кадра — там, куда и так смотрят, оценивая результат. */
-  .cmp-fab{position:absolute; left:14px; bottom:14px; z-index:6;
+  /* Справа — под большой палец правой руки: сравнение нажимают чаще всего. */
+  .cmp-fab{position:absolute; right:14px; bottom:14px; z-index:6;
     display:none; align-items:center; gap:7px; padding:10px 15px 10px 12px;
     border-radius:999px; cursor:pointer;
     background:var(--glass); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
@@ -237,7 +238,8 @@
   .cmp-fab svg{width:16px; height:16px; flex:none;}
   .cmp-fab:active{transform:scale(.96);}
   .cmp-fab.active{background:var(--gold); border-color:transparent; color:var(--gold-ink);}
-  .cmp-fab-r{left:auto; right:14px;}
+  /* Рука уходит влево, чтобы не спорить со сравнением */
+  .cmp-fab-r{right:auto; left:14px;}
   @media (prefers-reduced-motion:reduce){ .cmp-fab:active{transform:none;} }
 
   /* Рука остаётся значком в шапке ретуши — это переключатель, а не главное действие */
