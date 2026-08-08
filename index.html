@@ -212,10 +212,9 @@
   #secCurve .cv-pad{margin:2px auto 12px;}
   #secCurve .cv-chans{margin-top:2px;}
 
-  .toolbar{position:relative; z-index:2; flex-direction:column;
-    padding:8px 14px 7px;}
-  .tool-main{display:grid; grid-template-columns:repeat(3, 1fr); gap:4px;}
-  .tool-rest{display:grid; grid-template-columns:repeat(6, 1fr); gap:1px;}
+  /* «До/После» в шапке. Активное состояние заметное: сравнение — режим, а не тап,
+     и из него надо уметь выйти, не гадая, включено оно или нет. */
+  .hdr-cmp.active{color:var(--gold-ink); background:var(--gold); border-color:transparent;}
   /* краевая метка — та же, что идёт по краю плёнки на контактном листе */
   .tool-edge{display:flex; align-items:center; gap:9px; margin:6px 2px 5px;}
   .tool-edge::before, .tool-edge::after{content:""; height:1px; background:rgba(255,255,255,.07);}
@@ -941,13 +940,26 @@
      для горизонтального ряда. При равной специфичности выигрывает он, и кнопка в
      вертикальной колонке растягивалась на всю оставшуюся высоту — Артур прислал скриншот
      с обводкой во пол-экрана. Та же ловушка, что была с доком экспорта. */
-  /* два входа в один ряд: съёмка пачкой и коллаж — оба начинаются с выбора кадров */
-  .home-two{display:flex; gap:8px; margin-bottom:8px;}
-  /* на половине ширины прежняя разрядка не оставляла места надписи — поджимаем её,
-     а не обрезаем многоточием */
-  .ghost-btn.home-batch{flex:1 1 0; min-width:0; width:auto; margin-bottom:0; border-radius:999px;
-    border-color:var(--line-2); color:var(--gold); white-space:nowrap; padding:14px 8px;
-    font-size:9.5px; letter-spacing:.07em;}
+  /* ── инструменты на главной ──
+     СЕТКА, а не прокручиваемая строка: в строку влезало три карточки из шести,
+     и «Вся съёмка» с «Наборами» снова оказывались за краем — ровно та беда,
+     из-за которой инструменты и выносили из редактора. Всё разом на экране.
+     Подпись под названием — не украшение: без неё «Вся съёмка» читается как
+     непонятный термин, а с ней сразу ясно, что произойдёт. */
+  .home-tools{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px;}
+  .ht{display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+    padding:11px 10px 10px; border-radius:14px; cursor:pointer;
+    border:1px solid var(--line); background:rgba(255,255,255,.028);
+    color:var(--text); text-align:left;}
+  .ht svg{width:20px; height:20px; color:var(--gold); margin-bottom:6px;}
+  .ht b{font-size:11.5px; font-weight:600; letter-spacing:.01em; line-height:1.25;}
+  .ht i{font-style:normal; font-size:9px; line-height:1.3; color:var(--dim);
+    letter-spacing:.02em;}
+  .ht:active{transform:scale(.96); border-color:var(--line-2);}
+  /* Наборы — вход в магазин, поэтому он единственный подсвечен */
+  .ht.buy{border-color:rgba(224,162,74,.34); background:rgba(224,162,74,.06);}
+  @media (prefers-reduced-motion:reduce){ .ht:active{transform:none;} }
+
   .home-actions{display:flex; gap:10px; align-items:center; padding:4px 0 2px;}
   .ghost-btn{flex:1; padding:14px; border-radius:999px; border:1px solid var(--line);
     background:transparent; color:var(--text); font-size:11px; letter-spacing:.14em; cursor:pointer;}
@@ -1001,6 +1013,12 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
   </button>
   <div class="hdr-title" id="hdrTitle">Редактор</div>
+  <!-- «До/После» жило в разделе «Ещё». Сравнивать хочется на каждом шаге правки, а
+       не сходив за этим в отдельную вкладку, поэтому кнопка переехала в шапку и
+       видна из любого раздела. -->
+  <button class="icon-btn hdr-cmp" id="compare" aria-label="До и после" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
+  </button>
   <button class="ed-save" id="save" style="display:none">Сохранить</button>
 </header>
 
@@ -1037,10 +1055,41 @@
     <span class="em-n" id="edgeCount">00/12</span>
   </div>
 
-  <div class="home-two">
-    <button class="ghost-btn home-batch" id="homeBatch">ОБРАБОТАТЬ СЪЁМКУ</button>
-    <button class="ghost-btn home-batch" id="homeCollage">СОБРАТЬ КОЛЛАЖ</button>
+  <!-- Инструменты живут ЗДЕСЬ, а не в редакторе. Пока они прятались в панели
+       под фото, фотограф их просто не находил: чтобы добраться до ретуши, надо
+       было сперва догадаться открыть кадр. Пять карточек с подписями — видно
+       сразу, что приложение умеет, и каждая ведёт прямо в дело. -->
+  <div class="home-tools" id="homeTools">
+    <button class="ht" data-go="retouch">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="13" r="6.4"/><path d="M17.6 4.4v3.2M16 6h3.2"/><circle cx="11" cy="13" r="2.2" fill="currentColor" stroke="none"/></svg>
+      <b>Ретушь</b><i>убрать лишнее</i>
+    </button>
+    <button class="ht" data-go="shadows">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5s3.6-5 9-5 9 5 9 5-3.6 5-9 5-9-5-9-5z"/><circle cx="12" cy="10.5" r="2.3" fill="currentColor" stroke="none"/><path d="M7 17.6c1.8 1.5 8.2 1.5 10 0"/></svg>
+      <b>Тени</b><i>под глазами</i>
+    </button>
+    <button class="ht" data-go="crop">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
+      <b>Кадр</b><i>обрезать</i>
+    </button>
+    <button class="ht" data-go="collage">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.4"/><rect x="13" y="3" width="8" height="8" rx="1.4"/><rect x="3" y="13" width="8" height="8" rx="1.4"/><rect x="13" y="13" width="8" height="8" rx="1.4"/></svg>
+      <b>Коллаж</b><i>2–4 кадра</i>
+    </button>
+    <!-- Название «Обработать съёмку» жена прочитала и не поняла, что произойдёт.
+         Подпись объясняет ровно то, ради чего это и делалось. -->
+    <button class="ht" data-go="batch">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="10" rx="1.6"/><path d="M7.5 4.5h11a1.6 1.6 0 0 1 1.6 1.6v9"/><path d="M6.4 14.2l2.6-2.8 2.4 2.3 2-2.1 2.6 3"/></svg>
+      <b>Вся съёмка</b><i>один вид на все</i>
+    </button>
+    <!-- Магазин наборов раньше был плюсиком в хвосте контактного листа — его
+         не находили. Здесь он на равных с инструментами и назван словом. -->
+    <button class="ht buy" id="homePacks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h16l-1.2 11.2a1.6 1.6 0 0 1-1.6 1.4H6.8a1.6 1.6 0 0 1-1.6-1.4z"/><path d="M8.6 8V6.2a3.4 3.4 0 0 1 6.8 0V8"/></svg>
+      <b>Наборы</b><i>стили авторов</i>
+    </button>
   </div>
+
   <div class="home-actions">
     <button class="ghost-btn" id="homePick">ВЫБРАТЬ ДРУГОЕ ФОТО</button>
     <button class="solid-btn" id="homeCam">СНЯТЬ</button>
@@ -1082,38 +1131,11 @@
   <button data-sec="light">Свет<span class="dot" id="secLightDot"></span></button>
   <button data-sec="color">Цвет<span class="dot" id="secColorDot"></span></button>
   <button data-sec="curve">Кривая<span class="dot" id="secCurveDot"></span></button>
-  <button data-sec="more">Ещё</button>
+  <!-- Раздела «Ещё» больше нет: инструменты переехали на главную, где их находят
+       сразу, а «До/После» — в шапку. Ходить туда стало не за чем. -->
 </nav>
 <!-- по краю плёнки печатают её тип и номер кадра; здесь — то, что правда о снимке -->
 <div class="tool-edge"><span id="toolEdge">—</span></div>
-<div class="toolbar sec" data-sec="more" id="toolbar">
- <div class="tool-rest">
-  <button class="tool sm" id="compare">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M6 8l-4 4 4 4"/><path d="M18 8l4 4-4 4"/></svg>
-    До/После
-  </button>
-  <button class="tool" data-go="retouch">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="13" r="6.4"/><path d="M17.6 4.4v3.2M16 6h3.2"/><circle cx="11" cy="13" r="2.2" fill="currentColor" stroke="none"/></svg>
-    Ретушь
-  </button>
-  <button class="tool" data-go="shadows">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5s3.6-5 9-5 9 5 9 5-3.6 5-9 5-9-5-9-5z"/><circle cx="12" cy="10.5" r="2.3" fill="currentColor" stroke="none"/><path d="M7 17.6c1.8 1.5 8.2 1.5 10 0"/></svg>
-    Тени
-  </button>
-  <button class="tool" data-go="crop">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
-    Кадр
-  </button>
-  <button class="tool sm" data-go="collage">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.4"/><rect x="13" y="3" width="8" height="8" rx="1.4"/><rect x="3" y="13" width="8" height="8" rx="1.4"/><rect x="13" y="13" width="8" height="8" rx="1.4"/></svg>
-    Коллаж
-  </button>
-  <button class="tool sm" data-go="batch">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="10" rx="1.6"/><path d="M7.5 4.5h11a1.6 1.6 0 0 1 1.6 1.6v9"/><path d="M6.4 14.2l2.6-2.8 2.4 2.3 2-2.1 2.6 3"/></svg>
-    Съёмка
-  </button>
- </div>
-</div>
 
 <div class="tabs" id="tabs" style="display:none">
   <button class="tab active" data-tab="presets">Луки</button>
@@ -2258,7 +2280,7 @@ function setSource(img){
   stage.style.display = 'block';
   document.getElementById('save').style.display = 'inline-flex';
   document.getElementById('dock').classList.add('on');
-  document.getElementById('toolbar').classList.add('on');   // сетка, не строка — см. .toolbar.on
+  document.getElementById('compare').style.display = 'inline-flex';   // сравнивать есть с чем
   // строка вкладок скрыта: переключение живёт в кнопке «Настройки» в ряду инструментов
   setTab('presets');
   // Кадр на экран СРАЗУ, до сборки миниатюр. Выше мы поменяли размер stage — он очищен,
@@ -3688,6 +3710,7 @@ function openPacks(){
   ensureTrap(); renderPacks();
 }
 document.getElementById('rowPacks').onclick = openPacks;
+document.getElementById('homePacks').onclick = openPacks;
 document.getElementById('packsClose').onclick = ()=> packsEl.classList.remove('open');
 document.getElementById('packsImport').onclick = ()=> document.getElementById('mypFile').click();
 // Сборка набора: своя работа превращается в товар одним файлом. Имя набора и автор
@@ -4899,11 +4922,8 @@ function batchSaveEach(){
   batchStatus('Сохраняю ' + files.length + ' снимков…');
 }
 document.getElementById('expBatch').onclick = ()=>{ expEl.classList.remove('open'); openBatch(); };
-document.getElementById('homeBatch').onclick = ()=>{
-  if(!sourceCanvas) return document.getElementById('homePick').click();
-  openBatch();
-};
-document.getElementById('homeCollage').onclick = openCollage;
+// «Вся съёмка» и «Коллаж» переехали в ряд инструментов на главной — их ведёт
+// общий обработчик [data-go] через runTool, отдельные кнопки больше не нужны.
 document.getElementById('batchClose').onclick = closeBatch;
 document.getElementById('batchPick').onclick = ()=>{
   const done = batchItems.length && batchItems.every(i=> i.blob || i.failed);
@@ -5704,19 +5724,44 @@ function bagsApply(t, cv, data){
       // локальная темнота (по сглаженной карте, без шума пикселей) — самое тёмное место в зоне
       // получает эффект почти полностью, лёгкая полутень рядом — почти не тронется
       const dLum = (dm[i]+dm[i+1]+dm[i+2])/3;
-      const local = Math.min(1, Math.max(0, (cLum-dLum)/20));
-      // потолок 0.68, БЕЗ буста силы — раньше при полной силе тон долетал ровно до цвета щеки
-      // и на части пикселей давал светлее естественной кожи («белое пятно»); теперь тон мягко
-      // тянется к щеке, но не долетает до неё — читается как «тон кожи», не как замазка
-      const a = ageom * local * t * 0.68;
+      // Карта темноты СИЛЬНО размыта (blur ≈ 0.38 ширины глаза) — она показывает форму
+      // тени, а не её глубину: синяк глубиной 47 единиц яркости читается на ней как 9.
+      // Прежний делитель 20 был откалиброван будто по настоящей глубине, поэтому даже в
+      // самом тёмном месте давал меньше половины силы — отсюда и «разницы почти нету».
+      // Делим по шкале самой карты.
+      // Ровной добавки ко всей зоне здесь быть НЕ ДОЛЖНО: геометрия захватывает и спинку
+      // носа, и щёку, а они другого тона — пробовал, получились плоские серые пятна.
+      // Работает только там, где действительно темнее.
+      const local = Math.min(1, Math.max(0, (cLum-dLum)/10));
+      // Потолка на силу больше НЕТ: при полном ползунке тень убирается целиком.
+      // Раньше здесь стоял общий множитель 0.68 — им лечили «белое пятно», но
+      // пятно шло не отсюда, а от возврата текстуры ниже, и заодно ослаблялись
+      // ВСЕ тени: лёгкая (13 единиц яркости) убиралась всего на пять.
+      // Глухого потолка 0.68 больше нет: им лечили «белое пятно», а лечится оно
+      // ограничением подъёма ниже. Ниже делителя 10 эффект уже не растёт — упирается
+      // в саму карту, поэтому дальше задирать нечего.
+      const a = ageom * local * t;
       if(a < 0.004) continue;
-      const aClamped = Math.min(0.68, a), hk = 1 - 0.3*aClamped;
+      const aClamped = Math.min(1, a), hk = 1 - 0.3*aClamped;
       // сдвиг тона к ЦВЕТУ щеки (не только к яркости) — снимает и синеву/желтизну круга, не только темноту
       const lr=low[i], lg=low[i+1], lb=low[i+2];
       const nr = lr + (cR-lr)*aClamped, ng = lg + (cG-lg)*aClamped, nb = lb + (cB-lb)*aClamped;
-      od[i]   = clamp(nr + (r.orig.data[i]  -lr)*hk);         // + настоящая текстура поверх
-      od[i+1] = clamp(ng + (r.orig.data[i+1]-lg)*hk);
-      od[i+2] = clamp(nb + (r.orig.data[i+2]-lb)*hk);
+      let oR = clamp(nr + (r.orig.data[i]  -lr)*hk);          // + настоящая текстура поверх
+      let oG = clamp(ng + (r.orig.data[i+1]-lg)*hk);
+      let oB = clamp(nb + (r.orig.data[i+2]-lb)*hk);
+      // ВОТ ГДЕ РОЖДАЛОСЬ «БЕЛОЕ ПЯТНО»: на светлом пикселе внутри тени текстура
+      // прибавлялась к уже поднятому тону и выносила его ЯРЧЕ щеки — участок читался
+      // как белая замазка. Режем по яркости, сохраняя цвет.
+      // Потолок обязан считаться ОТ ИСХОДНОГО пикселя: зона захватывает и спинку носа,
+      // а она сама по себе светлее щеки. Глухой потолок «яркость щеки» ЗАТЕМНЯЛ её до
+      // уровня щеки — на лице появлялись плоские серые пятна там, где инструмент вообще
+      // не должен был ничего трогать (проверено на снимке, пятна были видны и на 60%).
+      // Поэтому ограничиваем только ПОДЪЁМ: темнее, чем было, пиксель не станет.
+      const oLum = (oR+oG+oB)/3;
+      const origLum = (r.orig.data[i]+r.orig.data[i+1]+r.orig.data[i+2])/3;
+      const cap = Math.max(origLum, cLum + 4);
+      if(oLum > cap){ const k = cap/oLum; oR*=k; oG*=k; oB*=k; }
+      od[i]   = oR; od[i+1] = oG; od[i+2] = oB;
     }
     ctx.putImageData(out, r.bx, r.by);
   }
