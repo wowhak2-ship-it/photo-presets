@@ -3107,12 +3107,24 @@ MYP.importFrom = function(text){
             : (data && Array.isArray(data.presets) ? data.presets : null);
   if(!arr || !arr.length) return { error:'В файле нет пресетов' };
   const list = this.all();
+  const packId = (data && data.pack && data.pack.id) ? String(data.pack.id).slice(0,64) : null;
   const taken = new Set(list.map(p=> p.name.toLowerCase()));
-  let added = 0;
+  let added = 0, updated = 0;
   for(const raw of arr){
-    if(list.length >= MYP_LIMIT) break;
     const p = sanitizePreset(raw);
     if(!p) continue;
+    // Набор ставится ЗАНОВО, а не вторым слоем: если вид с этим именем уже пришёл из
+    // того же набора — обновляем его. Иначе повторная установка плодила бы «Кино 2»,
+    // «Кино 3». Виды, поставленные до появления меток, узнаём по имени и усыновляем.
+    const свой = packId && list.find(x=> x.name.toLowerCase() === p.name.toLowerCase()
+                                      && (x.pack === packId || !x.pack));
+    if(свой){
+      свой.base = p.base; свой.intensity = p.intensity; свой.adjust = p.adjust;
+      свой.curve = p.curve || null; свой.hsl = p.hsl || null; свой.pack = packId;
+      updated++;
+      continue;
+    }
+    if(list.length >= MYP_LIMIT) break;
     let name = p.name, n = 2;                 // одноимённый пресет не затираем, а нумеруем
     while(taken.has(name.toLowerCase())) name = p.name + ' ' + (n++);
     taken.add(name.toLowerCase());
@@ -3121,16 +3133,16 @@ MYP.importFrom = function(text){
                 curve:p.curve || null, hsl:p.hsl || null, date:Date.now(),
                 // помним, из какого набора пришёл вид: по этому витрина понимает,
                 // остался ли набор в ленте или человек его вычистил
-                pack: (data && data.pack && data.pack.id) ? String(data.pack.id).slice(0,64) : null });
+                pack: packId });
     added++;
   }
-  if(!added) return { error:'В файле нет подходящих пресетов' };
+  if(!added && !updated) return { error:'В файле нет подходящих пресетов' };
   this.write(list);
   // Файл набора несёт свою метку: по ней витрина понимает, что этот набор уже куплен,
   // и больше не предлагает его купить второй раз.
-  const pack = data && data.pack && data.pack.id
-    ? { id:String(data.pack.id).slice(0,64), name:String(data.pack.name || '').slice(0,64) } : null;
-  return { added, pack };
+  const pack = packId
+    ? { id:packId, name:String((data.pack && data.pack.name) || '').slice(0,64) } : null;
+  return { added, updated, pack };
 };
 // ─── Пресет ссылкой ───
 // Файлом делиться плохо: мессенджер показывает .json безымянным документом, а открыть
@@ -3585,7 +3597,7 @@ function packCard(p){
         if(res.error) throw new Error(res.error);
         PACKS.own((res.pack && res.pack.id) || p.id);
         renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
-        toast('Набор в ленте: ' + res.added + ' видов');
+        toast('Набор в ленте: ' + (res.added + (res.updated || 0)) + ' видов');
         renderPacks();
       }catch(e){
         go.disabled = false; go.textContent = было;
