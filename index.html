@@ -923,6 +923,12 @@
     display:flex; align-items:center; justify-content:center; padding:0;}
   .rt-shape canvas{width:22px; height:22px; display:block; opacity:.75;}
   .rt-shape.on{border-color:var(--gold); background:rgba(224,162,74,.10);}
+  .rt-keep{display:flex; justify-content:center; gap:8px; padding:9px 22px 0;}
+  .rt-keepbtn{display:inline-flex; align-items:center; gap:7px; padding:9px 14px;
+    border-radius:999px; border:1px solid var(--line); background:transparent;
+    color:var(--dim); font-size:12px; cursor:pointer;}
+  .rt-keepbtn svg{width:15px; height:15px;}
+  #rtKeepOn.on{border-color:transparent; background:var(--gold); color:var(--gold-ink); font-weight:600;}
   .rt-shape.on canvas{opacity:1;}
   .retouch.shadows-only .rt-sliders{padding-bottom:26px;}
   .retouch.shadows-only .rt-srow{height:42px;}
@@ -1692,6 +1698,16 @@
       <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Тени</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
       <div class="rt-srow" id="rtBokehRow" style="display:none"><span>Боке</span><input type="range" id="rtBokeh" min="0" max="100" value="0" disabled><b id="rtBokehV">0</b></div>
       <div class="rt-shapes" id="rtShapes" style="display:none"></div>
+      <!-- Модель находит ЧЕЛОВЕКА и только его. Всё остальное на переднем плане —
+           животное рядом, букет, чашка в руках — уходит в фон и размывается. Кисть
+           возвращает такие места в резкость. -->
+      <div class="rt-keep" id="rtKeep" style="display:none">
+        <button class="rt-keepbtn" id="rtKeepOn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 4.5l4 4L8 20H4v-4z"/></svg>
+          Оставить резким
+        </button>
+        <button class="rt-keepbtn" id="rtKeepReset">Сбросить</button>
+      </div>
       <div class="rt-srow" id="rtSkinRow" style="display:none"><span>Кожа</span><input type="range" id="rtSkin" min="0" max="100" value="0" disabled><b id="rtSkinV">0</b></div>
     </div>
     <!-- «До / После» отсюда убрано: кнопка теперь в шапке, как и в редакторе -->
@@ -5655,7 +5671,7 @@ function rtUpdateLoupe(e, ar){
 }
 function rtHideLoupe(){ rtLoupe.classList.remove('on'); }
 // pointers: 1 finger draws, 2 fingers pinch-zoom + pan
-let rtScale = 1, rtTx = 0, rtTy = 0, rtPinch = null, rtPan1 = null, rtCmpDrag = false, rtPanMode = false;
+let rtScale = 1, rtTx = 0, rtTy = 0, rtPinch = null, rtPan1 = null, rtCmpDrag = false, rtPanMode = false, keepDrag = false;
 const rtPtrs = new Map();
 // Кнопка-рука появляется, только когда есть что двигать, — на неприближённом кадре
 // она была бы кнопкой без действия.
@@ -5694,6 +5710,7 @@ rtCanvas.addEventListener('pointerdown', e=>{
   e.preventDefault();
   // в режиме сравнения палец двигает шторку, а не мажет
   if(rtCmpOn){ try{ rtCanvas.setPointerCapture(e.pointerId); }catch(_){} rtCmpDrag = true; rtCmpAt(e); return; }
+  if(keepMode && rtTool==='bokeh'){ try{ rtCanvas.setPointerCapture(e.pointerId); }catch(_){} keepDrag = true; keepPaint(e); return; }
   rtPtrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
   try{ rtCanvas.setPointerCapture(e.pointerId); }catch(_){}
   if(rtPtrs.size === 2){
@@ -5711,6 +5728,7 @@ rtCanvas.addEventListener('pointerdown', e=>{
 });
 rtCanvas.addEventListener('pointermove', e=>{
   if(rtCmpOn){ if(rtCmpDrag){ e.preventDefault(); rtCmpAt(e); } return; }
+  if(keepDrag){ e.preventDefault(); keepPaint(e); return; }
   if(!rtPtrs.has(e.pointerId)) return;
   rtPtrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(rtPinch && rtPtrs.size >= 2){
@@ -5731,6 +5749,10 @@ rtCanvas.addEventListener('pointermove', e=>{
 });
 function rtEnd(e){
   if(rtCmpOn){ rtCmpDrag = false; return; }
+  if(keepDrag){ keepDrag = false;
+    const v = +document.getElementById('rtBokeh').value;
+    if(v && bokehData) bokehApply(v/100, rtCanvas, bokehData, bokehShape);
+    return; }
   const panned = rtPan1 && rtPan1.on;
   const finishHeal = !panned && rtDrawing && rtTool === 'heal' && rtLastE && rtPtrs.size === 1;
   rtPtrs.delete(e.pointerId);
@@ -5806,6 +5828,8 @@ function rtSetTool(tool){
   document.getElementById('rtSkinRow').style.display = skin?'flex':'none';
   document.getElementById('rtBokehRow').style.display = bokeh?'flex':'none';
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
+  document.getElementById('rtKeep').style.display = bokeh?'flex':'none';
+  if(!bokeh){ keepMode = false; }
   document.getElementById('rtTop').textContent =
     bags ? 'Тени' : skin ? 'Кожа' : bokeh ? 'Боке' : 'Ретушь';
   const rtHint = document.getElementById('rtHint');   // подсказка нужна только кисти
@@ -6128,7 +6152,7 @@ function bokehApply(t, cv, data, shape){
   // на кадре с освещённым забором в белое выбивало 13% площади. Берём самые выраженные
   // источники, остальные в их радиусе пропускаем: так и выглядит настоящее боке —
   // отдельные читаемые кружки, а не сплошное свечение.
-  const шагR = Math.max(1, R/шаг * 0.85);
+  const шагR = Math.max(1, R/шаг * 1.6);
   const взятые = [], предел = [];
   for(const p of точки){
     let рядом = false;
@@ -6137,22 +6161,26 @@ function bokehApply(t, cv, data, shape){
     }
     if(рядом) continue;
     взятые.push(p); предел.push(p);
-    if(предел.length >= 160) break;
+    if(предел.length >= 48) break;             // больше полусотни шариков — уже сыпь
   }
 
-  const sprite = bokehSprite(shape, R);
-  // Спрайт красим ОДИН раз на цвет — перекраска каждого блика по отдельности была
-  // самой дорогой частью, а цветов на кадре считанные единицы.
+  // ТРИ размера шарика. Одинаковые кружки читаются как штамп: у настоящего боке
+  // источники стоят на разном расстоянии, и круги выходят разной величины.
+  const размеры = [R*0.68, R, R*1.34];
+  const спрайты = размеры.map(r2=> bokehSprite(shape, r2));
+  // Спрайт красим ОДИН раз на цвет и размер — перекраска каждого блика по отдельности
+  // была самой дорогой частью, а цветов на кадре считанные единицы.
   const кэш = {};
-  const покрасить = (r2,g2,b2)=>{
-    const ключ = (r2>>4)+'_'+(g2>>4)+'_'+(b2>>4);
+  const покрасить = (n,r2,g2,b2)=>{
+    const ключ = n+'_'+(r2>>4)+'_'+(g2>>4)+'_'+(b2>>4);
     if(кэш[ключ]) return кэш[ключ];
-    const c2 = document.createElement('canvas'); c2.width=sprite.width; c2.height=sprite.height;
+    const sp = спрайты[n];
+    const c2 = document.createElement('canvas'); c2.width=sp.width; c2.height=sp.height;
     const x2 = c2.getContext('2d');
-    x2.drawImage(sprite,0,0);
+    x2.drawImage(sp,0,0);
     x2.globalCompositeOperation = 'source-in';
     x2.fillStyle = 'rgb('+r2+','+g2+','+b2+')';
-    x2.fillRect(0,0,sprite.width,sprite.height);
+    x2.fillRect(0,0,sp.width,sp.height);
     return (кэш[ключ] = c2);
   };
   blx.globalCompositeOperation = 'lighter';
@@ -6168,7 +6196,10 @@ function bokehApply(t, cv, data, shape){
     let r2=sd[k], g2=sd[k+1], b2=sd[k+2];
     const mx = Math.max(r2,g2,b2);
     if(mx > 8){ const s = 255/mx; r2=Math.min(255,r2*s); g2=Math.min(255,g2*s); b2=Math.min(255,b2*s); }
-    blx.drawImage(покрасить(r2|0, g2|0, b2|0), p.x*шаг - R, p.y*шаг - R);
+    // размер — от выраженности источника: сильнее выступает, крупнее шарик
+    const n = p.выступ > 78 ? 2 : p.выступ > 48 ? 1 : 0;
+    const sp = покрасить(n, r2|0, g2|0, b2|0);
+    blx.drawImage(sp, p.x*шаг - sp.width/2, p.y*шаг - sp.height/2);
   }
   blx.globalAlpha = 1; blx.globalCompositeOperation = 'source-over';
 
@@ -6529,6 +6560,35 @@ async function bokehEnter(){
     top.textContent = 'Модель недоступна — проверьте интернет';
   }
   bokehBusy = false;
+}
+// Кисть «оставить резким»: дорисовываем в маску, а не пересобираем всё заново —
+// подготовка фона стоит триста миллисекунд, а перерисовка результата шестьдесят.
+// Заращённый фон под новым резким участком просто окажется прикрыт сверху.
+let keepMode = false;
+function keepSync(){
+  const b = document.getElementById('rtKeepOn');
+  b.classList.toggle('on', keepMode);
+  rtCanvas.style.cursor = keepMode ? 'crosshair' : 'default';
+}
+document.getElementById('rtKeepOn').onclick = ()=>{ keepMode = !keepMode; rtCmpOff(); keepSync(); };
+document.getElementById('rtKeepReset').onclick = ()=>{
+  if(!bokehMask) return;
+  keepMode = false; keepSync();
+  bokehData = bokehPrepare(rtCanvas, bokehMask);   // маска с нуля, как её увидела модель
+  const v = +document.getElementById('rtBokeh').value;
+  if(v) bokehApply(v/100, rtCanvas, bokehData, bokehShape);
+  else rtCanvas.getContext('2d').putImageData(bokehData.orig, 0, 0);
+};
+function keepPaint(e){
+  if(!bokehData) return;
+  const r = rtCanvas.getBoundingClientRect();
+  const x = (e.clientX-r.left)*(rtCanvas.width/r.width);
+  const y = (e.clientY-r.top)*(rtCanvas.height/r.height);
+  const R = Math.max(12, Math.min(rtCanvas.width, rtCanvas.height)*0.055);
+  const mx = bokehData.mask.getContext('2d');
+  const g = mx.createRadialGradient(x,y,R*0.45, x,y,R);
+  g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  mx.fillStyle = g; mx.beginPath(); mx.arc(x,y,R,0,7); mx.fill();
 }
 document.getElementById('rtBokeh').oninput = e=>{
   rtCmpOff();
