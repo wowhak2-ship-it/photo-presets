@@ -863,9 +863,12 @@
   .rt-holder{position:relative; line-height:0; touch-action:none; transform-origin:center center; will-change:transform;}
   #rtCanvas{display:block; touch-action:none; cursor:crosshair; z-index:1;}
   /* выбор лица на групповом снимке */
-  .rt-faces{position:absolute; inset:0; z-index:4; pointer-events:none;}
+  .rt-faces{position:absolute; inset:0; z-index:4; pointer-events:none;
+    transition:opacity .16s ease;}
+  /* пока ведёшь ползунок — метки уходят: они мешают увидеть результат */
+  .rt-faces.busy{opacity:0; pointer-events:none;}
   .rt-faces button{position:absolute; transform:translate(-50%,-50%); pointer-events:auto;
-    width:34px; height:34px; border-radius:50%; cursor:pointer;
+    width:30px; height:30px; border-radius:50%; cursor:pointer;
     border:2px solid rgba(255,255,255,.85); background:rgba(0,0,0,.42);
     -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
     color:#fff; font-family:var(--mono); font-size:12px; font-weight:700;
@@ -6060,10 +6063,10 @@ function skinRun(cv, faces, amount){
 // крупное — почти всегда это главный герой кадра; остальные выбираются точкой.
 let rtFaceSel = 0;
 function faceCentre(lms, W, H){
-  let x=0, y=0, n=0, x0=1e9, x1=-1e9;
+  let x=0, y=0, n=0, x0=1e9, x1=-1e9, y1=-1e9;
   for(const p of lms){ x+=p.x; y+=p.y; n++;
-    if(p.x<x0) x0=p.x; if(p.x>x1) x1=p.x; }
-  return { x:(x/n)*W, y:(y/n)*H, w:(x1-x0)*W };
+    if(p.x<x0) x0=p.x; if(p.x>x1) x1=p.x; if(p.y>y1) y1=p.y; }
+  return { x:(x/n)*W, y:(y/n)*H, w:(x1-x0)*W, low:y1*H };
 }
 function biggestFace(faces, W, H){
   let best=0, bw=-1;
@@ -6086,13 +6089,34 @@ function rtDrawFaces(onPick){
     // не вспомнить, кого ты уже прошёл, а кого нет.
     const правлено = rtTool === 'skin' ? skinFaceAmount(i) > 0 : false;
     b.className = (i === rtFaceSel ? 'on' : '') + (правлено ? ' done' : '');
-    b.style.left = (cv.left - area.left + c.x/rtCanvas.width * cv.width) + 'px';
-    b.style.top  = (cv.top  - area.top  + c.y/rtCanvas.height * cv.height) + 'px';
+    // Метка стоит ПОД подбородком, а не по центру лица: в центре она закрывала ровно
+    // то место, ради которого её и открыли — не видно, что делает ползунок.
+    const kx = cv.width / rtCanvas.width, ky = cv.height / rtCanvas.height;
+    const x = cv.left - area.left + c.x*kx;
+    let y = cv.top - area.top + c.low*ky + 20;
+    if(y > area.height - 24) y = cv.top - area.top + c.low*ky - 22;   // у нижнего края — обратно вверх
+    b.style.left = Math.max(20, Math.min(area.width-20, x)) + 'px';
+    b.style.top  = Math.max(20, Math.min(area.height-20, y)) + 'px';
     b.onclick = ()=>{ if(i === rtFaceSel) return; rtFaceSel = i; onPick && onPick(); };
     host.appendChild(b);
   });
 }
 function rtClearFaces(){ const h=document.getElementById('rtFaces'); if(h) h.innerHTML=''; }
+// Пока палец на ползунке, метки прячем — иначе не видно, что происходит с лицом.
+let ликиТаймер = null;
+function rtFacesBusy(on){
+  const h = document.getElementById('rtFaces'); if(!h) return;
+  clearTimeout(ликиТаймер);
+  if(on){ h.classList.add('busy'); }
+  else ликиТаймер = setTimeout(()=> h.classList.remove('busy'), 260);
+}
+['rtSkin','rtBags'].forEach(id=>{
+  const s = document.getElementById(id); if(!s) return;
+  s.addEventListener('pointerdown', ()=> rtFacesBusy(true));
+  s.addEventListener('pointerup',   ()=> rtFacesBusy(false));
+  s.addEventListener('pointercancel',()=> rtFacesBusy(false));
+  s.addEventListener('change',      ()=> rtFacesBusy(false));
+});
 
 function bagsApply(t, cv, data){
   cv = cv || rtCanvas; data = data || bagsData;
