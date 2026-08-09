@@ -1008,7 +1008,7 @@
   .ht.ht-wide{width:100%; margin-bottom:8px; flex-direction:row; align-items:center; gap:12px;
     padding:10px 14px 10px 10px;}
   .ht.ht-wide b{font-size:13.5px;}
-  .ht-thumb{flex:0 0 auto; width:52px; height:64px; border-radius:4px; overflow:hidden;
+  .ht-thumb{flex:0 0 auto; width:52px; height:62px; border-radius:4px; overflow:hidden;
     background:var(--panel); display:block;
     box-shadow:0 0 0 1px rgba(255,255,255,.08) inset, 0 3px 10px rgba(0,0,0,.4);}
   .ht-thumb canvas{width:100%; height:100%; object-fit:cover; display:block;}
@@ -2848,12 +2848,16 @@ function closeLooks(){ looksEl.classList.remove('open'); }
 function paintHomeThumb(){
   const c = document.getElementById('homeThumb');
   if(!c || !sourceCanvas) return;
-  const box = c.parentElement.getBoundingClientRect();
+  // Окошко подгоняем под ФОРМУ снимка. Раньше оно было всегда 52×64, и горизонтальный
+  // кадр обрезался до неузнаваемости — от пейзажа оставалась вертикальная полоска.
+  const ar = sourceCanvas.width / sourceCanvas.height;
+  const bh = 62, bw = Math.round(Math.max(40, Math.min(96, bh * ar)));
+  const box = c.parentElement;
+  box.style.width = bw + 'px'; box.style.height = bh + 'px';
   const dpr = Math.min(3, window.devicePixelRatio || 1);
-  const w = Math.max(1, Math.round((box.width || 52) * dpr));
-  const h = Math.max(1, Math.round((box.height || 64) * dpr));
+  const w = Math.max(1, Math.round(bw * dpr)), h = Math.max(1, Math.round(bh * dpr));
   c.width = w; c.height = h;
-  const s = Math.max(w / sourceCanvas.width, h / sourceCanvas.height);   // cover
+  const s = Math.max(w / sourceCanvas.width, h / sourceCanvas.height);   // cover по подогнанной рамке
   const dw = sourceCanvas.width * s, dh = sourceCanvas.height * s;
   const ctx = c.getContext('2d');
   ctx.imageSmoothingQuality = 'high';
@@ -5989,9 +5993,10 @@ function skinPrepare(faces, cv){
     const размыть = (r)=>{ const c=document.createElement('canvas'); c.width=bw; c.height=bh;
       const q=c.getContext('2d'); q.filter='blur('+r+'px)';
       q.drawImage(cv, bx,by,bw,bh, 0,0,bw,bh); return q.getImageData(0,0,bw,bh).data; };
-    const mid = размыть(Math.max(1, Math.round(faceW*0.006)));   // граница пор
-    const low = размыть(Math.max(4, Math.round(faceW*0.085)));   // граница пятен
-    zones.push({bx,by,bw,bh,mask,orig,mid,low,faceW});
+    const mid  = размыть(Math.max(1, Math.round(faceW*0.006)));  // граница пор
+    const spot = размыть(Math.max(3, Math.round(faceW*0.030)));  // граница пятен
+    const low  = размыть(Math.max(6, Math.round(faceW*0.110)));  // граница лепки лица
+    zones.push({bx,by,bw,bh,mask,orig,mid,spot,low,faceW});
   }
   return zones.length ? zones : null;
 }
@@ -6001,7 +6006,7 @@ function skinApply(t, cv, zones){
   const ctx = cv.getContext('2d');
   for(const z of zones){
     const out = ctx.getImageData(z.bx, z.by, z.bw, z.bh), od = out.data;
-    const o = z.orig.data, mid = z.mid, low = z.low, m = z.mask;
+    const o = z.orig.data, mid = z.mid, spot = z.spot, low = z.low, m = z.mask;
     for(let i=0;i<od.length;i+=4){
       const a = m[i+3]/255; if(a < 0.02) continue;
       // кожа или нет: у кожи красный выше зелёного, зелёный выше синего, и разброс
@@ -6010,21 +6015,29 @@ function skinApply(t, cv, zones){
       const кожа = (R>=G && G>=B && R-B>8 && R-B<130 && R>50) ? 1
                  : (R>G && R-B>4 && R-B<160) ? 0.5 : 0;
       if(!кожа) continue;
-      // средняя полоса — то, что глушим; но если она ВЕЛИКА, это не пятно, а настоящий
-      // край (крыло носа, скула, прядь) — такие места сглаживать нельзя, поплывут черты
       let сила = a * кожа * t;
-      const b0 = o[i]  -mid[i],   b1 = o[i+1]-mid[i+1], b2 = o[i+2]-mid[i+2];   // поры
-      const p0 = mid[i]-low[i],   p1 = mid[i+1]-low[i+1], p2 = mid[i+2]-low[i+2]; // пятна
-      // Порог отмерен по настоящему лицу: неровности тона живут в пределах ~25 единиц,
-      // а край крыла носа или прядь дают сильно больше. Ставить порог ниже нельзя —
-      // защита начинает срабатывать на самих пятнах, ради которых всё и затевалось.
-      const край = Math.max(Math.abs(p0), Math.abs(p1), Math.abs(p2));
-      if(край > 26) сила *= Math.max(0, 1 - (край-26)/44);
+      // ЧЕТЫРЕ полосы, а не три. Раньше я глушил всё от пор до 8% ширины лица — а в этой
+      // полосе живут не только пятна, но и естественная лепка кожи: как ложится свет на
+      // скулу, где щека чуть румянее. Убери её — и лицо становится плоским, «замазанным».
+      // Теперь глушится ТОЛЬКО полоса самих пятен (от пор до 3% лица), а лепка от 3% до
+      // 11% возвращается нетронутой вместе с порами.
+      const b0 = o[i]   -mid[i],   b1 = o[i+1] -mid[i+1],  b2 = o[i+2] -mid[i+2];   // поры
+      const s0 = mid[i] -spot[i],  s1 = mid[i+1]-spot[i+1], s2 = mid[i+2]-spot[i+2]; // пятна
+      const l0 = spot[i]-low[i],   l1 = spot[i+1]-low[i+1], l2 = spot[i+2]-low[i+2]; // лепка
+      // Контрастное пятно — обычно настоящий край (крыло носа, прядь, ресница), его
+      // трогать нельзя. Но высыпания тоже контрастные, и защита щадила их наравне с
+      // чертами лица — на коже с прыщами эффект падал вчетверо. Различаем по ЦВЕТУ:
+      // воспаление уходит в красный сильнее, чем в зелёный и синий, а край носа или
+      // ресница так себя не ведут — они меняют яркость, а не оттенок.
+      const край = Math.max(Math.abs(s0), Math.abs(s1), Math.abs(s2));
+      const краснота = s0 - (s1 + s2) / 2;
+      if(край > 26 && краснота < 5) сила *= Math.max(0, 1 - (край-26)/44);
+      else if(краснота > 5) сила = Math.min(1, сила * 1.35);   // краснота — то, ради чего и идут сюда
       if(сила < 0.004) continue;
       const k = 1 - сила;
-      od[i]   = clamp(low[i]   + p0*k + b0);      // поры возвращаются целиком
-      od[i+1] = clamp(low[i+1] + p1*k + b1);
-      od[i+2] = clamp(low[i+2] + p2*k + b2);
+      od[i]   = clamp(low[i]   + l0 + s0*k + b0);
+      od[i+1] = clamp(low[i+1] + l1 + s1*k + b1);
+      od[i+2] = clamp(low[i+2] + l2 + s2*k + b2);
     }
     ctx.putImageData(out, z.bx, z.by);
   }
