@@ -916,6 +916,14 @@
   .rt-srow{display:flex; align-items:center; gap:10px; height:30px;}
   /* В «Тенях» ползунок один, и он оказывался вплотную к кнопкам — палец, ведущий
      ползунок к краю, задевал «Отменить». Разводим их так же, как доску кривой. */
+  /* выбор формы боке — сама фигура и есть подпись, слов не нужно */
+  .rt-shapes{display:flex; justify-content:center; gap:10px; padding:10px 22px 0;}
+  .rt-shape{width:42px; height:42px; border-radius:11px; cursor:pointer;
+    border:1px solid var(--line); background:rgba(255,255,255,.03);
+    display:flex; align-items:center; justify-content:center; padding:0;}
+  .rt-shape canvas{width:22px; height:22px; display:block; opacity:.75;}
+  .rt-shape.on{border-color:var(--gold); background:rgba(224,162,74,.10);}
+  .rt-shape.on canvas{opacity:1;}
   .retouch.shadows-only .rt-sliders{padding-bottom:26px;}
   .retouch.shadows-only .rt-srow{height:42px;}
   .retouch.shadows-only .rt-tools{padding-top:14px;}
@@ -1145,6 +1153,10 @@
     <button class="ht" data-go="skin">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.9 0 7 3.1 7 7v3.4c0 4.2-3.1 7.6-7 7.6s-7-3.4-7-7.6V10c0-3.9 3.1-7 7-7z"/><path d="M9.2 10.4h.01M14.8 10.4h.01M12 14.6h.01"/></svg>
       <b>Кожа</b><i>сгладить тон</i>
+    </button>
+    <button class="ht" data-go="bokeh">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="10" r="4.2"/><circle cx="16" cy="7" r="2.6"/><circle cx="15.5" cy="15" r="3.4"/></svg>
+      <b>Боке</b><i>размыть фон</i>
     </button>
     <button class="ht" data-go="crop">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
@@ -1678,6 +1690,8 @@
       <div class="rt-srow"><span>Жёсткость</span><input type="range" id="rtHard" min="0" max="100" value="45"><b id="rtHardV">45</b></div>
       <div class="rt-srow"><span>Сила</span><input type="range" id="rtStr" min="20" max="100" value="100"><b id="rtStrV">100</b></div>
       <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Тени</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
+      <div class="rt-srow" id="rtBokehRow" style="display:none"><span>Боке</span><input type="range" id="rtBokeh" min="0" max="100" value="0" disabled><b id="rtBokehV">0</b></div>
+      <div class="rt-shapes" id="rtShapes" style="display:none"></div>
       <div class="rt-srow" id="rtSkinRow" style="display:none"><span>Кожа</span><input type="range" id="rtSkin" min="0" max="100" value="0" disabled><b id="rtSkinV">0</b></div>
     </div>
     <!-- «До / После» отсюда убрано: кнопка теперь в шапке, как и в редакторе -->
@@ -2382,6 +2396,8 @@ function buildFullSource(){
       bagsRun(own(), op.faces, op.amount);
     } else if(op.t === 'skin'){
       skinRun(own(), op.faces, op.amount);
+    } else if(op.t === 'bokeh'){
+      bokehRun(own(), op.mask, op.amount, op.shape);
     }
   }
   return c;   // без правок это сам оригинал — читаем из него, но не пишем в него
@@ -2908,6 +2924,7 @@ function applyPendingTool(){
   if(t==='retouch'){ openRetouch(); return; }
   if(t==='shadows'){ openShadows(); return; }
   if(t==='skin'){ openSkin(); return; }
+  if(t==='bokeh'){ openBokeh(); return; }
   if(t==='crop'){ openCrop(); return; }
   if(t==='curve'){ goEditor(); setSection('curve'); return; }
   if(t==='hsl'){ goEditor(); setSection('color'); return; }
@@ -5567,7 +5584,8 @@ function openRetouch(){
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtFaces = null; skinData = null;
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtFaces = null; skinData = null;
+  bokehData = null; bokehMask = null;
   for(const k in skinFace) delete skinFace[k];   // новый снимок — настройки лиц с нуля
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
@@ -5588,6 +5606,11 @@ function openSkin(){
   openRetouch();
   retouchEl.classList.add('shadows-only');
   rtSetTool('skin');
+}
+function openBokeh(){
+  openRetouch();
+  retouchEl.classList.add('shadows-only');
+  rtSetTool('bokeh');
 }
 function closeRetouch(){ rtCmpOff(); retouchEl.classList.remove('open'); retouchEl.classList.remove('shadows-only'); }
 function rtBrushR(){ const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width; return rtSize * (rtCanvas.width/disp) * 0.5; }
@@ -5770,21 +5793,26 @@ function rtSetTool(tool){
   rtTool=tool;
   rtSyncPan();         // в «Тенях» руки нет, в кисти есть
   document.querySelectorAll('.rt-mode').forEach(b=>b.classList.toggle('active', b.dataset.tool===tool));
-  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin';
-  const ползунок = bags || skin;               // режимы «один ползунок вместо кисти»
+  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin', bokeh=tool==='bokeh';
+  const ползунок = bags || skin || bokeh;      // режимы «один ползунок вместо кисти»
   rtModes.classList.toggle('stamp', stamp);
   rtSrc.classList.toggle('on', stamp); rtTgt.classList.toggle('on', stamp);
   rtSrc.style.pointerEvents=stamp?'auto':'none'; rtTgt.style.pointerEvents=stamp?'auto':'none';
   if(stamp) rtPlaceMarkers();
   document.querySelectorAll('.rt-srow').forEach(r=>{
-    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow') r.style.display = ползунок?'none':'flex'; });
+    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtBokehRow')
+      r.style.display = ползунок?'none':'flex'; });
   document.getElementById('rtBagsRow').style.display = bags?'flex':'none';
   document.getElementById('rtSkinRow').style.display = skin?'flex':'none';
-  document.getElementById('rtTop').textContent = bags ? 'Тени' : skin ? 'Кожа' : 'Ретушь';
+  document.getElementById('rtBokehRow').style.display = bokeh?'flex':'none';
+  document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
+  document.getElementById('rtTop').textContent =
+    bags ? 'Тени' : skin ? 'Кожа' : bokeh ? 'Боке' : 'Ретушь';
   const rtHint = document.getElementById('rtHint');   // подсказка нужна только кисти
   if(rtHint) rtHint.style.display = ползунок ? 'none' : 'block';
   if(bags) bagsEnter();
   if(skin) skinEnter();
+  if(bokeh) bokehEnter();
 }
 document.querySelectorAll('.rt-mode').forEach(b=> b.onclick=()=>rtSetTool(b.dataset.tool));
 function markerDrag(el,key){
@@ -5943,6 +5971,191 @@ function bagsPrepare(faces, cv){
   bagsData = regs.length ? {regs} : null;
   return regs.length;
 }
+// ─── Боке ───
+// Два признака, по которым дешёвый «портретный режим» виден сразу:
+//   1) ОРЕОЛ. Если размыть кадр целиком и наложить сверху вырезанного человека, его
+//      собственные цвета размажутся наружу — вокруг плеч встаёт светлая кайма. Лечится
+//      тем, что ПЕРЕД размытием дыра от человека заращивается соседним фоном.
+//   2) КАША ВМЕСТО БОКЕ. Настоящее боке превращает яркие точки в светящиеся кружки,
+//      а гауссово размытие их просто усредняет и гасит. Лечится тем, что перед
+//      размытием света поднимаются степенью, а после — возвращаются обратно: яркая
+//      точка успевает «расплыться» кружком, сохранив силу.
+let segKit = null, bokehData = null, bokehBusy = false;
+async function loadSegKit(){
+  if(segKit) return segKit;
+  const vision = await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`);
+  const files = await vision.FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`);
+  const opts = d => ({ baseOptions:{ modelAssetPath:
+    'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite',
+    delegate:d }, runningMode:'IMAGE', outputCategoryMask:false, outputConfidenceMasks:true });
+  try{ segKit = await vision.ImageSegmenter.createFromOptions(files, opts('GPU')); }
+  catch(_){ segKit = await vision.ImageSegmenter.createFromOptions(files, opts('CPU')); }
+  return segKit;
+}
+function bokehPrepare(cv, mask){
+  const W = cv.width, H = cv.height;
+  // маска человека в отдельном холсте, с мягким краем
+  const mc = document.createElement('canvas'); mc.width=W; mc.height=H;
+  const mx = mc.getContext('2d');
+  const id = mx.createImageData(W, H), d = id.data;
+  for(let i=0, k=0; i<mask.length; i++, k+=4){
+    const v = Math.round(Math.max(0, Math.min(1, mask[i])) * 255);
+    d[k]=d[k+1]=d[k+2]=255; d[k+3]=v;
+  }
+  mx.putImageData(id, 0, 0);
+  const перо = Math.max(1, Math.round(Math.min(W,H)*0.004));
+  const mс = document.createElement('canvas'); mс.width=W; mс.height=H;
+  const mсx = mс.getContext('2d');
+  mсx.filter = 'blur('+перо+'px)'; mсx.drawImage(mc, 0, 0);
+
+  // ФОН БЕЗ ЧЕЛОВЕКА: дыру от него зарастим соседним фоном в несколько заходов,
+  // иначе размытие вытянет его цвета наружу и даст кайму
+  const bg = document.createElement('canvas'); bg.width=W; bg.height=H;
+  const bx = bg.getContext('2d');
+  bx.drawImage(cv, 0, 0);
+  const дыра = document.createElement('canvas'); дыра.width=W; дыра.height=H;
+  const дx = дыра.getContext('2d');
+  for(let шаг=0; шаг<4; шаг++){
+    const r = Math.max(2, Math.round(Math.min(W,H)*0.02*(шаг+1)));
+    дx.clearRect(0,0,W,H);
+    дx.filter = 'blur('+r+'px)'; дx.drawImage(bg, 0, 0); дx.filter='none';
+    // растянутый фон кладём ТОЛЬКО туда, где человек
+    дx.globalCompositeOperation = 'destination-in'; дx.drawImage(mс, 0, 0);
+    дx.globalCompositeOperation = 'source-over';
+    bx.drawImage(дыра, 0, 0);
+  }
+  return { W, H, mask:mс, bg, orig:cv.getContext('2d').getImageData(0,0,W,H) };
+}
+// Форма боке — это форма диафрагмы объектива. У круглой получаются кружки, у
+// шестилепестковой — шестигранники, а фотографы надевают на объектив трафарет
+// с сердцем или звездой, и блики принимают его форму. Рисуем спрайт один раз
+// на размер и форму, дальше только штампуем.
+const BOKEH_SHAPES = ['круг','шестигранник','сердце','звезда'];
+function bokehSprite(shape, r){
+  const s = Math.max(4, Math.round(r*2)), c = document.createElement('canvas');
+  c.width = c.height = s;
+  const x = c.getContext('2d'), R = s/2;
+  // мягкий край и чуть более яркая кромка — у настоящего боке край плотнее середины
+  const g = x.createRadialGradient(R,R,R*0.1, R,R,R);
+  g.addColorStop(0,'rgba(255,255,255,.62)'); g.addColorStop(.72,'rgba(255,255,255,.72)');
+  g.addColorStop(.92,'rgba(255,255,255,.95)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  x.fillStyle = g;
+  x.beginPath();
+  if(shape === 'круг'){ x.arc(R,R,R*0.98,0,7); }
+  else if(shape === 'шестигранник'){
+    for(let i=0;i<6;i++){ const a=-Math.PI/2 + i*Math.PI/3;
+      const px=R+Math.cos(a)*R*0.98, py=R+Math.sin(a)*R*0.98;
+      i ? x.lineTo(px,py) : x.moveTo(px,py); }
+    x.closePath();
+  } else if(shape === 'сердце'){
+    const k = R*0.92;
+    x.moveTo(R, R + k*0.78);
+    x.bezierCurveTo(R - k*1.5, R - k*0.25, R - k*0.5, R - k*1.15, R, R - k*0.42);
+    x.bezierCurveTo(R + k*0.5, R - k*1.15, R + k*1.5, R - k*0.25, R, R + k*0.78);
+    x.closePath();
+  } else {                                    // звезда
+    for(let i=0;i<10;i++){ const a=-Math.PI/2 + i*Math.PI/5, rr = i%2 ? R*0.44 : R*0.98;
+      const px=R+Math.cos(a)*rr, py=R+Math.sin(a)*rr;
+      i ? x.lineTo(px,py) : x.moveTo(px,py); }
+    x.closePath();
+  }
+  x.fill();
+  return c;
+}
+function bokehApply(t, cv, data, shape){
+  data = data || bokehData; if(!data || !t) return;
+  shape = shape || bokehShape;
+  const { W, H, mask, bg } = data;
+  const R = Math.max(2, Math.round(Math.min(W,H) * 0.045 * t));   // сила = радиус кружка
+
+  // 1. ровное размытие фона — основа
+  const bl = document.createElement('canvas'); bl.width=W; bl.height=H;
+  const blx = bl.getContext('2d');
+  blx.filter = 'blur('+R+'px)'; blx.drawImage(bg, 0, 0); blx.filter='none';
+
+  // 2. ЯРКИЕ ТОЧКИ фона превращаем в фигуры. Ищем по уменьшенной копии — так и быстро,
+  //    и находятся именно пятна света, а не отдельные шумные пиксели.
+  // Шаг НЕ привязан к радиусу: при крупном боке он выходил в тридцать пикселей, и
+  // мелкие фонарики усреднялись с тёмным фоном — из десятка огней оставался один, да
+  // ещё и серый, потому что цвет брался из той же усреднённой клетки.
+  const шаг = Math.max(2, Math.round(Math.min(W,H)/220));
+  const mw = Math.max(1, Math.round(W/шаг)), mh = Math.max(1, Math.round(H/шаг));
+  const sm = document.createElement('canvas'); sm.width=mw; sm.height=mh;
+  const smx = sm.getContext('2d'); smx.drawImage(bg, 0,0,W,H, 0,0,mw,mh);
+  const sd = smx.getImageData(0,0,mw,mh).data;
+  const мс = document.createElement('canvas'); мс.width=mw; мс.height=mh;
+  мс.getContext('2d').drawImage(mask, 0,0,W,H, 0,0,mw,mh);
+  const md = мс.getContext('2d').getImageData(0,0,mw,mh).data;
+
+  const яр = new Float32Array(mw*mh);
+  for(let i=0,k=0;k<sd.length;i++,k+=4) яр[i] = sd[k]*0.3 + sd[k+1]*0.6 + sd[k+2]*0.1;
+  // Порог — не жёсткое число, а по самому кадру: на ночной улице и в светлой комнате
+  // «яркое» означает разное. Берём верхние проценты гистограммы фона.
+  const выборка = [];
+  for(let i=0;i<яр.length;i+=3){ if(md[i*4+3] <= 40) выборка.push(яр[i]); }
+  выборка.sort((a,b)=>a-b);
+  const порог = Math.max(120, выборка.length ? выборка[Math.floor(выборка.length*0.976)] : 168);
+
+  // только местные максимумы — иначе один фонарь получит десяток наложенных фигур
+  const точки = [];
+  for(let y=1;y<mh-1;y++) for(let x2=1;x2<mw-1;x2++){
+    const i = y*mw+x2;
+    if(md[i*4+3] > 40) continue;
+    const L = яр[i];
+    if(L < порог) continue;
+    if(L < яр[i-1] || L < яр[i+1] || L < яр[i-mw] || L < яр[i+mw]) continue;
+    точки.push({x:x2, y, L, i});
+  }
+  точки.sort((a,b)=> b.L-a.L);
+  const предел = точки.slice(0, 400);          // на плотном фоне их могут быть тысячи
+
+  const sprite = bokehSprite(shape, R);
+  // Спрайт красим ОДИН раз на цвет — перекраска каждого блика по отдельности была
+  // самой дорогой частью, а цветов на кадре считанные единицы.
+  const кэш = {};
+  const покрасить = (r2,g2,b2)=>{
+    const ключ = (r2>>4)+'_'+(g2>>4)+'_'+(b2>>4);
+    if(кэш[ключ]) return кэш[ключ];
+    const c2 = document.createElement('canvas'); c2.width=sprite.width; c2.height=sprite.height;
+    const x2 = c2.getContext('2d');
+    x2.drawImage(sprite,0,0);
+    x2.globalCompositeOperation = 'source-in';
+    x2.fillStyle = 'rgb('+r2+','+g2+','+b2+')';
+    x2.fillRect(0,0,sprite.width,sprite.height);
+    return (кэш[ключ] = c2);
+  };
+  blx.globalCompositeOperation = 'lighter';
+  for(const p of предел){
+    const k = p.i*4;
+    const сила = Math.min(1, (p.L-порог)/60 + 0.35);
+    blx.globalAlpha = Math.min(0.9, (0.22 + 0.55*сила) * t);
+    // Цвет РАСКРУЧИВАЕМ до полной яркости, сохраняя оттенок. В клетке он уже смешан
+    // с тёмным фоном, и если брать как есть — шарики выходят серыми: на проверке
+    // тёплыми оставались 19% бликов против 99% в исходнике.
+    let r2=sd[k], g2=sd[k+1], b2=sd[k+2];
+    const mx = Math.max(r2,g2,b2);
+    if(mx > 8){ const s = 255/mx; r2=Math.min(255,r2*s); g2=Math.min(255,g2*s); b2=Math.min(255,b2*s); }
+    blx.drawImage(покрасить(r2|0, g2|0, b2|0), p.x*шаг - R, p.y*шаг - R);
+  }
+  blx.globalAlpha = 1; blx.globalCompositeOperation = 'source-over';
+
+  // 3. резкий человек поверх размытого фона
+  const out = cv.getContext('2d');
+  out.clearRect(0,0,W,H);
+  out.drawImage(bl, 0, 0);
+  const sharp = document.createElement('canvas'); sharp.width=W; sharp.height=H;
+  const sx = sharp.getContext('2d');
+  sx.putImageData(data.orig, 0, 0);
+  sx.globalCompositeOperation = 'destination-in'; sx.drawImage(mask, 0, 0);
+  sx.globalCompositeOperation = 'source-over';
+  out.drawImage(sharp, 0, 0);
+}
+let bokehShape = 'круг';
+function bokehRun(cv, mask, amount, shape){
+  if(!mask || !amount) return;
+  bokehApply(amount, cv, bokehPrepare(cv, mask), shape);
+}
+
 // ─── Сглаживание кожи ───
 // Почему у большинства приложений получается пластик: они размывают кадр целиком.
 // Вместе с пятнами уходят поры, а без пор кожа перестаёт быть кожей — глаз это
@@ -6235,6 +6448,65 @@ document.getElementById('rtBags').oninput = e=>{
   rtBagsOp = v ? { t:'bags', faces:[rtFaces[rtFaceSel]], amount:v/100 } : null;
 };
 
+// ─── «Боке» ───
+let rtBokehOp = null;
+function bokehChips(){
+  const host = document.getElementById('rtShapes');
+  host.innerHTML = '';
+  BOKEH_SHAPES.forEach(f=>{
+    const b = document.createElement('button');
+    b.className = 'rt-shape' + (f === bokehShape ? ' on' : '');
+    const s = bokehSprite(f, 11);                 // сама фигура и есть подпись
+    b.appendChild(s); b.title = f;
+    b.onclick = ()=>{
+      if(f === bokehShape) return;
+      bokehShape = f; bokehChips();
+      const v = +document.getElementById('rtBokeh').value;
+      if(v && bokehData) bokehApply(v/100, rtCanvas, bokehData, f);
+      if(v) rtBokehOp = { t:'bokeh', mask:bokehMask, amount:v/100, shape:f };
+    };
+    host.appendChild(b);
+  });
+}
+let bokehMask = null;
+async function bokehEnter(){
+  const slider = document.getElementById('rtBokeh'), top = document.getElementById('rtTop');
+  slider.value = 0; document.getElementById('rtBokehV').textContent = '0'; slider.disabled = true;
+  bokehData = null; bokehMask = null; bokehChips();
+  if(bokehBusy) return; bokehBusy = true;
+  try{
+    top.textContent = segKit ? 'Ищу человека…' : 'Загружаю модель…';
+    const kit = await loadSegKit();
+    if(rtTool !== 'bokeh'){ bokehBusy = false; return; }
+    top.textContent = 'Ищу человека…';
+    const res = kit.segment(rtCanvas);
+    const m = res.confidenceMasks && res.confidenceMasks[0];
+    if(!m){ top.textContent = 'Человек не найден'; bokehBusy = false; return; }
+    bokehMask = new Float32Array(m.getAsFloat32Array());
+    m.close(); res.close && res.close();
+    let есть = 0;
+    for(let i=0;i<bokehMask.length;i+=11) if(bokehMask[i] > 0.6) есть++;
+    if(есть < bokehMask.length/11 * 0.02){      // человека в кадре практически нет
+      top.textContent = 'Человек не найден'; bokehBusy = false; return;
+    }
+    bokehData = bokehPrepare(rtCanvas, bokehMask);
+    top.textContent = 'Боке';
+    slider.disabled = false;
+  } catch(e){
+    top.textContent = 'Модель недоступна — проверьте интернет';
+  }
+  bokehBusy = false;
+}
+document.getElementById('rtBokeh').oninput = e=>{
+  rtCmpOff();
+  const v = +e.target.value;
+  document.getElementById('rtBokehV').textContent = v;
+  if(!bokehData) return;
+  if(!v){ rtCanvas.getContext('2d').putImageData(bokehData.orig, 0, 0); rtBokehOp = null; return; }
+  bokehApply(v/100, rtCanvas, bokehData, bokehShape);
+  rtBokehOp = { t:'bokeh', mask:bokehMask, amount:v/100, shape:bokehShape };
+};
+
 // ─── «Кожа» ───
 async function skinEnter(){
   const slider = document.getElementById('rtSkin'), top = document.getElementById('rtTop');
@@ -6369,7 +6641,7 @@ document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
   rtCmpOff();          // применяем результат, а не то, что показывает шторка
   sourceCanvas.getContext('2d').drawImage(rtCanvas, 0, 0);   // bake retouch into the source
-  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp);   // те же правки повторим на оригинале
+  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp); if(rtBokehOp) editOps.push(rtBokehOp);   // те же правки повторим на оригинале
   rtOps = []; rtBagsOp = null; rtSkinOp = null;
   editedCanvas = null; makePreview(); buildChips(); buildHomeLooks(); render();
   closeRetouch(); goEditor();
