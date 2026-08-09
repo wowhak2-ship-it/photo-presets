@@ -871,6 +871,12 @@
     color:#fff; font-family:var(--mono); font-size:12px; font-weight:700;
     box-shadow:0 2px 10px rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center;}
   .rt-faces button.on{background:var(--gold); border-color:transparent; color:var(--gold-ink);}
+  /* уже правленное лицо — золотая обводка, даже когда выбрано другое */
+  .rt-faces button.done{border-color:var(--gold);}
+  .rt-faces button.done::after{content:''; position:absolute; right:-2px; top:-2px;
+    width:9px; height:9px; border-radius:50%; background:var(--gold);
+    box-shadow:0 0 0 2px rgba(0,0,0,.5);}
+  .rt-faces button.on.done::after{display:none;}
   .rt-cursor{position:absolute; left:0; top:0; width:0; height:0; border-radius:50%; z-index:3;
     border:1.5px solid rgba(255,255,255,.92); background:rgba(255,255,255,.1);
     box-shadow:0 0 0 1px rgba(0,0,0,.45), inset 0 0 6px rgba(0,0,0,.25);
@@ -5559,6 +5565,7 @@ function openRetouch(){
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
   rtOps = []; rtBagsOp = null; rtSkinOp = null; rtFaces = null; skinData = null;
+  for(const k in skinFace) delete skinFace[k];   // новый снимок — настройки лиц с нуля
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
   retouchEl.classList.add('open');
@@ -6075,7 +6082,10 @@ function rtDrawFaces(onPick){
     const c = faceCentre(f, rtCanvas.width, rtCanvas.height);
     const b = document.createElement('button');
     b.textContent = String(i+1);
-    b.className = i === rtFaceSel ? 'on' : '';
+    // «done» — у этого лица уже что-то выставлено. Без отметки на групповом кадре
+    // не вспомнить, кого ты уже прошёл, а кого нет.
+    const правлено = rtTool === 'skin' ? skinFaceAmount(i) > 0 : false;
+    b.className = (i === rtFaceSel ? 'on' : '') + (правлено ? ' done' : '');
     b.style.left = (cv.left - area.left + c.x/rtCanvas.width * cv.width) + 'px';
     b.style.top  = (cv.top  - area.top  + c.y/rtCanvas.height * cv.height) + 'px';
     b.onclick = ()=>{ if(i === rtFaceSel) return; rtFaceSel = i; onPick && onPick(); };
@@ -6222,8 +6232,10 @@ async function skinEnter(){
     }
     rtFaces = faces;
     rtFaceSel = faces.length ? biggestFace(faces, rtCanvas.width, rtCanvas.height) : 0;
+    for(const k in skinFace) delete skinFace[k];
     skinData = faces.length ? skinPrepare([faces[rtFaceSel]]) : null;
     if(!skinData){ top.textContent = 'Лицо не найдено'; bagsBusy = false; return; }
+    skinFace[rtFaceSel] = { сила:0, зоны:skinData };
     top.textContent = 'Кожа';
     slider.disabled = false;
     rtDrawFaces(skinPickFace);
@@ -6232,29 +6244,44 @@ async function skinEnter(){
   }
   bagsBusy = false;
 }
-function skinRestore(){                       // вернуть кадр к тому, что было до сглаживания
+function skinRestore(){                       // вернуть ТЕКУЩЕЕ лицо к тому, что было до сглаживания
   if(!skinData) return;
   const ctx = rtCanvas.getContext('2d');
   for(const z of skinData) ctx.putImageData(z.orig, z.bx, z.by);
 }
-// Выбрали другое лицо: снимаем эффект с прежнего, собираем зону нового, повторяем силу.
+// У КАЖДОГО лица своя настройка. На семейной съёмке сглаживать надо всем, и почти
+// всегда по-разному; раньше переход к соседу снимал правку с предыдущего — человек
+// терял работу одним касанием. Зоны тоже держим на лицо: пересобирать их заново при
+// каждом переключении и долго, и незачем.
+const skinFace = {};                           // индекс лица → { сила, зоны }
+function skinFaceAmount(i){ return skinFace[i] ? skinFace[i].сила : 0; }
 function skinPickFace(){
-  const v = +document.getElementById('rtSkin').value;
-  skinRestore();
-  skinData = skinPrepare([rtFaces[rtFaceSel]]);
-  rtDrawFaces(skinPickFace);
-  if(v && skinData){ skinApply(v/100);
-    rtSkinOp = { t:'skin', faces:[rtFaces[rtFaceSel]], amount:v/100 }; }
+  const s = skinFace[rtFaceSel];
+  if(s && s.зоны) skinData = s.зоны;
+  else { skinData = skinPrepare([rtFaces[rtFaceSel]]);
+         skinFace[rtFaceSel] = { сила:0, зоны:skinData }; }
+  const v = skinFaceAmount(rtFaceSel);
+  const sl = document.getElementById('rtSkin');
+  sl.value = v; document.getElementById('rtSkinV').textContent = v;
+  rtDrawFaces(skinPickFace);                   // точки перерисуются с отметками «тут уже правлено»
 }
 document.getElementById('rtSkin').oninput = e=>{
   rtCmpOff();
   const v = +e.target.value;
   document.getElementById('rtSkinV').textContent = v;
-  // база — всегда исходный кадр: иначе сглаживание накладывалось бы само на себя
-  // при каждом движении ползунка и за пару секунд превратило бы лицо в пластик
+  // база — всегда исходный кадр ЭТОГО лица: иначе сглаживание накладывалось бы само
+  // на себя при каждом движении ползунка и за пару секунд дало бы пластик
   skinRestore();
   skinApply(v/100);
-  rtSkinOp = v ? { t:'skin', faces:[rtFaces[rtFaceSel]], amount:v/100 } : null;
+  if(!skinFace[rtFaceSel]) skinFace[rtFaceSel] = { зоны:skinData };
+  skinFace[rtFaceSel].сила = v;
+  skinFace[rtFaceSel].зоны = skinData;
+  // в историю кадра уходят ВСЕ лица, которым что-то выставлено
+  rtSkinOp = Object.keys(skinFace)
+    .filter(k=> skinFace[k].сила > 0 && rtFaces[k])
+    .map(k=> ({ t:'skin', faces:[rtFaces[k]], amount:skinFace[k].сила/100 }));
+  if(!rtSkinOp.length) rtSkinOp = null;
+  rtDrawFaces(skinPickFace);
 };
 
 // ─── «До/После» в ретуши ───
@@ -6318,7 +6345,7 @@ document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
   rtCmpOff();          // применяем результат, а не то, что показывает шторка
   sourceCanvas.getContext('2d').drawImage(rtCanvas, 0, 0);   // bake retouch into the source
-  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(rtSkinOp);   // те же правки повторим на оригинале
+  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp);   // те же правки повторим на оригинале
   rtOps = []; rtBagsOp = null; rtSkinOp = null;
   editedCanvas = null; makePreview(); buildChips(); buildHomeLooks(); render();
   closeRetouch(); goEditor();
