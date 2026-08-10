@@ -923,6 +923,10 @@
     display:flex; align-items:center; justify-content:center; padding:0;}
   .rt-shape canvas{width:22px; height:22px; display:block; opacity:.75;}
   .rt-shape.on{border-color:var(--gold); background:rgba(224,162,74,.10);}
+  .rt-tints{display:flex; justify-content:center; gap:10px; padding:9px 22px 0;}
+  .rt-tint{width:26px; height:26px; border-radius:50%; cursor:pointer; padding:0;
+    border:2px solid transparent; box-shadow:0 0 0 1px rgba(255,255,255,.14);}
+  .rt-tint.on{border-color:var(--gold); box-shadow:0 0 0 1px rgba(0,0,0,.5);}
   .rt-keep{display:flex; justify-content:center; gap:8px; padding:9px 22px 0;}
   .rt-keepbtn{display:inline-flex; align-items:center; gap:7px; padding:9px 14px;
     border-radius:999px; border:1px solid var(--line); background:transparent;
@@ -1696,8 +1700,10 @@
       <div class="rt-srow"><span>Жёсткость</span><input type="range" id="rtHard" min="0" max="100" value="45"><b id="rtHardV">45</b></div>
       <div class="rt-srow"><span>Сила</span><input type="range" id="rtStr" min="20" max="100" value="100"><b id="rtStrV">100</b></div>
       <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Тени</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
-      <div class="rt-srow" id="rtBokehRow" style="display:none"><span>Боке</span><input type="range" id="rtBokeh" min="0" max="100" value="0" disabled><b id="rtBokehV">0</b></div>
+      <div class="rt-srow" id="rtSprinkleRow" style="display:none"><span>Россыпь</span><input type="range" id="rtSprinkle" min="0" max="100" value="0"><b id="rtSprinkleV">0</b></div>
+      <div class="rt-srow" id="rtBokehRow" style="display:none"><span>Размыть фон</span><input type="range" id="rtBokeh" min="0" max="100" value="0" disabled><b id="rtBokehV">0</b></div>
       <div class="rt-shapes" id="rtShapes" style="display:none"></div>
+      <div class="rt-tints" id="rtTints" style="display:none"></div>
       <!-- Модель находит ЧЕЛОВЕКА и только его. Всё остальное на переднем плане —
            животное рядом, букет, чашка в руках — уходит в фон и размывается. Кисть
            возвращает такие места в резкость. -->
@@ -2413,7 +2419,8 @@ function buildFullSource(){
     } else if(op.t === 'skin'){
       skinRun(own(), op.faces, op.amount);
     } else if(op.t === 'bokeh'){
-      bokehRun(own(), op.mask, op.amount, op.shape);
+      if(op.amount) bokehRun(own(), op.mask, op.amount, op.shape);
+      if(op.sprinkle) bokehSprinkle(own(), op.sprinkle, op.shape, op.tint);
     }
   }
   return c;   // без правок это сам оригинал — читаем из него, но не пишем в него
@@ -5749,10 +5756,7 @@ rtCanvas.addEventListener('pointermove', e=>{
 });
 function rtEnd(e){
   if(rtCmpOn){ rtCmpDrag = false; return; }
-  if(keepDrag){ keepDrag = false;
-    const v = +document.getElementById('rtBokeh').value;
-    if(v && bokehData) bokehApply(v/100, rtCanvas, bokehData, bokehShape);
-    return; }
+  if(keepDrag){ keepDrag = false; bokehDraw(); return; }
   const panned = rtPan1 && rtPan1.on;
   const finishHeal = !panned && rtDrawing && rtTool === 'heal' && rtLastE && rtPtrs.size === 1;
   rtPtrs.delete(e.pointerId);
@@ -5827,6 +5831,8 @@ function rtSetTool(tool){
   document.getElementById('rtBagsRow').style.display = bags?'flex':'none';
   document.getElementById('rtSkinRow').style.display = skin?'flex':'none';
   document.getElementById('rtBokehRow').style.display = bokeh?'flex':'none';
+  document.getElementById('rtSprinkleRow').style.display = bokeh?'flex':'none';
+  document.getElementById('rtTints').style.display = bokeh?'flex':'none';
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtKeep').style.display = bokeh?'flex':'none';
   if(!bokeh){ keepMode = false; }
@@ -6215,6 +6221,51 @@ function bokehApply(t, cv, data, shape){
   out.drawImage(sharp, 0, 0);
 }
 let bokehShape = 'круг';
+
+// ─── Россыпь боке ───
+// То, что продают наборами «Holiday Bokeh»: кадр не размывается вовсе, светящиеся
+// кружки просто ложатся сверху. Работает на ЛЮБОМ снимке — в отличие от размытия
+// фона, которому нужны и человек в кадре, и настоящие огни за ним.
+const BOKEH_PALETTES = {
+  'золотое':  [[255,214,140],[255,236,190],[255,190,96],[255,170,70]],
+  'голубое':  [[150,210,255],[190,230,255],[110,180,255],[80,210,235]],
+  'тёплое':   [[255,170,130],[255,140,110],[255,200,170],[240,120,110]],
+  'розовое':  [[255,170,210],[255,200,230],[240,140,190],[255,150,175]]
+};
+let bokehTint = 'золотое';
+// Тот же посев — та же россыпь: иначе кружки прыгали бы при каждом движении ползунка.
+function bokehRandom(seed){
+  let s = seed >>> 0;
+  return ()=>{ s = (s*1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+function bokehSprinkle(cv, amount, shape, tint, seed){
+  if(!amount) return;
+  const W = cv.width, H = cv.height, ctx = cv.getContext('2d');
+  const rnd = bokehRandom(seed || 20260809);
+  const пал = BOKEH_PALETTES[tint] || BOKEH_PALETTES['золотое'];
+  const N = Math.round(18 + 52*amount);                 // от горстки до плотной россыпи
+  const баз = Math.min(W,H);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for(let i=0;i<N;i++){
+    const x = rnd()*W, y = rnd()*H;
+    // Размеры сильно разные: у настоящей россыпи есть и мелкие точки, и крупные шары.
+    // Равные кружки сразу читаются как наклейка.
+    const кр = rnd(), r = баз * (0.012 + 0.075*кр*кр);
+    const c = пал[(rnd()*пал.length)|0];
+    const sp = bokehSprite(shape, r);
+    const цв = document.createElement('canvas'); цв.width=sp.width; цв.height=sp.height;
+    const цx = цв.getContext('2d');
+    цx.drawImage(sp,0,0);
+    цx.globalCompositeOperation='source-in';
+    цx.fillStyle='rgb('+c[0]+','+c[1]+','+c[2]+')';
+    цx.fillRect(0,0,sp.width,sp.height);
+    // крупные — прозрачнее: иначе большой шар забивает под собой всё
+    ctx.globalAlpha = Math.min(0.72, (0.5 - 0.26*кр) * (0.45 + 0.75*amount));
+    ctx.drawImage(цв, x - sp.width/2, y - sp.height/2);
+  }
+  ctx.restore();
+}
 function bokehRun(cv, mask, amount, shape){
   if(!mask || !amount) return;
   bokehApply(amount, cv, bokehPrepare(cv, mask), shape);
@@ -6525,40 +6576,77 @@ function bokehChips(){
     b.onclick = ()=>{
       if(f === bokehShape) return;
       bokehShape = f; bokehChips();
-      const v = +document.getElementById('rtBokeh').value;
-      if(v && bokehData) bokehApply(v/100, rtCanvas, bokehData, f);
-      if(v) rtBokehOp = { t:'bokeh', mask:bokehMask, amount:v/100, shape:f };
+      bokehDraw();
     };
     host.appendChild(b);
   });
 }
-let bokehMask = null;
+function bokehTints(){
+  const host = document.getElementById('rtTints');
+  host.innerHTML = '';
+  Object.keys(BOKEH_PALETTES).forEach(t=>{
+    const b = document.createElement('button');
+    b.className = 'rt-tint' + (t === bokehTint ? ' on' : '');
+    const c = BOKEH_PALETTES[t][0];
+    b.style.background = 'rgb('+c[0]+','+c[1]+','+c[2]+')';
+    b.title = t;
+    b.onclick = ()=>{ if(t===bokehTint) return; bokehTint = t; bokehTints(); bokehDraw(); };
+    host.appendChild(b);
+  });
+}
+// Обе части рисуются одним проходом от исходного кадра: сперва размытие фона,
+// потом россыпь поверх. Иначе они накладывались бы друг на друга накопительно.
+function bokehDraw(){
+  const ctx = rtCanvas.getContext('2d');
+  const размытие = +document.getElementById('rtBokeh').value;
+  const россыпь  = +document.getElementById('rtSprinkle').value;
+  if(bokehData) ctx.putImageData(bokehData.orig, 0, 0);
+  else if(bokehOrig) ctx.putImageData(bokehOrig, 0, 0);
+  if(размытие && bokehData) bokehApply(размытие/100, rtCanvas, bokehData, bokehShape);
+  if(россыпь) bokehSprinkle(rtCanvas, россыпь/100, bokehShape, bokehTint);
+  rtBokehOp = (размытие || россыпь)
+    ? { t:'bokeh', mask:bokehMask, amount:размытие/100, shape:bokehShape,
+        sprinkle:россыпь/100, tint:bokehTint }
+    : null;
+}
+let bokehMask = null, bokehOrig = null;
 async function bokehEnter(){
-  const slider = document.getElementById('rtBokeh'), top = document.getElementById('rtTop');
-  slider.value = 0; document.getElementById('rtBokehV').textContent = '0'; slider.disabled = true;
-  bokehData = null; bokehMask = null; bokehChips();
+  const blur = document.getElementById('rtBokeh'), spr = document.getElementById('rtSprinkle');
+  const top = document.getElementById('rtTop');
+  blur.value = 0; document.getElementById('rtBokehV').textContent = '0'; blur.disabled = true;
+  spr.value = 0; document.getElementById('rtSprinkleV').textContent = '0';
+  bokehData = null; bokehMask = null; keepMode = false;
+  // Кадр запоминаем СРАЗУ: россыпи ни человек, ни модель не нужны, она должна
+  // работать даже там, где размытие фона невозможно — на пейзаже, на предмете.
+  bokehOrig = rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height);
+  bokehChips(); bokehTints(); keepSync();
+  document.getElementById('rtKeep').style.display = 'none';   // покажем, когда будет маска
+  top.textContent = 'Боке';
   if(bokehBusy) return; bokehBusy = true;
   try{
-    top.textContent = segKit ? 'Ищу человека…' : 'Загружаю модель…';
     const kit = await loadSegKit();
     if(rtTool !== 'bokeh'){ bokehBusy = false; return; }
-    top.textContent = 'Ищу человека…';
     const res = kit.segment(rtCanvas);
     const m = res.confidenceMasks && res.confidenceMasks[0];
-    if(!m){ top.textContent = 'Человек не найден'; bokehBusy = false; return; }
-    bokehMask = new Float32Array(m.getAsFloat32Array());
-    m.close(); res.close && res.close();
-    let есть = 0;
-    for(let i=0;i<bokehMask.length;i+=11) if(bokehMask[i] > 0.6) есть++;
-    if(есть < bokehMask.length/11 * 0.02){      // человека в кадре практически нет
-      top.textContent = 'Человек не найден'; bokehBusy = false; return;
+    if(m){
+      const mm = new Float32Array(m.getAsFloat32Array());
+      m.close(); res.close && res.close();
+      let есть = 0;
+      for(let i=0;i<mm.length;i+=11) if(mm[i] > 0.6) есть++;
+      if(есть >= mm.length/11 * 0.02){          // человек в кадре правда есть
+        bokehMask = mm;
+        // Модель дочитывается СЕКУНДЫ, а россыпь доступна сразу — за это время
+        // человек успевает подвигать ползунок. Если снять «оригинал» с холста как
+        // есть, кружки впекутся в эталон навсегда. Возвращаем чистый кадр, снимаем
+        // с него, и только потом восстанавливаем то, что человек уже накрутил.
+        rtCanvas.getContext('2d').putImageData(bokehOrig, 0, 0);
+        bokehData = bokehPrepare(rtCanvas, bokehMask);
+        blur.disabled = false;
+        document.getElementById('rtKeep').style.display = 'flex';
+        bokehDraw();
+      }
     }
-    bokehData = bokehPrepare(rtCanvas, bokehMask);
-    top.textContent = 'Боке';
-    slider.disabled = false;
-  } catch(e){
-    top.textContent = 'Модель недоступна — проверьте интернет';
-  }
+  } catch(e){ /* без модели остаётся россыпь — она и не требует интернета */ }
   bokehBusy = false;
 }
 // Кисть «оставить резким»: дорисовываем в маску, а не пересобираем всё заново —
@@ -6574,10 +6662,10 @@ document.getElementById('rtKeepOn').onclick = ()=>{ keepMode = !keepMode; rtCmpO
 document.getElementById('rtKeepReset').onclick = ()=>{
   if(!bokehMask) return;
   keepMode = false; keepSync();
+  // тоже от ЧИСТОГО кадра — иначе пересборка запечёт в эталон то, что уже нарисовано
+  rtCanvas.getContext('2d').putImageData(bokehOrig, 0, 0);
   bokehData = bokehPrepare(rtCanvas, bokehMask);   // маска с нуля, как её увидела модель
-  const v = +document.getElementById('rtBokeh').value;
-  if(v) bokehApply(v/100, rtCanvas, bokehData, bokehShape);
-  else rtCanvas.getContext('2d').putImageData(bokehData.orig, 0, 0);
+  bokehDraw();
 };
 function keepPaint(e){
   if(!bokehData) return;
@@ -6592,12 +6680,13 @@ function keepPaint(e){
 }
 document.getElementById('rtBokeh').oninput = e=>{
   rtCmpOff();
-  const v = +e.target.value;
-  document.getElementById('rtBokehV').textContent = v;
-  if(!bokehData) return;
-  if(!v){ rtCanvas.getContext('2d').putImageData(bokehData.orig, 0, 0); rtBokehOp = null; return; }
-  bokehApply(v/100, rtCanvas, bokehData, bokehShape);
-  rtBokehOp = { t:'bokeh', mask:bokehMask, amount:v/100, shape:bokehShape };
+  document.getElementById('rtBokehV').textContent = e.target.value;
+  bokehDraw();
+};
+document.getElementById('rtSprinkle').oninput = e=>{
+  rtCmpOff();
+  document.getElementById('rtSprinkleV').textContent = e.target.value;
+  bokehDraw();
 };
 
 // ─── «Кожа» ───
