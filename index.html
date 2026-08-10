@@ -6061,14 +6061,22 @@ function bokehPrepare(cv, mask){
 // с сердцем или звездой, и блики принимают его форму. Рисуем спрайт один раз
 // на размер и форму, дальше только штампуем.
 const BOKEH_SHAPES = ['круг','шестигранник','сердце','звезда'];
-function bokehSprite(shape, r){
+function bokehSprite(shape, r, soft){
   const s = Math.max(4, Math.round(r*2)), c = document.createElement('canvas');
   c.width = c.height = s;
   const x = c.getContext('2d'), R = s/2;
-  // мягкий край и чуть более яркая кромка — у настоящего боке край плотнее середины
+  // Две повадки. Для РОССЫПИ край плотнее середины — так кружок читается как
+  // самостоятельный огонёк. Для РАЗМЫТИЯ ФОНА наоборот, мягкая заливка без кромки:
+  // у светосильного объектива круги нерезкости сливаются в сливочное поле, а не
+  // лежат отдельными монетками (это и видно на третьем референсе).
   const g = x.createRadialGradient(R,R,R*0.1, R,R,R);
-  g.addColorStop(0,'rgba(255,255,255,.62)'); g.addColorStop(.72,'rgba(255,255,255,.72)');
-  g.addColorStop(.92,'rgba(255,255,255,.95)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  if(soft){
+    g.addColorStop(0,'rgba(255,255,255,.55)'); g.addColorStop(.55,'rgba(255,255,255,.42)');
+    g.addColorStop(.85,'rgba(255,255,255,.16)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  } else {
+    g.addColorStop(0,'rgba(255,255,255,.62)'); g.addColorStop(.72,'rgba(255,255,255,.72)');
+    g.addColorStop(.92,'rgba(255,255,255,.95)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  }
   x.fillStyle = g;
   x.beginPath();
   if(shape === 'круг'){ x.arc(R,R,R*0.98,0,7); }
@@ -6096,7 +6104,9 @@ function bokehApply(t, cv, data, shape){
   data = data || bokehData; if(!data || !t) return;
   shape = shape || bokehShape;
   const { W, H, mask, bg } = data;
-  const R = Math.max(2, Math.round(Math.min(W,H) * 0.045 * t));   // сила = радиус кружка
+  // Радиус поднят: на референсе фон растворён целиком, а прежние 4.5% давали
+  // «слегка не в фокусе». Светосильный объектив уводит задний план гораздо дальше.
+  const R = Math.max(2, Math.round(Math.min(W,H) * 0.075 * t));
 
   // 1. ровное размытие фона — основа
   const bl = document.createElement('canvas'); bl.width=W; bl.height=H;
@@ -6173,7 +6183,7 @@ function bokehApply(t, cv, data, shape){
   // ТРИ размера шарика. Одинаковые кружки читаются как штамп: у настоящего боке
   // источники стоят на разном расстоянии, и круги выходят разной величины.
   const размеры = [R*0.68, R, R*1.34];
-  const спрайты = размеры.map(r2=> bokehSprite(shape, r2));
+  const спрайты = размеры.map(r2=> bokehSprite(shape, r2, true));   // мягкие, кремовые
   // Спрайт красим ОДИН раз на цвет и размер — перекраска каждого блика по отдельности
   // была самой дорогой частью, а цветов на кадре считанные единицы.
   const кэш = {};
