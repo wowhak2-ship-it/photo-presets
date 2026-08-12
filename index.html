@@ -5307,29 +5307,28 @@ function loadDemo(force){
 }
 loadDemo();
 
-// ─── Ползунки не должны срабатывать при прокрутке ───
-// Одного pan-y мало: у ползунка значение прыгает уже в момент КАСАНИЯ, до того как
-// браузер поймёт, что палец пошёл вниз и это прокрутка. Поэтому запоминаем значение
-// на касании и возвращаем его, если браузер забрал жест себе (pointercancel).
-// Слушаем на документе с перехватом — под правило попадают все ползунки разом:
-// свет, цвет, кривая, ретушь, боке.
+// ─── Ползунок слушается, только если палец попал НА НЕГО ───
+// По умолчанию касание в любом месте дорожки сразу перебрасывает значение туда. При
+// прокрутке длинного списка палец то и дело попадает на линию — и правка менялась
+// сама собой. Теперь работает только хват за сам ползунок: касание мимо него не
+// делает ничего, а вертикальное движение уходит на прокрутку (touch-action:pan-y).
+const THUMB_W = 6;          // ширина ползунка из стилей
+const THUMB_HIT = 26;       // и запас под палец по обе стороны от него
 (function(){
-  let жертва = null, было = null;
   document.addEventListener('pointerdown', e=>{
     const s = e.target;
     if(!s || s.tagName !== 'INPUT' || s.type !== 'range') return;
-    жертва = s; было = s.value;
-  }, true);
-  const вернуть = ()=>{
-    if(жертва && жертва.value !== было){
-      жертва.value = было;
-      жертва.dispatchEvent(new Event('input', {bubbles:true}));
-      жертва.dispatchEvent(new Event('change', {bubbles:true}));
+    const r = s.getBoundingClientRect();
+    if(!r.width) return;
+    const min = +s.min || 0, max = (+s.max || 100);
+    const доля = (max === min) ? 0 : ((+s.value - min) / (max - min));
+    const центр = r.left + THUMB_W/2 + доля * (r.width - THUMB_W);
+    if(Math.abs(e.clientX - центр) > THUMB_HIT){
+      // мимо ползунка: гасим действие браузера, чтобы значение не прыгнуло
+      e.preventDefault();
+      e.stopPropagation();
     }
-    жертва = null;
-  };
-  document.addEventListener('pointercancel', вернуть, true);   // жест ушёл на прокрутку
-  document.addEventListener('pointerup', ()=>{ жертва = null; }, true);
+  }, true);
 })();
 
 // re-fit the photo on rotate / viewport change
