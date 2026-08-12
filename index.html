@@ -1160,7 +1160,11 @@
     </button>
     <button class="ht" data-go="bokeh">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="10" r="4.2"/><circle cx="16" cy="7" r="2.6"/><circle cx="15.5" cy="15" r="3.4"/></svg>
-      <b>Боке</b><i>размыть фон</i>
+      <b>Боке</b><i>россыпь огней</i>
+    </button>
+    <button class="ht" data-go="build">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9M10 20V4M16 20v-7M22 20V7"/><circle cx="4" cy="6" r="1.6" fill="currentColor" stroke="none"/><circle cx="10" cy="16" r="1.6" fill="currentColor" stroke="none"/><circle cx="16" cy="10" r="1.6" fill="currentColor" stroke="none"/><circle cx="22" cy="4" r="1.6" fill="currentColor" stroke="none"/></svg>
+      <b>Свой пресет</b><i>свет, цвет, кривая</i>
     </button>
     <button class="ht" data-go="crop">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
@@ -1595,6 +1599,9 @@
       <button class="crop-btn gold" id="expSave">Сохранить в галерею</button>
       <button class="crop-btn" id="expShare">Поделиться</button>
       <button class="exp-batch" id="expBatch">Применить этот вид ко всей съёмке</button>
+      <!-- Сохранением работа над видом обычно не кончается: посмотрел файл и хочешь
+           довести. Отсюда прямой ход в свет/цвет/кривую, а не через выход на главную. -->
+      <button class="exp-batch" id="expBuild">Продолжить собирать свой пресет</button>
     </div>
   </div>
 </div>
@@ -2933,6 +2940,9 @@ function applyPendingTool(){
   if(t==='crop'){ openCrop(); return; }
   if(t==='curve'){ goEditor(); setSection('curve'); return; }
   if(t==='hsl'){ goEditor(); setSection('color'); return; }
+  // «Свой пресет» — не отдельный экран, а те же разделы редактора: свет, цвет,
+  // кривая. Заводить им копию значило бы держать две правды об одном и том же.
+  if(t==='build'){ goEditor(); setSection('light'); return; }
   if(t==='batch'){ openBatch(); return; }
   if(t==='collage'){ openCollage(); return; }
   if(!t) return;   // выбрали фото просто через «Галерея»/«Камера» — остаёмся на главной, фото уже подхвачено лентой луков
@@ -5121,6 +5131,10 @@ function batchSaveEach(){
   batchStatus('Сохраняю ' + files.length + ' снимков…');
 }
 document.getElementById('expBatch').onclick = ()=>{ expEl.classList.remove('open'); openBatch(); };
+document.getElementById('expBuild').onclick = ()=>{
+  expEl.classList.remove('open');
+  goEditor(); setSection('light');
+};
 // «Вся съёмка» и «Коллаж» переехали в ряд инструментов на главной — их ведёт
 // общий обработчик [data-go] через runTool, отдельные кнопки больше не нужны.
 document.getElementById('batchClose').onclick = closeBatch;
