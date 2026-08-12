@@ -200,7 +200,17 @@
      вертикально — по направлению первого движения они и различаются, без всяких
      задержек. Иначе, листая длинный список правок, палец задевал ползунок и менял
      значение. */
-  input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:34px; background:transparent; outline:none; position:relative; z-index:1; touch-action:pan-y;}
+  /* Дорожка НЕ принимает касания вовсе: у range значение прыгает туда, куда ткнули,
+     а при листании длинного списка палец попадает на линию постоянно. Сквозь неё
+     касание уходит на список и спокойно его листает. Тянут за площадку .rng-grip,
+     которая ездит вместе с ползунком (см. upgradeRange). */
+  input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:34px; background:transparent; outline:none; position:relative; z-index:1; pointer-events:none;}
+  /* Площадка под палец: невидима, шире самого ползунка, забирает жест целиком
+     (touch-action:none), поэтому во время протяжки список не едет. */
+  .rng-grip{position:absolute; top:0; bottom:0; width:52px; margin-left:-26px;
+    z-index:4; touch-action:none; cursor:grab; display:none;}
+  .rng-grip.on{cursor:grabbing;}
+  .adj-row, .col-line, .rt-srow{position:relative;}
   input[type=range]::-webkit-slider-runnable-track{height:3px; border-radius:3px; background:var(--line-2);}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:6px; height:26px; margin-top:-11.5px; border-radius:3px; background:var(--gold); cursor:pointer; box-shadow:0 0 12px rgba(224,162,74,.75);}
   input[type=range]::-moz-range-track{height:3px; border-radius:3px; background:var(--line-2);}
@@ -2921,6 +2931,7 @@ function setSection(name){
   if(name === 'light') syncAdjustUI();
   syncSecDots();
   fitStage();
+  setTimeout(placeAllGrips, 0);   // у скрытого ползунка ширина 0 — считаем, когда показали
 }
 // Точка у раздела значит «здесь что-то правлено» — иначе о своих же правках забываешь.
 function syncSecDots(){
@@ -5308,28 +5319,72 @@ function loadDemo(force){
 loadDemo();
 
 // ─── Ползунок слушается, только если палец попал НА НЕГО ───
-// По умолчанию касание в любом месте дорожки сразу перебрасывает значение туда. При
-// прокрутке длинного списка палец то и дело попадает на линию — и правка менялась
-// сама собой. Теперь работает только хват за сам ползунок: касание мимо него не
-// делает ничего, а вертикальное движение уходит на прокрутку (touch-action:pan-y).
-const THUMB_W = 6;          // ширина ползунка из стилей
-const THUMB_HIT = 26;       // и запас под палец по обе стороны от него
-(function(){
-  document.addEventListener('pointerdown', e=>{
-    const s = e.target;
-    if(!s || s.tagName !== 'INPUT' || s.type !== 'range') return;
-    const r = s.getBoundingClientRect();
-    if(!r.width) return;
+// Первая попытка была запрещать действие браузера на касании мимо ползунка. На
+// телефоне это не работает: когда прокрутка разрешена, Android присылает касание
+// НЕОТМЕНЯЕМЫМ, и запрет ни на что не влияет — значение всё равно прыгало. В
+// настольном браузере синтетическое событие отменяется, поэтому проверка врала.
+//
+// Поэтому опоры на отмену больше нет. Сама дорожка полностью выключена из касаний
+// (pointer-events:none), так что прыгнуть значению не от чего, а палец сквозь неё
+// попадает на список и спокойно его листает. Перетаскивание живёт на отдельной
+// площадке размером с палец, которая ездит вместе с ползунком и берёт жест на себя.
+const THUMB_W = 6;                 // ширина ползунка из стилей
+function upgradeRange(s){
+  if(!s || s.__grip) return;
+  const row = s.parentElement; if(!row) return;
+  const grip = document.createElement('div');
+  grip.className = 'rng-grip';
+  row.appendChild(grip);
+  s.__grip = grip;
+
+  const место = ()=>{
+    const r = s.getBoundingClientRect(), rr = row.getBoundingClientRect();
+    if(!r.width){ grip.style.display='none'; return; }
+    grip.style.display = s.disabled ? 'none' : 'block';
     const min = +s.min || 0, max = (+s.max || 100);
     const доля = (max === min) ? 0 : ((+s.value - min) / (max - min));
-    const центр = r.left + THUMB_W/2 + доля * (r.width - THUMB_W);
-    if(Math.abs(e.clientX - центр) > THUMB_HIT){
-      // мимо ползунка: гасим действие браузера, чтобы значение не прыгнуло
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  }, true);
-})();
+    grip.style.left = (r.left - rr.left + THUMB_W/2 + доля*(r.width - THUMB_W)) + 'px';
+  };
+  s.__place = место;
+  s.addEventListener('input', место);
+  s.addEventListener('change', место);
+
+  let ведём = false;
+  const поставить = (x)=>{
+    const r = s.getBoundingClientRect();
+    const min = +s.min || 0, max = (+s.max || 100), шаг = +s.step || 1;
+    const доля = Math.max(0, Math.min(1, (x - r.left - THUMB_W/2) / (r.width - THUMB_W)));
+    let v = min + доля*(max - min);
+    v = Math.round(v/шаг)*шаг;
+    v = Math.max(min, Math.min(max, v));
+    if(String(v) === s.value) return;
+    s.value = String(v);
+    s.dispatchEvent(new Event('input', {bubbles:true}));
+  };
+  grip.addEventListener('pointerdown', e=>{
+    if(s.disabled) return;
+    e.preventDefault(); e.stopPropagation();
+    ведём = true;
+    try{ grip.setPointerCapture(e.pointerId); }catch(_){}
+    grip.classList.add('on');
+  });
+  grip.addEventListener('pointermove', e=>{
+    if(!ведём) return;
+    e.preventDefault();
+    поставить(e.clientX); место();
+  });
+  const конец = ()=>{ if(!ведём) return; ведём = false; grip.classList.remove('on');
+    s.dispatchEvent(new Event('change', {bubbles:true})); };
+  grip.addEventListener('pointerup', конец);
+  grip.addEventListener('pointercancel', конец);
+  место();
+}
+function upgradeAllRanges(){ document.querySelectorAll('input[type=range]').forEach(upgradeRange); }
+function placeAllGrips(){
+  document.querySelectorAll('input[type=range]').forEach(s=>{ if(s.__place) s.__place(); });
+}
+upgradeAllRanges();
+window.addEventListener('resize', placeAllGrips);
 
 // re-fit the photo on rotate / viewport change
 window.addEventListener('resize', ()=>{ fitStage(); if(compareMode) drawCompare(); if(cropEl.classList.contains('open')) refreshCrop(); if(retouchEl.classList.contains('open')) layoutRetouch(); });
@@ -5639,6 +5694,7 @@ function openRetouch(){
   retouchEl.classList.add('open');
   document.getElementById('rtCompare').classList.add('on');
   layoutRetouch(); rtResetZoom(); rtSetTool('heal');
+  setTimeout(placeAllGrips, 0);
 }
 // отдельная карточка «Тени» на главной — тот же оверлей ретуши, но сразу в режиме
 // «Тени» и без переключателя Умная кисть/Штамп (они там просто не нужны)
@@ -5856,6 +5912,7 @@ function rtSetTool(tool){
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
     bags ? 'Тени' : skin ? 'Кожа' : bokeh ? 'Боке' : 'Ретушь';
+  setTimeout(placeAllGrips, 0);          // показали другие ползунки — переставляем площадки
   const rtHint = document.getElementById('rtHint');   // подсказка нужна только кисти
   if(rtHint) rtHint.style.display = ползунок ? 'none' : 'block';
   if(bags) bagsEnter();
