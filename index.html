@@ -210,7 +210,6 @@
   .rng-grip{position:absolute; top:0; bottom:0; width:52px; margin-left:-26px;
     z-index:4; touch-action:none; cursor:grab; display:none;}
   .rng-grip.on{cursor:grabbing;}
-  .adj-row, .col-line, .rt-srow{position:relative;}
   input[type=range]::-webkit-slider-runnable-track{height:3px; border-radius:3px; background:var(--line-2);}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:6px; height:26px; margin-top:-11.5px; border-radius:3px; background:var(--gold); cursor:pointer; box-shadow:0 0 12px rgba(224,162,74,.75);}
   input[type=range]::-moz-range-track{height:3px; border-radius:3px; background:var(--line-2);}
@@ -1614,9 +1613,9 @@
       <button class="crop-btn gold" id="expSave">Сохранить в галерею</button>
       <button class="crop-btn" id="expShare">Поделиться</button>
       <button class="exp-batch" id="expBatch">Применить этот вид ко всей съёмке</button>
-      <!-- Сохранением работа над видом обычно не кончается: посмотрел файл и хочешь
+      <!-- Сохранением работа над кадром обычно не кончается: посмотрел файл и хочешь
            довести. Отсюда прямой ход в свет/цвет/кривую, а не через выход на главную. -->
-      <button class="exp-batch" id="expBuild">Продолжить собирать свой пресет</button>
+      <button class="exp-batch" id="expBuild">Продолжить работу</button>
     </div>
   </div>
 </div>
@@ -2931,7 +2930,6 @@ function setSection(name){
   if(name === 'light') syncAdjustUI();
   syncSecDots();
   fitStage();
-  setTimeout(placeAllGrips, 0);   // у скрытого ползунка ширина 0 — считаем, когда показали
 }
 // Точка у раздела значит «здесь что-то правлено» — иначе о своих же правках забываешь.
 function syncSecDots(){
@@ -5332,6 +5330,10 @@ const THUMB_W = 6;                 // ширина ползунка из сти�
 function upgradeRange(s){
   if(!s || s.__grip) return;
   const row = s.parentElement; if(!row) return;
+  // Опору для площадки ставим ПРОГРАММНО, а не списком классов в стилях: рядов с
+  // ползунками пять видов, и стоило забыть один — площадка считалась от чужого
+  // предка. Так новый ряд подхватится сам.
+  if(getComputedStyle(row).position === 'static') row.style.position = 'relative';
   const grip = document.createElement('div');
   grip.className = 'rng-grip';
   row.appendChild(grip);
@@ -5348,6 +5350,14 @@ function upgradeRange(s){
   s.__place = место;
   s.addEventListener('input', место);
   s.addEventListener('change', место);
+  // У скрытого ползунка ширина ноль, и площадку поставить некуда. Раньше я звал
+  // пересчёт руками из каждого экрана — и пропустил коллаж, там ползунок просто
+  // перестал работать. Наблюдатель делает это сам: как только ряд появился на
+  // экране и получил ширину, площадка встаёт на место. Никаких списков экранов.
+  if(window.ResizeObserver){
+    const ro = new ResizeObserver(()=> место());
+    ro.observe(s);
+  }
 
   let ведём = false;
   const поставить = (x)=>{
@@ -5361,22 +5371,35 @@ function upgradeRange(s){
     s.value = String(v);
     s.dispatchEvent(new Event('input', {bubbles:true}));
   };
+  // Площадка ПЕРЕСЫЛАЕТ ползунку его собственные события. На них подписано многое:
+  // крупная подпись значения поверх кадра, флаг протяжки, черновой рендер. Раз палец
+  // теперь на площадке, без пересылки подпись зажигалась и уже не гасла — так и было.
+  const переслать = (тип, e)=>{
+    s.dispatchEvent(new PointerEvent(тип, {
+      pointerId:e.pointerId, clientX:e.clientX, clientY:e.clientY, bubbles:true
+    }));
+  };
   grip.addEventListener('pointerdown', e=>{
     if(s.disabled) return;
     e.preventDefault(); e.stopPropagation();
     ведём = true;
     try{ grip.setPointerCapture(e.pointerId); }catch(_){}
     grip.classList.add('on');
+    переслать('pointerdown', e);
   });
   grip.addEventListener('pointermove', e=>{
     if(!ведём) return;
     e.preventDefault();
     поставить(e.clientX); место();
   });
-  const конец = ()=>{ if(!ведём) return; ведём = false; grip.classList.remove('on');
-    s.dispatchEvent(new Event('change', {bubbles:true})); };
-  grip.addEventListener('pointerup', конец);
-  grip.addEventListener('pointercancel', конец);
+  const конец = (тип)=> (e)=>{
+    if(!ведём) return;
+    ведём = false; grip.classList.remove('on');
+    переслать(тип, e);                       // отпустили — подпись гаснет, рендер добивается
+    s.dispatchEvent(new Event('change', {bubbles:true}));
+  };
+  grip.addEventListener('pointerup', конец('pointerup'));
+  grip.addEventListener('pointercancel', конец('pointercancel'));
   место();
 }
 function upgradeAllRanges(){ document.querySelectorAll('input[type=range]').forEach(upgradeRange); }
@@ -5694,7 +5717,6 @@ function openRetouch(){
   retouchEl.classList.add('open');
   document.getElementById('rtCompare').classList.add('on');
   layoutRetouch(); rtResetZoom(); rtSetTool('heal');
-  setTimeout(placeAllGrips, 0);
 }
 // отдельная карточка «Тени» на главной — тот же оверлей ретуши, но сразу в режиме
 // «Тени» и без переключателя Умная кисть/Штамп (они там просто не нужны)
@@ -5912,7 +5934,6 @@ function rtSetTool(tool){
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
     bags ? 'Тени' : skin ? 'Кожа' : bokeh ? 'Боке' : 'Ретушь';
-  setTimeout(placeAllGrips, 0);          // показали другие ползунки — переставляем площадки
   const rtHint = document.getElementById('rtHint');   // подсказка нужна только кисти
   if(rtHint) rtHint.style.display = ползунок ? 'none' : 'block';
   if(bags) bagsEnter();
