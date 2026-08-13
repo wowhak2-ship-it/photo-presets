@@ -942,7 +942,9 @@
     border:2px solid transparent; box-shadow:0 0 0 1px rgba(255,255,255,.14);}
   .rt-tint.on{border-color:var(--gold); box-shadow:0 0 0 1px rgba(0,0,0,.5);}
   .rt-shape.on canvas{opacity:1;}
-  .retouch.shadows-only .rt-sliders{padding-bottom:26px;}
+  /* Кнопки «Отменить» под ползунком больше нет, и он оказался вплотную к нижнему
+     краю — а там ещё системная полоса телефона. Отступ теперь его собственный. */
+  .retouch.shadows-only .rt-sliders{padding-bottom:calc(22px + env(safe-area-inset-bottom));}
   .retouch.shadows-only .rt-srow{height:42px;}
   .retouch.shadows-only .rt-tools{padding-top:14px;}
   .rt-srow span{flex:0 0 80px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); font-weight:600;}
@@ -1721,7 +1723,9 @@
       <div class="rt-srow" id="rtSkinRow" style="display:none"><span>Кожа</span><input type="range" id="rtSkin" min="0" max="100" value="0" disabled><b id="rtSkinV">0</b></div>
     </div>
     <!-- «До / После» отсюда убрано: кнопка теперь в шапке, как и в редакторе -->
-    <div class="rt-tools">
+    <!-- «Отменить» откатывает МАЗОК КИСТИ. В «Тенях», «Коже» и «Боке» кисти нет,
+         стек пустой — кнопка там всегда серая и ничего не делает; прячем её. -->
+    <div class="rt-tools" id="rtTools">
       <button class="rt-undo" id="rtUndo" disabled>Отменить</button>
     </div>
   </div>
@@ -5934,6 +5938,8 @@ function rtSetTool(tool){
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
     bags ? 'Тени' : skin ? 'Кожа' : bokeh ? 'Боке' : 'Ретушь';
+  // ряд с «Отменить» — только там, где есть что отменять, то есть у кисти и штампа
+  document.getElementById('rtTools').style.display = ползунок ? 'none' : 'flex';
   const rtHint = document.getElementById('rtHint');   // подсказка нужна только кисти
   if(rtHint) rtHint.style.display = ползунок ? 'none' : 'block';
   if(bags) bagsEnter();
