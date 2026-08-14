@@ -6718,6 +6718,7 @@ async function bagsEnter(){
       top.textContent = 'Лицо не найдено';
       bagsBusy = false; return;
     }
+    if(rtTool !== 'bags'){ bagsBusy = false; return; }   // пока искали лицо, ушли в другой инструмент
     top.textContent = 'Тени';
     slider.disabled = false;
     rtDrawFaces(bagsPickFace);
@@ -6832,6 +6833,7 @@ async function skinEnter(){
     skinData = faces.length ? skinPrepare([faces[rtFaceSel]]) : null;
     if(!skinData){ top.textContent = 'Лицо не найдено'; bagsBusy = false; return; }
     skinFace[rtFaceSel] = { сила:0, зоны:skinData };
+    if(rtTool !== 'skin'){ bagsBusy = false; return; }    // то же: инструмент уже другой
     top.textContent = 'Кожа';
     slider.disabled = false;
     rtDrawFaces(skinPickFace);
