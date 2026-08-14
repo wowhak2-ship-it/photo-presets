@@ -716,6 +716,9 @@
   .myp-io{flex:1 1 140px; background:transparent; border:1px solid var(--line-2); color:var(--dim);
     font-size:12px; font-weight:600; letter-spacing:.04em; padding:10px 12px; border-radius:11px; cursor:pointer;}
   .myp-io:active{transform:scale(.98);}
+  /* Собирать не из чего — видно до нажатия, а не окриком после него */
+  .myp-io:disabled{opacity:.4; cursor:default;}
+  .myp-io:disabled:active{transform:none;}
 
   /* Витрина наборов */
   .packs-lead{font-size:13px; line-height:1.55; color:var(--faint); margin-bottom:16px;}
@@ -899,6 +902,19 @@
     box-shadow:0 0 0 1px rgba(0,0,0,.45), inset 0 0 6px rgba(0,0,0,.25);
     transform:translate(-50%,-50%); pointer-events:none; opacity:0; transition:opacity .12s;}
   .rt-cursor.on{opacity:1;}
+  /* Место под палец: кольцо размером с подушечку пальца, чтобы было видно, за что
+     браться. Поводок показывает, что кружок выше — не сам по себе, а привязан к руке. */
+  .rt-grab{position:absolute; width:38px; height:38px; border-radius:50%; z-index:4;
+    border:2px solid rgba(246,195,107,.95); background:rgba(246,195,107,.16);
+    box-shadow:0 2px 12px rgba(0,0,0,.5); transform:translate(-50%,-50%);
+    pointer-events:none; opacity:0; transition:opacity .12s;}
+  .rt-grab::after{content:''; position:absolute; left:50%; top:50%; width:6px; height:6px;
+    margin:-3px 0 0 -3px; border-radius:50%; background:rgba(255,255,255,.95);}
+  .rt-grab.on{opacity:1;}
+  .rt-leash{position:absolute; width:2px; margin-left:-1px; z-index:3; pointer-events:none;
+    opacity:0; transition:opacity .12s;
+    background:linear-gradient(to bottom, rgba(255,255,255,.85), rgba(246,195,107,.95));}
+  .rt-leash.on{opacity:1;}
   .rt-modes{display:flex; align-items:center; justify-content:center; gap:8px; padding:6px 16px 0;}
   /* зашли через отдельную карточку «Тени» — кисть/штамп тут не нужны; visibility (не display),
      чтобы место осталось зарезервированным и фото не «прыгало» крупнее с лишним воздухом вокруг */
@@ -1607,9 +1623,11 @@
       <button class="myp-io" id="packsImport">Загрузить купленный файл</button>
       <button class="myp-io" id="packsMake">Собрать свой набор</button>
     </div>
-    <!-- Артур: «не совсем ясно, что нужно сохранять». Раньше здесь говорилось, ЧЕМ
-         набор является; теперь — что произойдёт по шагам и откуда берётся содержимое. -->
-    <div class="set-note">Соберёт в один файл <b>все ваши сохранённые пресеты</b> — те, что вы делали кнопкой «Сохранить как пресет». Спросит название и автора. Файл можно отдать или продать: у получателя он встанет готовым набором.</div>
+    <!-- Артур дважды: «не ясно, что нужно сохранять». Объяснять словами оказалось мало —
+         вопрос был не «что такое набор», а «а у меня-то есть из чего собирать». Теперь
+         это видно из самой кнопки: она называет число ваших пресетов, а когда их нет —
+         не даёт нажать и говорит первый шаг. -->
+    <div class="set-note" id="packsMakeNote"></div>
     <div class="set-note packs-legal">Покупка наборов — по <a href="./offer.html" target="_blank" rel="noopener">условиям продажи</a>. Данные обрабатываются согласно <a href="./privacy.html" target="_blank" rel="noopener">политике конфиденциальности</a>.</div>
   </div>
 </div>
@@ -1716,6 +1734,11 @@
          выбрать нужное. Появляются, только если лиц больше одного. -->
     <div class="rt-faces" id="rtFaces"></div>
     <div class="rt-cursor" id="rtCursor"></div>
+    <!-- «Замазать»: место под палец, поводок и кружок. Пока они появлялись только
+         при касании, было непонятно, куда вообще ляжет замазка, — теперь пара стоит
+         на кадре с самого открытия и видно, как она устроена. -->
+    <div class="rt-leash" id="rtLeash"></div>
+    <div class="rt-grab" id="rtGrab"></div>
     <div class="rt-marker rt-src" id="rtSrc"><b>Источник</b></div>
     <div class="rt-marker rt-tgt" id="rtTgt"><b>Замазать</b></div>
     <div class="rt-loupe" id="rtLoupe"><canvas id="rtLoupeC" width="132" height="132"></canvas></div>
@@ -3949,7 +3972,22 @@ async function renderPacks(){
 const packsEl = document.getElementById('packs');
 function openPacks(){
   packsEl.classList.add('open');
-  ensureTrap(); renderPacks();
+  ensureTrap(); renderPacks(); syncPacksMake();
+}
+// Кнопка сборки говорит, из ЧЕГО соберётся набор, — иначе непонятно, что нужно
+// сохранять заранее. Пустой список — не молчаливая ошибка после нажатия, а видимый
+// первый шаг.
+function syncPacksMake(){
+  const n = MYP.all().length;
+  const один = n%10===1 && n%100!==11, немного = n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20);
+  const изЧего = один ? 'пресета' : 'пресетов';          // из одного пресета / из пяти пресетов
+  const ваши   = один ? 'пресет' : немного ? 'пресета' : 'пресетов';   // ваши 3 пресета
+  const b = document.getElementById('packsMake'), note = document.getElementById('packsMakeNote');
+  b.disabled = !n;
+  b.textContent = n ? `Собрать набор из ${n} ${изЧего}` : 'Собрать свой набор';
+  note.innerHTML = n
+    ? `Возьмёт <b>ваши ${n} ${ваши}</b> — те, что вы сохраняли кнопкой «Сохранить как пресет» — и сложит в один файл. Спросит название и автора. Файл можно отдать или продать: у получателя он встанет готовым набором.`
+    : 'Собирать пока не из чего: <b>своих пресетов ещё нет</b>. Настройте вид на фото и нажмите внизу «Сохранить как пресет» — сохранённые попадут сюда, и кнопка оживёт.';
 }
 document.getElementById('rowPacks').onclick = openPacks;
 document.getElementById('homePacks').onclick = openPacks;
@@ -5804,16 +5842,41 @@ function rtSnap(){
   document.getElementById('rtUndo').disabled = false;
 }
 const rtCursor = document.getElementById('rtCursor');
+const rtGrab = document.getElementById('rtGrab'), rtLeash = document.getElementById('rtLeash');
 function rtShowCursor(e){
   const ar = document.getElementById('rtArea').getBoundingClientRect();
+  const палец = e;
   e = rtAim(e);
   rtCursor.style.left = (e.clientX - ar.left) + 'px';
   rtCursor.style.top  = (e.clientY - ar.top)  + 'px';
   rtCursor.style.width = rtSize + 'px'; rtCursor.style.height = rtSize + 'px';
   rtCursor.classList.add('on');
+  if(rtTool === 'paint') paintRig(палец, ar);
   rtUpdateLoupe(e, ar);
 }
-function rtHideCursor(){ rtCursor.classList.remove('on'); rtHideLoupe(); }
+// рука и поводок ездят вместе с кружком, чтобы связь между ними читалась
+function paintRig(e, ar){
+  ar = ar || document.getElementById('rtArea').getBoundingClientRect();
+  const fx = e.clientX - ar.left, fy = e.clientY - ar.top;
+  const cy = fy + (paintFlip ? PAINT_GAP : -PAINT_GAP);
+  rtGrab.style.left = fx+'px'; rtGrab.style.top = fy+'px';
+  rtLeash.style.left = fx+'px'; rtLeash.style.top = Math.min(fy, cy)+'px';
+  rtLeash.style.height = Math.abs(cy - fy)+'px';
+  rtGrab.classList.add('on'); rtLeash.classList.add('on');
+}
+function paintRigOff(){ rtGrab.classList.remove('on'); rtLeash.classList.remove('on'); }
+// В «Замазать» пара «палец + кружок» остаётся на кадре и после того, как отпустили:
+// иначе непонятно, куда ляжет следующий мазок.
+function paintPark(){
+  const r = rtCanvas.getBoundingClientRect();
+  paintFlip = false;
+  rtShowCursor({ clientX: r.left + r.width/2, clientY: r.top + r.height*0.62 });
+  rtHideLoupe();
+}
+function rtHideCursor(){
+  if(rtTool === 'paint'){ rtHideLoupe(); return; }   // кружок с рукой в «Замазать» видны всегда
+  rtCursor.classList.remove('on'); paintRigOff(); rtHideLoupe();
+}
 // loupe: magnified preview of the area under the finger so you can see if you hit the spot
 const rtLoupe = document.getElementById('rtLoupe'), rtLoupeC = document.getElementById('rtLoupeC');
 function rtUpdateLoupe(e, ar){
@@ -6052,6 +6115,9 @@ function rtSetTool(tool){
     rtHint.textContent = tool==='paint' ? 'Ведите пальцем вдоль дефекта — кружок идёт выше пальца'
                                         : 'Коснитесь дефектов на коже';
   }
+  // пара «палец + кружок» принадлежит «Замазать» — в других инструментах её быть не должно
+  if(tool === 'paint') requestAnimationFrame(paintPark);
+  else { paintRigOff(); rtCursor.classList.remove('on'); }
   if(bags) bagsEnter();
   if(skin) skinEnter();
   if(bokeh) bokehEnter();
@@ -7009,6 +7075,7 @@ function rtCmpOff(){
   rtCmpOn = false; rtCmpEl.classList.remove('on'); rtCompareBtn.classList.remove('active');
   if(rtCmpTmp){ const ctx = rtCanvas.getContext('2d');
     ctx.clearRect(0,0,rtCanvas.width,rtCanvas.height); ctx.drawImage(rtCmpTmp, 0, 0); rtCmpTmp = null; }
+  if(rtTool === 'paint') paintPark();     // вышли из сравнения — вернули пару на кадр
 }
 document.getElementById('rtPanBtn').onclick = ()=>{
   rtPanMode = !rtPanMode;
@@ -7024,6 +7091,7 @@ rtCompareBtn.onclick = ()=>{
   rtCmpTmp.getContext('2d').drawImage(rtCanvas, 0, 0);
   rtCmpOn = true; rtCmpPos = 0.5;
   rtCmpEl.classList.add('on'); rtCompareBtn.classList.add('active');
+  rtCursor.classList.remove('on'); paintRigOff();   // под шторкой кисти не место
   rtCmpDraw();
 };
 document.getElementById('rtCancel').onclick = closeRetouch;
