@@ -921,9 +921,14 @@
   .rt-src b{color:#9cc7ff;}
   .rt-tgt{border:2px solid var(--gold); box-shadow:0 0 0 1px rgba(0,0,0,.45);}
   .rt-tgt b{color:var(--gold);}
-  .rt-loupe{position:absolute; top:10px; width:112px; height:112px; border-radius:50%; overflow:hidden; z-index:5;
+  /* Лупа живёт внутри .rt-area, а та начинается ПОД шапкой только за счёт внутреннего
+     отступа — абсолютной лупе он не указ, и она залезала на кнопку «назад». При тапе
+     это мелькало мгновение, при ведении висит весь мазок. Опускаем на высоту шапки. */
+  .rt-loupe{position:absolute; top:calc(84px + env(safe-area-inset-top)); width:112px; height:112px; border-radius:50%; overflow:hidden; z-index:5;
     border:2px solid rgba(255,255,255,.92); box-shadow:0 6px 20px rgba(0,0,0,.55); display:none; background:#000; pointer-events:none;}
   .rt-loupe.on{display:block;}
+  /* подсказка и лупа делят одно место у верха — пока ведёшь, подсказка уходит */
+  .retouch.rt-aim .ov-hint{opacity:0; transition:opacity .12s;}
   .rt-loupe canvas{width:100%; height:100%; display:block;}
   .rt-tools{display:flex; align-items:center; justify-content:center; gap:14px; padding:4px 22px 2px;}
   .rt-sliders{display:flex; flex-direction:column; gap:0; padding:4px 22px 0;}
@@ -5808,7 +5813,7 @@ function rtShowCursor(e){
   rtCursor.classList.add('on');
   rtUpdateLoupe(e, ar);
 }
-function rtHideCursor(){ rtCursor.classList.remove('on'); rtLoupe.classList.remove('on'); }
+function rtHideCursor(){ rtCursor.classList.remove('on'); rtHideLoupe(); }
 // loupe: magnified preview of the area under the finger so you can see if you hit the spot
 const rtLoupe = document.getElementById('rtLoupe'), rtLoupeC = document.getElementById('rtLoupeC');
 function rtUpdateLoupe(e, ar){
@@ -5827,8 +5832,9 @@ function rtUpdateLoupe(e, ar){
   if(px > ar.width*0.5){ rtLoupe.style.left='10px'; rtLoupe.style.right='auto'; }
   else { rtLoupe.style.right='10px'; rtLoupe.style.left='auto'; }
   rtLoupe.classList.add('on');
+  retouchEl.classList.add('rt-aim');     // подсказка уступает лупе место
 }
-function rtHideLoupe(){ rtLoupe.classList.remove('on'); }
+function rtHideLoupe(){ rtLoupe.classList.remove('on'); retouchEl.classList.remove('rt-aim'); }
 
 // ─── «Замазать»: кисть, которую ведут пальцем ───
 // Палец закрывает собой то самое место, которое замазываешь, — поэтому кружок идёт
