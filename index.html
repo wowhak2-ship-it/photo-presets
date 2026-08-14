@@ -1166,6 +1166,13 @@
            как у соседних карточек («под глазами», «обрезать»). -->
       <b>Ретушь</b><i>прыщики и пятна</i>
     </button>
+    <!-- Точечная ретушь хороша для прыщика, но длинный шрам ею не закрыть: тапать
+         пришлось бы двадцать раз. Здесь кисть ведут пальцем, а кружок идёт выше
+         пальца — иначе он сам закрывает то место, которое замазываешь. -->
+    <button class="ht" data-go="paint">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="16.6" cy="7.4" r="3.6"/><path d="M13.9 9.8C11.1 12.5 8.4 14.3 4.6 15.5"/><path d="M4.6 15.5l-1 3.9 3.9-1"/></svg>
+      <b>Замазать</b><i>шрамы и полосы</i>
+    </button>
     <button class="ht" data-go="shadows">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5s3.6-5 9-5 9 5 9 5-3.6 5-9 5-9-5-9-5z"/><circle cx="12" cy="10.5" r="2.3" fill="currentColor" stroke="none"/><path d="M7 17.6c1.8 1.5 8.2 1.5 10 0"/></svg>
       <b>Тени</b><i>под глазами</i>
@@ -2954,6 +2961,7 @@ function applyPendingTool(){
   // retouch/crop are full-screen overlays over the CURRENT screen:
   // Отмена returns where you came from (home), Применить lands in the editor
   if(t==='retouch'){ openRetouch(); return; }
+  if(t==='paint'){ openPaint(); return; }
   if(t==='shadows'){ openShadows(); return; }
   if(t==='skin'){ openSkin(); return; }
   if(t==='bokeh'){ openBokeh(); return; }
@@ -5375,6 +5383,14 @@ function upgradeRange(s){
     const ro = new ResizeObserver(()=> место());
     ro.observe(s);
   }
+  // В «Тенях» и «Коже» ползунок выключен, пока ищется лицо, — площадка при этом
+  // спрятана. Лицо находится через несколько секунд, ползунок включается, а размер
+  // его не меняется, и наблюдатель за размером молчит: площадка так и остаётся
+  // спрятанной. Ползунок выглядит живым, но тянуть его нечем — это и была жалоба
+  // «в тенях ползунок не работает». Следим за самим выключением.
+  if(window.MutationObserver){
+    new MutationObserver(()=> место()).observe(s, {attributes:true, attributeFilter:['disabled']});
+  }
 
   let ведём = false;
   const поставить = (x)=>{
@@ -5754,6 +5770,13 @@ function openBokeh(){
   retouchEl.classList.add('shadows-only');
   rtSetTool('bokeh');
 }
+// «Замазать» — кисть с ведением. Переключатель Умная кисть/Штамп прячем: сюда
+// приходят за одним делом, а лишний выбор только сбивает.
+function openPaint(){
+  openRetouch();
+  retouchEl.classList.add('shadows-only');
+  rtSetTool('paint');
+}
 function closeRetouch(){ rtCmpOff(); retouchEl.classList.remove('open'); retouchEl.classList.remove('shadows-only'); }
 function rtBrushR(){ const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width; return rtSize * (rtCanvas.width/disp) * 0.5; }
 function rtAt(e){ const r = rtCanvas.getBoundingClientRect();
@@ -5766,9 +5789,19 @@ function rtRecord(bx, by, r, src){
   rtOps.push({ t:'heal', x:bx/W, y:by/H, r:r/W, hardness:o.hardness, strength:o.strength,
                sx: src ? src.x/W : null, sy: src ? src.y/H : null });
 }
+// Снимок перед действием. Помним и место в журнале правок: мазок ведением — это
+// десятки замазок подряд, а «Отменить» должно снимать весь мазок разом, иначе
+// картинка вернётся на шаг назад, а журнал останется впереди.
+function rtSnap(){
+  rtUndo.push({ img: rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height),
+                ops: rtOps.length });
+  if(rtUndo.length > 10) rtUndo.shift();
+  document.getElementById('rtUndo').disabled = false;
+}
 const rtCursor = document.getElementById('rtCursor');
 function rtShowCursor(e){
   const ar = document.getElementById('rtArea').getBoundingClientRect();
+  e = rtAim(e);
   rtCursor.style.left = (e.clientX - ar.left) + 'px';
   rtCursor.style.top  = (e.clientY - ar.top)  + 'px';
   rtCursor.style.width = rtSize + 'px'; rtCursor.style.height = rtSize + 'px';
@@ -5796,6 +5829,39 @@ function rtUpdateLoupe(e, ar){
   rtLoupe.classList.add('on');
 }
 function rtHideLoupe(){ rtLoupe.classList.remove('on'); }
+
+// ─── «Замазать»: кисть, которую ведут пальцем ───
+// Палец закрывает собой то самое место, которое замазываешь, — поэтому кружок идёт
+// выше пальца на постоянное расстояние и движется вместе с ним. У верхнего края
+// кадра он бы вылез за снимок, там переворачиваем его вниз — один раз на мазок,
+// чтобы кружок не прыгал под рукой.
+const PAINT_GAP = 56;              // в точках экрана
+let paintFlip = false, paintPrev = null, paintDrew = false, paintDownE = null;
+function rtAim(e){
+  if(rtTool !== 'paint') return e;
+  return { clientX: e.clientX, clientY: e.clientY + (paintFlip ? PAINT_GAP : -PAINT_GAP) };
+}
+function paintDab(x, y, R){
+  healSpot(rtCanvas, x, y, R, null, rtOpts());
+  rtRecord(x, y, R, null);
+}
+function paintTo(e){
+  const p = rtAim(e), r = rtCanvas.getBoundingClientRect();
+  const bx = (p.clientX-r.left)*(rtCanvas.width/r.width);
+  const by = (p.clientY-r.top) *(rtCanvas.height/r.height);
+  const R = rtBrushR(), step = Math.max(3, R*0.65);
+  if(!paintPrev){ paintPrev = {x:bx, y:by}; paintDab(bx, by, R); paintDrew = true; return; }
+  const dx = bx-paintPrev.x, dy = by-paintPrev.y, d = Math.hypot(dx, dy);
+  if(d < step) return;                       // реже шага мазать незачем — только тормозит
+  const n = Math.min(30, Math.floor(d/step));  // потолок на случай рывка пальцем
+  for(let i=1;i<=n;i++){
+    const k = i*step/d;
+    paintDab(paintPrev.x + dx*k, paintPrev.y + dy*k, R);
+  }
+  const k = n*step/d;
+  paintPrev = { x: paintPrev.x + dx*k, y: paintPrev.y + dy*k };
+  paintDrew = true;
+}
 // pointers: 1 finger draws, 2 fingers pinch-zoom + pan
 let rtScale = 1, rtTx = 0, rtTy = 0, rtPinch = null, rtPan1 = null, rtCmpDrag = false, rtPanMode = false;
 const rtPtrs = new Map();
@@ -5849,6 +5915,13 @@ rtCanvas.addEventListener('pointerdown', e=>{
     // и вместо замазки уезжало фото. Поэтому режим явный, кнопкой.
     rtPan1 = rtCanPan1() ? { x0:e.clientX, y0:e.clientY, tx0:rtTx, ty0:rtTy, on:true } : null;
     if(!rtPan1 && rtTool === 'heal'){ rtDrawing = true; rtLastE = e; rtShowCursor(e); }  // aim only — heal fires on release
+    if(!rtPan1 && rtTool === 'paint'){
+      // у верхнего края кадра кружок ушёл бы за снимок — переворачиваем его вниз
+      const cr = rtCanvas.getBoundingClientRect();
+      paintFlip = (e.clientY - PAINT_GAP) < cr.top + 6;
+      rtDrawing = true; rtLastE = e; paintDownE = e; paintPrev = null; paintDrew = false;
+      rtShowCursor(e);            // нажатие только показывает, куда попадёт: мазок с движения
+    }
   }
 });
 rtCanvas.addEventListener('pointermove', e=>{
@@ -5868,23 +5941,28 @@ rtCanvas.addEventListener('pointermove', e=>{
     rtTy = rtPan1.ty0 + (e.clientY - rtPan1.y0);
     rtClampPan(); rtApplyTransform();
   } else if(rtDrawing && rtPtrs.size === 1){
-    e.preventDefault(); rtLastE = e; rtShowCursor(e);   // keep aiming, heal only on release
+    e.preventDefault(); rtLastE = e;
+    if(rtTool === 'paint' && paintDownE &&
+       (paintDrew || Math.hypot(e.clientX-paintDownE.clientX, e.clientY-paintDownE.clientY) > 6)){
+      if(!paintDrew){ rtSnap(); paintTo(paintDownE); }   // мазок начинаем от места нажатия
+      paintTo(e);
+    }
+    rtShowCursor(e);   // keep aiming, heal only on release
   }
 });
 function rtEnd(e){
   if(rtCmpOn){ rtCmpDrag = false; return; }
   const panned = rtPan1 && rtPan1.on;
   const finishHeal = !panned && rtDrawing && rtTool === 'heal' && rtLastE && rtPtrs.size === 1;
+  // нажали и отпустили не ведя — это одна замазка ровно там, куда целились
+  const tapPaint = !panned && rtDrawing && rtTool === 'paint' && !paintDrew && rtLastE && rtPtrs.size === 1;
   rtPtrs.delete(e.pointerId);
   if(rtPtrs.size < 2) rtPinch = null;
   if(rtPtrs.size === 0) rtPan1 = null;
   if(rtPtrs.size === 0){
-    if(finishHeal){   // heal exactly where you aimed, on release
-      rtUndo.push(rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height));
-      if(rtUndo.length > 10) rtUndo.shift();
-      document.getElementById('rtUndo').disabled = false;
-      rtAt(rtLastE);
-    }
+    if(finishHeal){ rtSnap(); rtAt(rtLastE); }   // heal exactly where you aimed, on release
+    if(tapPaint){ rtSnap(); paintTo(rtLastE); }
+    paintPrev = null; paintDownE = null; paintDrew = false;
     rtDrawing = false; rtHideCursor();
   }
 }
@@ -5899,8 +5977,9 @@ rtCanvas.addEventListener('wheel', e=>{
 document.getElementById('rtUndo').onclick = ()=>{
   rtCmpOff();
   if(!rtUndo.length) return;
-  rtCanvas.getContext('2d').putImageData(rtUndo.pop(), 0, 0);
-  rtOps.pop();   // снимок и запись в журнале идут парой
+  const u = rtUndo.pop();
+  rtCanvas.getContext('2d').putImageData(u.img, 0, 0);
+  rtOps.length = u.ops;   // журнал откатываем ровно к тому же месту, что и картинку
   document.getElementById('rtUndo').disabled = rtUndo.length === 0;
 };
 document.getElementById('rtSize').oninput = e=>{
@@ -5950,7 +6029,7 @@ function rtSetTool(tool){
   document.getElementById('rtTints').style.display = bokeh?'flex':'none';
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
-    bags ? 'Тени' : skin ? 'Кожа' : bokeh ? 'Боке' : 'Ретушь';
+    bags ? 'Тени' : skin ? 'Кожа' : bokeh ? 'Боке' : tool==='paint' ? 'Замазать' : 'Ретушь';
   // ряд с «Отменить» — только там, где есть что отменять, то есть у кисти и штампа
   document.getElementById('rtTools').style.display = ползунок ? 'none' : 'flex';
   // Кружки выбора лица принадлежат «Теням» и «Коже». Раньше их никто не убирал, и
@@ -5962,7 +6041,11 @@ function rtSetTool(tool){
   // настоящие. Это и была «иногда не работает».
   requestAnimationFrame(()=> requestAnimationFrame(placeAllGrips));
   const rtHint = document.getElementById('rtHint');   // подсказка нужна только кисти
-  if(rtHint) rtHint.style.display = ползунок ? 'none' : 'block';
+  if(rtHint){
+    rtHint.style.display = ползунок ? 'none' : 'block';
+    rtHint.textContent = tool==='paint' ? 'Ведите пальцем вдоль дефекта — кружок идёт выше пальца'
+                                        : 'Коснитесь дефектов на коже';
+  }
   if(bags) bagsEnter();
   if(skin) skinEnter();
   if(bokeh) bokehEnter();
@@ -5979,9 +6062,7 @@ document.getElementById('rtStampApply').onclick = ()=>{
   const a=document.getElementById('rtArea').getBoundingClientRect(), c=rtCanvas.getBoundingClientRect();
   const bmp=m=>({ x:(a.left+m.x-c.left)*(rtCanvas.width/c.width), y:(a.top+m.y-c.top)*(rtCanvas.height/c.height) });
   const s=bmp(rtMk.src), t=bmp(rtMk.tgt);
-  rtUndo.push(rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height));
-  if(rtUndo.length>10) rtUndo.shift();
-  document.getElementById('rtUndo').disabled=false;
+  rtSnap();
   const sr = rtSize*(rtCanvas.width/c.width)*0.5;
   healSpot(rtCanvas, t.x, t.y, sr, {x:s.x, y:s.y}, rtOpts());
   rtRecord(t.x, t.y, sr, s);
