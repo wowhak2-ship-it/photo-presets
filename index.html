@@ -1202,6 +1202,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.4" r="6.2"/><path d="M12 9.6a3.8 3.8 0 0 1 0 7.6"/><path d="M9.2 3.6h5.6l-.7 3.1H9.9z"/></svg>
       <b>Пудра</b><i>убрать блеск</i>
     </button>
+    <button class="ht" data-go="tone">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.8h6v3.4l2 2.6V20a1.2 1.2 0 0 1-1.2 1.2H8.2A1.2 1.2 0 0 1 7 20V8.8l2-2.6z"/><path d="M7.4 13.6h9.2"/></svg>
+      <b>Тональный</b><i>выровнять тон</i>
+    </button>
     <button class="ht" data-go="skin">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.9 0 7 3.1 7 7v3.4c0 4.2-3.1 7.6-7 7.6s-7-3.4-7-7.6V10c0-3.9 3.1-7 7-7z"/><path d="M9.2 10.4h.01M14.8 10.4h.01M12 14.6h.01"/></svg>
       <b>Кожа</b><i>сгладить тон</i>
@@ -1762,6 +1766,7 @@
       <div class="rt-shapes" id="rtShapes" style="display:none"></div>
       <div class="rt-tints" id="rtTints" style="display:none"></div>
       <div class="rt-srow" id="rtPowderRow" style="display:none"><span>Сила</span><input type="range" id="rtPowder" min="0" max="100" value="0" disabled><b id="rtPowderV">0</b></div>
+      <div class="rt-srow" id="rtToneRow" style="display:none"><span>Сила</span><input type="range" id="rtTone" min="0" max="100" value="0" disabled><b id="rtToneV">0</b></div>
       <div class="rt-srow" id="rtSkinRow" style="display:none"><span>Кожа</span><input type="range" id="rtSkin" min="0" max="100" value="0" disabled><b id="rtSkinV">0</b></div>
     </div>
     <!-- «До / После» отсюда убрано: кнопка теперь в шапке, как и в редакторе -->
@@ -2468,6 +2473,8 @@ function buildFullSource(){
       bagsRun(own(), op.faces, op.amount);
     } else if(op.t === 'skin'){
       skinRun(own(), op.faces, op.amount);
+    } else if(op.t === 'tone'){
+      toneRun(own(), op.faces, op.amount);
     } else if(op.t === 'powder'){
       powderRun(own(), op.faces, op.amount);
     } else if(op.t === 'bokeh'){
@@ -3001,6 +3008,7 @@ function applyPendingTool(){
   if(t==='skin'){ openSkin(); return; }
   if(t==='bokeh'){ openBokeh(); return; }
   if(t==='powder'){ openPowder(); return; }
+  if(t==='tone'){ openTone(); return; }
   if(t==='crop'){ openCrop(); return; }
   if(t==='curve'){ goEditor(); setSection('curve'); return; }
   if(t==='hsl'){ goEditor(); setSection('color'); return; }
@@ -5794,7 +5802,7 @@ function openRetouch(){
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtFaces = null; skinData = null; powderData = null;
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFaces = null; skinData = null; powderData = null; toneData = null;
   for(const k in skinFace) delete skinFace[k];   // новый снимок — настройки лиц с нуля
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
@@ -5825,6 +5833,11 @@ function openPowder(){
   openRetouch();
   retouchEl.classList.add('shadows-only');
   rtSetTool('powder');
+}
+function openTone(){
+  openRetouch();
+  retouchEl.classList.add('shadows-only');
+  rtSetTool('tone');
 }
 // «Замазать» — кисть с ведением. Переключатель Умная кисть/Штамп прячем: сюда
 // приходят за одним делом, а лишний выбор только сбивает.
@@ -6096,29 +6109,30 @@ function rtSetTool(tool){
   rtTool=tool;
   rtSyncPan();         // в «Тенях» руки нет, в кисти есть
   document.querySelectorAll('.rt-mode').forEach(b=>b.classList.toggle('active', b.dataset.tool===tool));
-  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin', bokeh=tool==='bokeh', powder=tool==='powder';
-  const ползунок = bags || skin || bokeh || powder;   // режимы «один ползунок вместо кисти»
+  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin', bokeh=tool==='bokeh', powder=tool==='powder', tone=tool==='tone';
+  const ползунок = bags || skin || bokeh || powder || tone;   // режимы «один ползунок вместо кисти»
   rtModes.classList.toggle('stamp', stamp);
   rtSrc.classList.toggle('on', stamp); rtTgt.classList.toggle('on', stamp);
   rtSrc.style.pointerEvents=stamp?'auto':'none'; rtTgt.style.pointerEvents=stamp?'auto':'none';
   if(stamp) rtPlaceMarkers();
   document.querySelectorAll('.rt-srow').forEach(r=>{
-    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow')
+    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow')
       r.style.display = ползунок?'none':'flex'; });
   document.getElementById('rtBagsRow').style.display = bags?'flex':'none';
   document.getElementById('rtSkinRow').style.display = skin?'flex':'none';
   document.getElementById('rtPowderRow').style.display = powder?'flex':'none';
+  document.getElementById('rtToneRow').style.display = tone?'flex':'none';
   document.getElementById('rtSprinkleRow').style.display = bokeh?'flex':'none';
   document.getElementById('rtTints').style.display = bokeh?'flex':'none';
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
-    bags ? 'Консилер' : skin ? 'Кожа' : bokeh ? 'Боке' : powder ? 'Пудра'
+    bags ? 'Консилер' : skin ? 'Кожа' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный'
          : tool==='paint' ? 'Замазать' : 'Ретушь';
   // ряд с «Отменить» — только там, где есть что отменять, то есть у кисти и штампа
   document.getElementById('rtTools').style.display = ползунок ? 'none' : 'flex';
   // Кружки выбора лица принадлежат «Теням» и «Коже». Раньше их никто не убирал, и
   // после этих инструментов они оставались висеть поверх кадра в кисти и штампе.
-  if(!bags && !skin && !powder) rtClearFaces();
+  if(!bags && !skin && !powder && !tone) rtClearFaces();
   // Площадку ползунка ставим не только по наблюдателю: он может сработать в тот миг,
   // когда строка ещё нулевой ширины, и тогда площадка останется спрятанной — ползунок
   // выглядит живым, но не тянется. Досчитываем на следующих кадрах, когда размеры уже
@@ -6137,6 +6151,7 @@ function rtSetTool(tool){
   if(skin) skinEnter();
   if(bokeh) bokehEnter();
   if(powder) powderEnter();
+  if(tone) toneEnter();
 }
 document.querySelectorAll('.rt-mode').forEach(b=> b.onclick=()=>rtSetTool(b.dataset.tool));
 function markerDrag(el,key){
@@ -6808,8 +6823,11 @@ function skinRun(cv, faces, amount){
 // Подложку строим в два захода: сперва грубая оценка кожи, по ней вырезаем сами
 // блики, заращиваем дырки соседней кожей и только потом размываем. Если размыть
 // сразу, блик попадёт в подложку и гасить будет нечего.
-let powderData = null, rtPowderOp = null;
-function powderPrepare(faces, cv){
+let powderData = null, rtPowderOp = null, toneData = null, rtToneOp = null;
+// Разметка лица для «Пудры» и «Тонального»: овал минус глаза, губы и брови, средний
+// тон кожи и границы её собственного тонального диапазона. Обоим нужно одно и то же,
+// поэтому считается в одном месте — иначе две копии разъедутся при первой же правке.
+function faceZones(faces, cv){
   cv = cv || rtCanvas;
   const W = cv.width, H = cv.height, zones = [];
   for(const lms of (faces||[])){
@@ -6871,9 +6889,17 @@ function powderPrepare(faces, cv){
     const низ = квантиль(0.70), верх = Math.max(квантиль(0.985), низ+10);
     zones.push({bx,by,bw,bh,mask,orig,faceW,кожаR,кожаG,кожаB,низ,верх});
   }
-  if(cv !== rtCanvas) return zones.length ? zones : null;
-  powderData = zones.length ? zones : null;
-  return powderData;
+  return zones.length ? zones : null;
+}
+function powderPrepare(faces, cv){
+  const z = faceZones(faces, cv || rtCanvas);
+  if((cv || rtCanvas) !== rtCanvas) return z;
+  powderData = z; return powderData;
+}
+function tonePrepare(faces, cv){
+  const z = faceZones(faces, cv || rtCanvas);
+  if((cv || rtCanvas) !== rtCanvas) return z;
+  toneData = z; return toneData;
 }
 function powderApply(t, cv, zones){
   cv = cv || rtCanvas; zones = zones || powderData;
@@ -6910,6 +6936,47 @@ function powderRun(cv, faces, amount){
   const z = powderPrepare(faces, cv);
   if(z) powderApply(amount, cv, z);
 }
+
+// ─── «Тональный крем»: выровнять тон лица ───
+// Тональный НЕ меняет форму лица — он меняет только ЦВЕТ. Поэтому яркость каждого
+// пикселя оставляем ровно как была, а цвет ведём к среднему тону этого же лица,
+// приведённому к той же яркости. Светотень, объём и текстура при этом не трогаются
+// вообще: мы двигаемся строго поперёк яркости. Сильнее всего достаётся красноте —
+// щёкам, крыльям носа, раздражению, — потому что именно она выбивается из тона.
+function toneApply(t, cv, zones){
+  cv = cv || rtCanvas; zones = zones || toneData;
+  if(!zones) return;
+  const ctx = cv.getContext('2d');
+  for(const z of zones){
+    const out = ctx.getImageData(z.bx, z.by, z.bw, z.bh), od = out.data;
+    const o = z.orig.data, m = z.mask;
+    const кл = (z.кожаR + z.кожаG + z.кожаB)/3 || 1;
+    for(let i=0;i<od.length;i+=4){
+      const ag = m[i+3]/255; if(ag < 0.02) continue;
+      const R=o[i], G=o[i+1], B=o[i+2];
+      const lum=(R+G+B)/3; if(lum < 12) continue;
+      const k = lum/кл;
+      const tR=z.кожаR*k, tG=z.кожаG*k, tB=z.кожаB*k;      // тон лица на этой же яркости
+      const откл = Math.abs(R-tR) + Math.abs(G-tG) + Math.abs(B-tB);
+      const краснота = (R-tR) - ((G-tG)+(B-tB))/2;
+      let вес = Math.min(1, Math.max(0, краснота)/20 + Math.min(откл,40)/70);
+      // Слишком далеко от кожи — это уже не неровность тона, а прядь волос, оправа
+      // или край губ. Их перекрашивать в кожу нельзя, поэтому вес сходит на нет.
+      if(откл > 70) вес *= Math.max(0, 1 - (откл-70)/45);
+      const a = ag * t * вес * 0.8;
+      if(a < 0.004) continue;
+      od[i]   = clamp(R + (tR-R)*a);
+      od[i+1] = clamp(G + (tG-G)*a);
+      od[i+2] = clamp(B + (tB-B)*a);
+    }
+    ctx.putImageData(out, z.bx, z.by);
+  }
+}
+function toneRun(cv, faces, amount){
+  if(!faces || !faces.length || !amount) return;
+  const z = tonePrepare(faces, cv);
+  if(z) toneApply(amount, cv, z);
+}
 async function powderEnter(){
   const slider = document.getElementById('rtPowder'), top = document.getElementById('rtTop');
   slider.value = 0; document.getElementById('rtPowderV').textContent = '0'; slider.disabled = true;
@@ -6943,6 +7010,54 @@ async function powderEnter(){
   }
   bagsBusy = false;
 }
+async function toneEnter(){
+  const slider = document.getElementById('rtTone'), top = document.getElementById('rtTop');
+  slider.value = 0; document.getElementById('rtToneV').textContent = '0'; slider.disabled = true;
+  toneData = null; rtToneOp = null;
+  if(bagsBusy) return; bagsBusy = true;
+  try{
+    top.textContent = bagsKit ? 'Ищу лицо…' : 'Загружаю модель…';
+    const kit = await loadFaceKit();
+    if(rtTool !== 'tone'){ bagsBusy = false; return; }
+    top.textContent = 'Ищу лицо…';
+    let res = kit.detect(rtCanvas);
+    let faces = (res && res.faceLandmarks) || [];
+    if(!faces.length && rtCanvas.width > 900){
+      const t = document.createElement('canvas'); const s = 720/rtCanvas.width;
+      t.width = 720; t.height = Math.max(1, Math.round(rtCanvas.height*s));
+      t.getContext('2d').drawImage(rtCanvas, 0, 0, t.width, t.height);
+      res = kit.detect(t); faces = (res && res.faceLandmarks) || [];
+    }
+    rtFaces = faces;
+    rtFaceSel = faces.length ? biggestFace(faces, rtCanvas.width, rtCanvas.height) : 0;
+    if(!faces.length || !tonePrepare([faces[rtFaceSel]])){
+      top.textContent = 'Лицо не найдено'; bagsBusy = false; return;
+    }
+    if(rtTool !== 'tone'){ bagsBusy = false; return; }
+    top.textContent = 'Тональный';
+    slider.disabled = false;
+    rtDrawFaces(tonePickFace);
+    rtFacesHint(faces.length, 'кому выровнять тон');
+  } catch(e){
+    top.textContent = 'Модель недоступна — проверьте интернет';
+  }
+  bagsBusy = false;
+}
+function tonePickFace(){
+  const v = +document.getElementById('rtTone').value;
+  if(toneData){ const ctx = rtCanvas.getContext('2d');
+    for(const z of toneData) ctx.putImageData(z.orig, z.bx, z.by); }
+  tonePrepare([rtFaces[rtFaceSel]]);
+  rtDrawFaces(tonePickFace);
+  if(v){ toneApply(v/100); rtToneOp = { t:'tone', faces:[rtFaces[rtFaceSel]], amount:v/100 }; }
+}
+document.getElementById('rtTone').oninput = e=>{
+  rtCmpOff();
+  const v = +e.target.value;
+  document.getElementById('rtToneV').textContent = v;
+  toneApply(v/100);
+  rtToneOp = v ? { t:'tone', faces:[rtFaces[rtFaceSel]], amount:v/100 } : null;
+};
 function powderPickFace(){
   const v = +document.getElementById('rtPowder').value;
   if(powderData){ const ctx = rtCanvas.getContext('2d');
@@ -7340,8 +7455,8 @@ document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
   rtCmpOff();          // применяем результат, а не то, что показывает шторка
   sourceCanvas.getContext('2d').drawImage(rtCanvas, 0, 0);   // bake retouch into the source
-  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp); if(rtPowderOp) editOps.push(rtPowderOp); if(rtBokehOp) editOps.push(rtBokehOp);   // те же правки повторим на оригинале
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtPowderOp = null;
+  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp); if(rtPowderOp) editOps.push(rtPowderOp); if(rtToneOp) editOps.push(rtToneOp); if(rtBokehOp) editOps.push(rtBokehOp);   // те же правки повторим на оригинале
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtPowderOp = null; rtToneOp = null;
   editedCanvas = null; makePreview(); buildChips(); buildHomeLooks(); render();
   closeRetouch(); goEditor();
 };
