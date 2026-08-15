@@ -1933,7 +1933,11 @@ function applyLook(img, look, mix, orig, y0, y1){
       const s = sat + vib*(1 - cur);
       R = avg + (R-avg)*s;  G = avg + (G-avg)*s;  B = avg + (B-avg)*s;
       if(vig){ const dx = x-cx; const f = 1 - vig*((dx*dx + dy2)/maxD2); R*=f; G*=f; B*=f; }
-      if(grain){ const g = gLine[x]; R+=g; G+=g; B+=g; }
+      // Зерно живёт в СРЕДНИХ тонах. Раньше оно клалось поровну по всему кадру — и в
+      // чёрное, и в белое, — а такого на плёнке не бывает: в глубокой тени и в пересвете
+      // зерна почти нет. Ровное зерно и читается как цифровой шум, «агрессивно».
+      // Парабола с полкой 0.25: полная сила в середине, четверть по краям.
+      if(grain){ const u=(R+G+B)/765, g = gLine[x]*(0.25 + 3*u*(1-u)); R+=g; G+=g; B+=g; }
       R = R<0?0:R>255?255:R; G = G<0?0:G>255?255:G; B = B<0?0:B>255?255:B;
       if(od){ R = od[p]*inv + R*t; G = od[p+1]*inv + G*t; B = od[p+2]*inv + B*t; }
       d[p]=R; d[p+1]=G; d[p+2]=B;
@@ -2243,7 +2247,7 @@ function applyAdjust(img, a, y0, y1){
       }
       if(vg){ const dx = x - vcx, dy = y - vcy;
               const f = 1 - vg*((dx*dx + dy*dy)/vmax); R*=f; G*=f; B*=f; }
-      if(gr){ const g = gLine[x]; R+=g; G+=g; B+=g; }
+      if(gr){ const u=(R+G+B)/765, g = gLine[x]*(0.25 + 3*u*(1-u)); R+=g; G+=g; B+=g; }   // та же полка, что у пресета
       d[p]=R<0?0:R>255?255:R; d[p+1]=G<0?0:G>255?255:G; d[p+2]=B<0?0:B>255?255:B;
     }
   }
