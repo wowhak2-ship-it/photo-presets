@@ -1231,6 +1231,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3.4"/><path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.4 5.4l2.1 2.1M16.5 16.5l2.1 2.1M18.6 5.4l-2.1 2.1M7.5 16.5l-2.1 2.1"/></svg>
       <b>Засветка</b><i>солнце в объектив</i>
     </button>
+    <button class="ht" data-go="vig">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.6" y="4.6" width="18.8" height="14.8" rx="2"/><ellipse cx="12" cy="12" rx="6.4" ry="4.8"/></svg>
+      <b>Виньетка</b><i>затемнить края</i>
+    </button>
     <button class="ht" data-go="build">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9M10 20V4M16 20v-7M22 20V7"/><circle cx="4" cy="6" r="1.6" fill="currentColor" stroke="none"/><circle cx="10" cy="16" r="1.6" fill="currentColor" stroke="none"/><circle cx="16" cy="10" r="1.6" fill="currentColor" stroke="none"/><circle cx="22" cy="4" r="1.6" fill="currentColor" stroke="none"/></svg>
       <b>Свой пресет</b><i>свет, цвет, кривая</i>
@@ -1779,6 +1783,9 @@
       <div class="rt-srow"><span>Жёсткость</span><input type="range" id="rtHard" min="0" max="100" value="45"><b id="rtHardV">45</b></div>
       <div class="rt-srow"><span>Сила</span><input type="range" id="rtStr" min="20" max="100" value="100"><b id="rtStrV">100</b></div>
       <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Сила</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
+      <div class="rt-srow" id="rtVigRow" style="display:none"><span>Сила</span><input type="range" id="rtVig" min="0" max="100" value="0"><b id="rtVigV">0</b></div>
+      <div class="rt-srow" id="rtVigSizeRow" style="display:none"><span>Размер</span><input type="range" id="rtVigSize" min="0" max="100" value="55"><b id="rtVigSizeV">55</b></div>
+      <div class="rt-kinds" id="rtVigModes" style="display:none"></div>
       <div class="rt-srow" id="rtFlareRow" style="display:none"><span>Сила</span><input type="range" id="rtFlare" min="0" max="100" value="0"><b id="rtFlareV">0</b></div>
       <div class="rt-kinds" id="rtFlareKinds" style="display:none"></div>
       <div class="rt-tints" id="rtFlareTints" style="display:none"></div>
@@ -2493,6 +2500,8 @@ function buildFullSource(){
       bagsRun(own(), op.faces, op.amount);
     } else if(op.t === 'skin'){
       skinRun(own(), op.faces, op.amount);
+    } else if(op.t === 'vig'){
+      vigRun(own(), op);
     } else if(op.t === 'flare'){
       flareRun(own(), op);
     } else if(op.t === 'tone'){
@@ -3032,6 +3041,7 @@ function applyPendingTool(){
   if(t==='powder'){ openPowder(); return; }
   if(t==='tone'){ openTone(); return; }
   if(t==='flare'){ openFlare(); return; }
+  if(t==='vig'){ openVig(); return; }
   if(t==='crop'){ openCrop(); return; }
   if(t==='curve'){ goEditor(); setSection('curve'); return; }
   if(t==='hsl'){ goEditor(); setSection('color'); return; }
@@ -5854,7 +5864,7 @@ function openRetouch(){
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtFaces = null; skinData = null; powderData = null; toneData = null;
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtFaces = null; skinData = null; powderData = null; toneData = null;
   for(const k in skinFace) delete skinFace[k];   // новый снимок — настройки лиц с нуля
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
@@ -5895,6 +5905,11 @@ function openFlare(){
   openRetouch();
   retouchEl.classList.add('shadows-only');
   rtSetTool('flare');
+}
+function openVig(){
+  openRetouch();
+  retouchEl.classList.add('shadows-only');
+  rtSetTool('vig');
 }
 // «Замазать» — кисть с ведением. Переключатель Умная кисть/Штамп прячем: сюда
 // приходят за одним делом, а лишний выбор только сбивает.
@@ -5957,7 +5972,7 @@ function paintPark(){
   rtHideLoupe();
 }
 function rtHideCursor(){
-  if(rtTool === 'flare'){ rtHideLoupe(); return; }   // точка источника в «Засветке» видна всегда
+  if(rtTool === 'flare' || rtTool === 'vig'){ rtHideLoupe(); return; }   // точка источника в «Засветке» видна всегда
   if(rtTool === 'paint'){ rtHideLoupe(); return; }   // кружок с рукой в «Замазать» видны всегда
   rtCursor.classList.remove('on'); paintRigOff(); rtHideLoupe();
 }
@@ -6071,6 +6086,7 @@ rtCanvas.addEventListener('pointerdown', e=>{
     // Источник засветки ставится пальцем: он может быть и за краем кадра, как настоящее
     // солнце сбоку, поэтому точка не ограничена холстом.
     if(!rtPan1 && rtTool === 'flare'){ rtDrawing = true; flareAt(e); }
+    if(!rtPan1 && rtTool === 'vig'){ rtDrawing = true; vigAt(e); }
     if(!rtPan1 && rtTool === 'paint'){
       // у верхнего края кадра кружок ушёл бы за снимок — переворачиваем его вниз
       const cr = rtCanvas.getBoundingClientRect();
@@ -6096,6 +6112,8 @@ rtCanvas.addEventListener('pointermove', e=>{
     rtTx = rtPan1.tx0 + (e.clientX - rtPan1.x0);
     rtTy = rtPan1.ty0 + (e.clientY - rtPan1.y0);
     rtClampPan(); rtApplyTransform();
+  } else if(rtDrawing && rtTool === 'vig' && rtPtrs.size === 1){
+    e.preventDefault(); vigAt(e);
   } else if(rtDrawing && rtTool === 'flare' && rtPtrs.size === 1){
     e.preventDefault(); flareAt(e);
   } else if(rtDrawing && rtPtrs.size === 1){
@@ -6172,27 +6190,30 @@ function rtSetTool(tool){
   rtTool=tool;
   rtSyncPan();         // в «Тенях» руки нет, в кисти есть
   document.querySelectorAll('.rt-mode').forEach(b=>b.classList.toggle('active', b.dataset.tool===tool));
-  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin', bokeh=tool==='bokeh', powder=tool==='powder', tone=tool==='tone', flare=tool==='flare';
-  const ползунок = bags || skin || bokeh || powder || tone || flare;   // режимы «один ползунок вместо кисти»
+  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin', bokeh=tool==='bokeh', powder=tool==='powder', tone=tool==='tone', flare=tool==='flare', vig=tool==='vig';
+  const ползунок = bags || skin || bokeh || powder || tone || flare || vig;   // режимы «один ползунок вместо кисти»
   rtModes.classList.toggle('stamp', stamp);
   rtSrc.classList.toggle('on', stamp); rtTgt.classList.toggle('on', stamp);
   rtSrc.style.pointerEvents=stamp?'auto':'none'; rtTgt.style.pointerEvents=stamp?'auto':'none';
   if(stamp) rtPlaceMarkers();
   document.querySelectorAll('.rt-srow').forEach(r=>{
-    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow' && r.id!=='rtFlareRow')
+    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow' && r.id!=='rtFlareRow' && r.id!=='rtVigRow' && r.id!=='rtVigSizeRow')
       r.style.display = ползунок?'none':'flex'; });
   document.getElementById('rtBagsRow').style.display = bags?'flex':'none';
   document.getElementById('rtSkinRow').style.display = skin?'flex':'none';
   document.getElementById('rtPowderRow').style.display = powder?'flex':'none';
   document.getElementById('rtToneRow').style.display = tone?'flex':'none';
   document.getElementById('rtFlareRow').style.display = flare?'flex':'none';
+  document.getElementById('rtVigRow').style.display = vig?'flex':'none';
+  document.getElementById('rtVigSizeRow').style.display = vig?'flex':'none';
+  document.getElementById('rtVigModes').style.display = vig?'flex':'none';
   document.getElementById('rtFlareKinds').style.display = flare?'flex':'none';
   document.getElementById('rtFlareTints').style.display = flare?'flex':'none';
   document.getElementById('rtSprinkleRow').style.display = bokeh?'flex':'none';
   document.getElementById('rtTints').style.display = bokeh?'flex':'none';
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
-    bags ? 'Консилер' : skin ? 'Кожа' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка'
+    bags ? 'Консилер' : skin ? 'Кожа' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка' : vig ? 'Виньетка'
          : tool==='paint' ? 'Замазать' : 'Ретушь';
   // ряд с «Отменить» — только там, где есть что отменять, то есть у кисти и штампа
   document.getElementById('rtTools').style.display = ползунок ? 'none' : 'flex';
@@ -6219,6 +6240,7 @@ function rtSetTool(tool){
   if(powder) powderEnter();
   if(tone) toneEnter();
   if(flare) flareEnter();
+  if(vig) vigEnter();
 }
 document.querySelectorAll('.rt-mode').forEach(b=> b.onclick=()=>rtSetTool(b.dataset.tool));
 function markerDrag(el,key){
@@ -7509,6 +7531,103 @@ document.getElementById('rtFlare').oninput = e=>{
   flareDraw();
 };
 
+// ─── «Виньетка»: затемнение по краям со своим центром ───
+// В движке виньетка уже есть, но она жёстко по центру кадра и круглая. Живой кадр так
+// не устроен: герой стоит сбоку, кадр горизонтальный, и центр внимания смещён. Здесь
+// центр ставится пальцем, размер задаётся ползунком, а форма ТЯНЕТСЯ ПОД КАДР — на
+// горизонтальном снимке круглая виньетка съедает бока и оставляет пустой верх.
+// Затемнение делаем УМНОЖЕНИЕМ: так сохраняется цвет и не выходит серая муть, а на
+// светлой версии, наоборот, тянем к белому.
+const VIG_MODES = ['тёмная', 'светлая'];
+let vigMode = 'тёмная', vigX = 0.5, vigY = 0.5, vigOrig = null, rtVigOp = null;
+function vigPaint(cv, x, y, amount, size, mode){
+  const W = cv.width, H = cv.height, ctx = cv.getContext('2d');
+  const out = ctx.getImageData(0,0,W,H), od = out.data;
+  const cx = x*W, cy = y*H;
+  // Радиусы по осям кадра: круг на 3:2 обрезал бы именно бока, где обычно и стоят люди.
+  // «Размер» — это размер СВЕТЛОГО пятна, а не тени. При прежнем разбеге (0.35..1.45)
+  // на середине ползунка овал почти совпадал с кадром: замер показал, что края темнели
+  // на 0 единиц, а тень доставала только до углов. Теперь на середине края уже в тени,
+  // а конец шкалы оставляет чистым почти весь кадр.
+  const k = 0.20 + size*0.0075;
+  const rx = W*0.5*k, ry = H*0.5*k;
+  const t = Math.max(0, Math.min(1, amount));
+  const тёмная = mode !== 'светлая';
+  for(let py=0; py<H; py++){
+    const dy = (py-cy)/ry, dy2 = dy*dy;
+    for(let px=0; px<W; px++){
+      const dx = (px-cx)/rx;
+      const d = Math.sqrt(dx*dx + dy2);
+      if(d <= 1) continue;
+      // мягкий выход: от края овала до полутора радиусов
+      let f = Math.min(1, (d-1)/0.62);
+      f = f*f*(3-2*f);                        // сглаживание, чтобы не было кольца
+      const a = f*t;
+      const i = (py*W+px)*4;
+      if(тёмная){
+        const k = 1 - a*0.82;
+        od[i] *= k; od[i+1] *= k; od[i+2] *= k;
+      } else {
+        od[i]   = clamp(od[i]   + (255-od[i]  )*a*0.72);
+        od[i+1] = clamp(od[i+1] + (255-od[i+1])*a*0.72);
+        od[i+2] = clamp(od[i+2] + (255-od[i+2])*a*0.72);
+      }
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+}
+function vigRun(cv, op){ if(op && op.amount) vigPaint(cv, op.x, op.y, op.amount, op.size, op.mode); }
+function vigDraw(){
+  const ctx = rtCanvas.getContext('2d');
+  const v = +document.getElementById('rtVig').value;
+  const s = +document.getElementById('rtVigSize').value;
+  if(vigOrig) ctx.putImageData(vigOrig, 0, 0);
+  if(v) vigPaint(rtCanvas, vigX, vigY, v/100, s, vigMode);
+  rtVigOp = v ? { t:'vig', x:vigX, y:vigY, amount:v/100, size:s, mode:vigMode } : null;
+  vigMark();
+}
+function vigMark(){
+  const ar = document.getElementById('rtArea').getBoundingClientRect();
+  const r = rtCanvas.getBoundingClientRect();
+  rtCursor.style.left = (r.left - ar.left + vigX*r.width) + 'px';
+  rtCursor.style.top  = (r.top  - ar.top  + vigY*r.height) + 'px';
+  rtCursor.style.width = '30px'; rtCursor.style.height = '30px';
+  rtCursor.classList.add('on');
+}
+function vigAt(e){
+  const r = rtCanvas.getBoundingClientRect();
+  vigX = Math.max(0, Math.min(1, (e.clientX - r.left)/r.width));
+  vigY = Math.max(0, Math.min(1, (e.clientY - r.top) /r.height));
+  vigDraw();
+}
+function vigChips(){
+  const host = document.getElementById('rtVigModes');
+  host.innerHTML = '';
+  VIG_MODES.forEach(m=>{
+    const b = document.createElement('button');
+    b.className = 'rt-kind' + (m === vigMode ? ' on' : '');
+    b.textContent = m;
+    b.onclick = ()=>{ if(m===vigMode) return; vigMode = m; vigChips(); vigDraw(); };
+    host.appendChild(b);
+  });
+}
+function vigEnter(){
+  const v = document.getElementById('rtVig'), s = document.getElementById('rtVigSize');
+  v.value = 0; document.getElementById('rtVigV').textContent = '0';
+  s.value = 55; document.getElementById('rtVigSizeV').textContent = '55';
+  vigOrig = rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height);
+  vigX = 0.5; vigY = 0.5; rtVigOp = null;
+  vigChips();
+  document.getElementById('rtTop').textContent = 'Виньетка';
+  requestAnimationFrame(vigMark);
+}
+document.getElementById('rtVig').oninput = e=>{
+  rtCmpOff(); document.getElementById('rtVigV').textContent = e.target.value; vigDraw();
+};
+document.getElementById('rtVigSize').oninput = e=>{
+  rtCmpOff(); document.getElementById('rtVigSizeV').textContent = e.target.value; vigDraw();
+};
+
 let bokehOrig = null;
 // Размытие фона убрано: жене не понравилось, а модель ради него тянулась с сети и
 // не справлялась с тем, что рядом с человеком стоит не человек. Россыпи ничего
@@ -7664,8 +7783,8 @@ document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
   rtCmpOff();          // применяем результат, а не то, что показывает шторка
   sourceCanvas.getContext('2d').drawImage(rtCanvas, 0, 0);   // bake retouch into the source
-  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp); if(rtPowderOp) editOps.push(rtPowderOp); if(rtToneOp) editOps.push(rtToneOp); if(rtFlareOp) editOps.push(rtFlareOp); if(rtBokehOp) editOps.push(rtBokehOp);   // те же правки повторим на оригинале
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null;
+  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp); if(rtPowderOp) editOps.push(rtPowderOp); if(rtToneOp) editOps.push(rtToneOp); if(rtFlareOp) editOps.push(rtFlareOp); if(rtVigOp) editOps.push(rtVigOp); if(rtBokehOp) editOps.push(rtBokehOp);   // те же правки повторим на оригинале
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; rtVigOp = null;
   editedCanvas = null; makePreview(); buildChips(); buildHomeLooks(); render();
   closeRetouch(); goEditor();
 };
