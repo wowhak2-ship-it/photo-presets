@@ -6853,36 +6853,23 @@ function powderPrepare(faces, cv){
     if(!sn) continue;
     const кожаR=sr/sn, кожаG=sg/sn, кожаB=sb/sn;
 
-    const размыть = (src, r)=>{ const c=document.createElement('canvas'); c.width=bw; c.height=bh;
-      const q=c.getContext('2d'); q.filter='blur('+Math.max(2,Math.round(r))+'px)'; q.drawImage(src,0,0);
-      return q; };
-    const кадр = document.createElement('canvas'); кадр.width=bw; кадр.height=bh;
-    кадр.getContext('2d').putImageData(orig, 0, 0);
-    const грубо = размыть(кадр, faceW*0.10).getImageData(0,0,bw,bh).data;
-
-    // Блики и всё, что не кожа, ПОДМЕНЯЕМ на грубую оценку кожи — не вырезаем.
-    // Вырезание с заращиванием (как в консилере) здесь дало квадратные пятна на лбу:
-    // там дыры крупные, и канвас на почти прозрачных местах отдаёт рваный цвет — на
-    // мелкой зоне под глазом это незаметно, на пол-лица вылезло сразу. Подмена ничего
-    // прозрачного не оставляет, поэтому размытие получается ровным.
-    const dc = document.createElement('canvas'); dc.width=bw; dc.height=bh;
-    const dx2 = dc.getContext('2d');
-    const донор = new ImageData(new Uint8ClampedArray(od), bw, bh), pd = донор.data;
-    for(let i=0;i<pd.length;i+=4){
-      const R=pd[i],G=pd[i+1],B=pd[i+2];
-      const dr=R-кожаR, dg=G-кожаG, db=B-кожаB, l=(dr+dg+db)/3;
-      const чужой = Math.abs(dr-l)+Math.abs(dg-l)+Math.abs(db-l) > 44 || mask[i+3] < 40;
-      if(чужой){ pd[i]=кожаR; pd[i+1]=кожаG; pd[i+2]=кожаB; continue; }
-      const gl = (грубо[i]+грубо[i+1]+грубо[i+2])/3, ll = (R+G+B)/3;
-      if(ll > gl && ll > 1){ const k = gl/ll; pd[i]=R*k; pd[i+1]=G*k; pd[i+2]=B*k; }  // светлее оценки — это блик
+    // ПРОСТРАНСТВЕННОЙ подложки здесь быть не должно. Я пробовал: строил «кожу без
+    // бликов» и гасил всё, что её ярче. На лице Артура работало, а на дочери дало серое
+    // пятно во всю щёку — потому что на масштабе полщеки блик и обычное освещение
+    // неразличимы в принципе, и подложка объявила бликом почти всё лицо.
+    // Поэтому смотрим не НА МЕСТО, а НА ЯРКОСТЬ: сжимаем верх собственного тонального
+    // диапазона лица. Самое блестящее опускается сильнее всего, обычная кожа — почти
+    // нет. Такое преобразование зависит только от яркости пикселя, значит соседи с
+    // похожей яркостью получают похожую правку — пятно не может возникнуть по построению.
+    const гист = new Uint32Array(256); let n = 0;
+    for(let i=0;i<od.length;i+=4){
+      if(mask[i+3] < 128) continue;
+      гист[Math.max(0, Math.min(255, Math.round((od[i]+od[i+1]+od[i+2])/3)))]++; n++;
     }
-    dx2.putImageData(донор, 0, 0);
-    const bc = document.createElement('canvas'); bc.width=bw; bc.height=bh;
-    const bq = bc.getContext('2d');
-    bq.filter = 'blur('+Math.max(3, Math.round(faceW*0.05))+'px)';
-    bq.drawImage(dc, 0, 0);
-    const base = bq.getImageData(0,0,bw,bh).data;
-    zones.push({bx,by,bw,bh,mask,orig,base,faceW,кожаR,кожаG,кожаB});
+    if(!n) continue;
+    const квантиль = p => { let s=0; for(let v=0;v<256;v++){ s+=гист[v]; if(s>=n*p) return v; } return 255; };
+    const низ = квантиль(0.70), верх = Math.max(квантиль(0.985), низ+10);
+    zones.push({bx,by,bw,bh,mask,orig,faceW,кожаR,кожаG,кожаB,низ,верх});
   }
   if(cv !== rtCanvas) return zones.length ? zones : null;
   powderData = zones.length ? zones : null;
@@ -6894,28 +6881,26 @@ function powderApply(t, cv, zones){
   const ctx = cv.getContext('2d');
   for(const z of zones){
     const out = ctx.getImageData(z.bx, z.by, z.bw, z.bh), od = out.data;
-    const o = z.orig.data, b = z.base, m = z.mask;
+    const o = z.orig.data, m = z.mask;
+    const низ = z.низ, диапазон = Math.max(10, z.верх - z.низ);
+    // тон кожи, к которому подтягиваем цвет: блик его смывает, и без возврата
+    // приглушённое место выглядит серым
+    const кл = (z.кожаR + z.кожаG + z.кожаB)/3 || 1;
     for(let i=0;i<od.length;i+=4){
       const ag = m[i+3]/255; if(ag < 0.02) continue;
       const R=o[i], G=o[i+1], B=o[i+2];
-      const bR=b[i], bG=b[i+1], bB=b[i+2];
-      const lum=(R+G+B)/3, bl=(bR+bG+bB)/3;
-      const свыше = lum - bl;
-      if(свыше <= 7) { continue; }                       // не ярче кожи — это и не блик
-      // Второй признак: блик СМЫВАЕТ цвет. Насыщенность падает — значит поверх кожи
-      // лёг посторонний свет. Если цвет держится, это просто светлая кожа, не трогаем.
-      const c0 = Math.max(R,G,B)-Math.min(R,G,B), cb = Math.max(bR,bG,bB)-Math.min(bR,bG,bB);
-      const смыт = Math.max(0, Math.min(1, (cb - c0 + 2) / 10));
-      const сила = Math.max(0, Math.min(1, (свыше - 7) / 18)) * (0.35 + 0.65*смыт);
-      const a = ag * t * сила;
-      if(a < 0.004) continue;
-      const цель = bl + свыше*(1 - 0.85*a);               // приглушаем, но не в ноль
-      // Цвет ведём к коже тем сильнее, чем сильнее блик её смыл: иначе останется
-      // серое пятно — приглушённое по яркости, но всё ещё бесцветное.
-      const k = цель/Math.max(1, lum), kb = цель/Math.max(1, bl), см = a*0.75;
-      od[i]   = clamp(R*k + (bR*kb - R*k)*см);
-      od[i+1] = clamp(G*k + (bG*kb - G*k)*см);
-      od[i+2] = clamp(B*k + (bB*kb - B*k)*см);
+      const lum=(R+G+B)/3;
+      if(lum <= низ) continue;                       // тёмнее верхней трети — не блеск
+      const u = Math.min(1, (lum - низ) / диапазон);  // 0 у обычной кожи, 1 у самого блестящего
+      const a = ag * t;
+      const сжатие = a * (0.12 + 0.53*u);             // чем ярче, тем сильнее матируем
+      const цель = lum - (lum - низ) * сжатие;
+      const k = цель / lum;
+      // Возврат цвета: чем ярче было место, тем сильнее свет смыл с него кожу.
+      const см = a * u * 0.4, kk = цель / кл;
+      od[i]   = clamp(R*k + (z.кожаR*kk - R*k)*см);
+      od[i+1] = clamp(G*k + (z.кожаG*kk - G*k)*см);
+      od[i+2] = clamp(B*k + (z.кожаB*kk - B*k)*см);
     }
     ctx.putImageData(out, z.bx, z.by);
   }
