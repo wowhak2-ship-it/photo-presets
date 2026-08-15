@@ -4,7 +4,7 @@
   "pack": {
     "id": "vitrina-6",
     "name": "Витрина стилей",
-    "count": 6,
+    "count": 7,
     "author": "Пресеты"
   },
   "presets": [
@@ -487,6 +487,16 @@
           ]
         ]
       },
+      "hsl": null
+    },
+    {
+      "name": "Серебро",
+      "base": "Ч/Б",
+      "intensity": 100,
+      "adjust": { "exposure": 0, "contrast": 13, "temp": 0, "saturation": 0, "grain": 88, "bloom": 0,
+                  "shadows": 9, "highlights": 7, "tint": 0, "splitSh": 0, "splitHi": 0,
+                  "vibrance": 0, "vignette": 12 },
+      "curve": { "rgb": [[0,5],[44,39],[128,123],[198,196],[255,217]] },
       "hsl": null
     }
   ]
