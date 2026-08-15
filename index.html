@@ -731,7 +731,15 @@
   .pack-by{font-family:var(--mono); font-size:9px; letter-spacing:.14em; color:var(--dim);
     margin-top:3px; text-transform:uppercase;}
   .pack-ab{font-size:12.5px; line-height:1.45; color:var(--faint); margin-top:7px;}
-  .pack-foot{display:flex; align-items:center; gap:10px; margin-top:auto; padding-top:11px;}
+  /* Кнопок в подвале стало две — на узком экране им нужно право перенестись,
+     иначе «Удалить» уезжает за край карточки. */
+  .pack-foot{display:flex; align-items:center; gap:10px; margin-top:auto; padding-top:11px; flex-wrap:wrap;}
+  .pack-acts{display:flex; align-items:center; gap:8px; margin-left:auto;}
+  .pack-acts .pack-buy{margin-left:0;}
+  .pack-del{background:transparent; color:var(--dim); border:1px solid var(--line-2);
+    font-size:12.5px; font-weight:700; letter-spacing:.03em; padding:8px 13px;
+    border-radius:11px; cursor:pointer;}
+  .pack-del:active{transform:scale(.98);}
   .pack-price{font-family:var(--mono); font-size:13px; font-weight:600; color:var(--text);}
   .pack-price.free{font-size:9px; letter-spacing:.16em; color:#7FBF6A;
     border:1px solid rgba(127,191,106,.45); background:rgba(127,191,106,.10);
@@ -3277,6 +3285,13 @@ const MYP = {
     }));
   },
   remove(id){ return this.write(this.all().filter(p=> p.id !== id)); },
+  // Снести набор целиком. Поштучно это было десять касаний на один набор — и после
+  // каждого лента перерисовывалась заново.
+  removePack(pack){
+    const было = this.all(), стало = было.filter(p=> p.pack !== pack);
+    this.write(стало);
+    return было.length - стало.length;
+  },
   rename(id, name){ const l = this.all(), p = l.find(x=> x.id === id); if(p) p.name = name; return this.write(l); }
 };
 
@@ -3886,6 +3901,9 @@ const PACKS = {
                 return Array.isArray(v) ? v : []; }catch(_){ return []; } },
   own(id){ if(!id) return; const l = this.owned();
            if(!l.includes(id)){ l.push(id); try{ localStorage.setItem('packsOwned', JSON.stringify(l)); }catch(_){} } },
+  // Набор снят — витрина должна снова предлагать «Установить», а не «Обновить»
+  disown(id){ try{ localStorage.setItem('packsOwned',
+                     JSON.stringify(this.owned().filter(x=> x !== id))); }catch(_){} },
   cached(){ try{ const v = JSON.parse(localStorage.getItem('packsCache') || 'null');
                  return v && Array.isArray(v.packs) ? v.packs : null; }catch(_){ return null; } },
   async load(){
@@ -3941,6 +3959,9 @@ function packCard(p){
     // Кнопка есть и у уже стоящего набора: это единственный способ вернуть удалённый вид.
     // Повторная установка не плодит копии — importFrom обновляет свои виды на месте.
     const целиком = owned && вЛенте >= (p.count || вЛенте);
+    // Кнопки живут в своей группе: у «Обновить» был отступ auto, и на узком экране
+    // он съедал всю строку — «Удалить» переносилось вниз и уезжало к левому краю.
+    const acts = document.createElement('div'); acts.className = 'pack-acts';
     const go = document.createElement('button'); go.className = 'pack-buy';
     go.textContent = !owned ? 'Установить' : (целиком ? 'Обновить' : 'Вернуть');
     go.onclick = async ()=>{
@@ -3958,7 +3979,23 @@ function packCard(p){
         toast('Не удалось поставить набор');
       }
     };
-    foot.appendChild(go);
+    acts.appendChild(go);
+    if(owned){
+      // Раньше набор снимался только по одному виду за раз — на семи видах это семь
+      // подтверждений. Здесь он уходит целиком, вместе с отметкой «ваш».
+      const del = document.createElement('button');
+      del.className = 'pack-del'; del.textContent = 'Удалить';
+      del.onclick = async ()=>{
+        if(!await askConfirm('Убрать набор «' + (p.name || 'Набор') + '» из ленты? Видов: ' + вЛенте + '.', 'Удалить')) return;
+        const снято = MYP.removePack(p.id);
+        PACKS.disown(p.id);
+        renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
+        toast(снято ? ('Убрано видов: ' + снято) : 'Набор убран');
+        renderPacks();
+      };
+      acts.appendChild(del);
+    }
+    foot.appendChild(acts);
   } else if(p.buy){
     const go = document.createElement('button'); go.className = 'pack-buy'; go.textContent = 'Купить';
     go.onclick = ()=> window.open(p.buy, '_blank', 'noopener');
