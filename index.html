@@ -1231,6 +1231,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3.4"/><path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.4 5.4l2.1 2.1M16.5 16.5l2.1 2.1M18.6 5.4l-2.1 2.1M7.5 16.5l-2.1 2.1"/></svg>
       <b>Засветка</b><i>солнце в объектив</i>
     </button>
+    <button class="ht" data-go="hal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="6.2" opacity=".55"/><circle cx="12" cy="12" r="9.4" opacity=".28"/></svg>
+      <b>Свечение</b><i>ореол как на плёнке</i>
+    </button>
     <button class="ht" data-go="vig">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.6" y="4.6" width="18.8" height="14.8" rx="2"/><ellipse cx="12" cy="12" rx="6.4" ry="4.8"/></svg>
       <b>Виньетка</b><i>затемнить края</i>
@@ -1783,6 +1787,9 @@
       <div class="rt-srow"><span>Жёсткость</span><input type="range" id="rtHard" min="0" max="100" value="45"><b id="rtHardV">45</b></div>
       <div class="rt-srow"><span>Сила</span><input type="range" id="rtStr" min="20" max="100" value="100"><b id="rtStrV">100</b></div>
       <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Сила</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
+      <div class="rt-srow" id="rtHalRow" style="display:none"><span>Сила</span><input type="range" id="rtHal" min="0" max="100" value="0"><b id="rtHalV">0</b></div>
+      <div class="rt-srow" id="rtHalSpreadRow" style="display:none"><span>Разлив</span><input type="range" id="rtHalSpread" min="0" max="100" value="45"><b id="rtHalSpreadV">45</b></div>
+      <div class="rt-tints" id="rtHalTints" style="display:none"></div>
       <div class="rt-srow" id="rtVigRow" style="display:none"><span>Сила</span><input type="range" id="rtVig" min="0" max="100" value="0"><b id="rtVigV">0</b></div>
       <div class="rt-srow" id="rtVigSizeRow" style="display:none"><span>Размер</span><input type="range" id="rtVigSize" min="0" max="100" value="55"><b id="rtVigSizeV">55</b></div>
       <div class="rt-kinds" id="rtVigModes" style="display:none"></div>
@@ -2500,6 +2507,8 @@ function buildFullSource(){
       bagsRun(own(), op.faces, op.amount);
     } else if(op.t === 'skin'){
       skinRun(own(), op.faces, op.amount);
+    } else if(op.t === 'hal'){
+      halRun(own(), op);
     } else if(op.t === 'vig'){
       vigRun(own(), op);
     } else if(op.t === 'flare'){
@@ -3042,6 +3051,7 @@ function applyPendingTool(){
   if(t==='tone'){ openTone(); return; }
   if(t==='flare'){ openFlare(); return; }
   if(t==='vig'){ openVig(); return; }
+  if(t==='hal'){ openHal(); return; }
   if(t==='crop'){ openCrop(); return; }
   if(t==='curve'){ goEditor(); setSection('curve'); return; }
   if(t==='hsl'){ goEditor(); setSection('color'); return; }
@@ -5864,7 +5874,7 @@ function openRetouch(){
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtFaces = null; skinData = null; powderData = null; toneData = null;
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtHalOp = null; halOrig = null; rtFaces = null; skinData = null; powderData = null; toneData = null;
   for(const k in skinFace) delete skinFace[k];   // новый снимок — настройки лиц с нуля
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
@@ -5910,6 +5920,11 @@ function openVig(){
   openRetouch();
   retouchEl.classList.add('shadows-only');
   rtSetTool('vig');
+}
+function openHal(){
+  openRetouch();
+  retouchEl.classList.add('shadows-only');
+  rtSetTool('hal');
 }
 // «Замазать» — кисть с ведением. Переключатель Умная кисть/Штамп прячем: сюда
 // приходят за одним делом, а лишний выбор только сбивает.
@@ -6190,14 +6205,14 @@ function rtSetTool(tool){
   rtTool=tool;
   rtSyncPan();         // в «Тенях» руки нет, в кисти есть
   document.querySelectorAll('.rt-mode').forEach(b=>b.classList.toggle('active', b.dataset.tool===tool));
-  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin', bokeh=tool==='bokeh', powder=tool==='powder', tone=tool==='tone', flare=tool==='flare', vig=tool==='vig';
-  const ползунок = bags || skin || bokeh || powder || tone || flare || vig;   // режимы «один ползунок вместо кисти»
+  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin', bokeh=tool==='bokeh', powder=tool==='powder', tone=tool==='tone', flare=tool==='flare', vig=tool==='vig', hal=tool==='hal';
+  const ползунок = bags || skin || bokeh || powder || tone || flare || vig || hal;   // режимы «один ползунок вместо кисти»
   rtModes.classList.toggle('stamp', stamp);
   rtSrc.classList.toggle('on', stamp); rtTgt.classList.toggle('on', stamp);
   rtSrc.style.pointerEvents=stamp?'auto':'none'; rtTgt.style.pointerEvents=stamp?'auto':'none';
   if(stamp) rtPlaceMarkers();
   document.querySelectorAll('.rt-srow').forEach(r=>{
-    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow' && r.id!=='rtFlareRow' && r.id!=='rtVigRow' && r.id!=='rtVigSizeRow')
+    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow' && r.id!=='rtFlareRow' && r.id!=='rtVigRow' && r.id!=='rtVigSizeRow' && r.id!=='rtHalRow' && r.id!=='rtHalSpreadRow')
       r.style.display = ползунок?'none':'flex'; });
   document.getElementById('rtBagsRow').style.display = bags?'flex':'none';
   document.getElementById('rtSkinRow').style.display = skin?'flex':'none';
@@ -6207,13 +6222,16 @@ function rtSetTool(tool){
   document.getElementById('rtVigRow').style.display = vig?'flex':'none';
   document.getElementById('rtVigSizeRow').style.display = vig?'flex':'none';
   document.getElementById('rtVigModes').style.display = vig?'flex':'none';
+  document.getElementById('rtHalRow').style.display = hal?'flex':'none';
+  document.getElementById('rtHalSpreadRow').style.display = hal?'flex':'none';
+  document.getElementById('rtHalTints').style.display = hal?'flex':'none';
   document.getElementById('rtFlareKinds').style.display = flare?'flex':'none';
   document.getElementById('rtFlareTints').style.display = flare?'flex':'none';
   document.getElementById('rtSprinkleRow').style.display = bokeh?'flex':'none';
   document.getElementById('rtTints').style.display = bokeh?'flex':'none';
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
-    bags ? 'Консилер' : skin ? 'Кожа' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка' : vig ? 'Виньетка'
+    bags ? 'Консилер' : skin ? 'Кожа' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка' : vig ? 'Виньетка' : hal ? 'Свечение'
          : tool==='paint' ? 'Замазать' : 'Ретушь';
   // ряд с «Отменить» — только там, где есть что отменять, то есть у кисти и штампа
   document.getElementById('rtTools').style.display = ползунок ? 'none' : 'flex';
@@ -6241,6 +6259,7 @@ function rtSetTool(tool){
   if(tone) toneEnter();
   if(flare) flareEnter();
   if(vig) vigEnter();
+  if(hal) halEnter();
 }
 document.querySelectorAll('.rt-mode').forEach(b=> b.onclick=()=>rtSetTool(b.dataset.tool));
 function markerDrag(el,key){
@@ -7628,6 +7647,94 @@ document.getElementById('rtVigSize').oninput = e=>{
   rtCmpOff(); document.getElementById('rtVigSizeV').textContent = e.target.value; vigDraw();
 };
 
+// ─── «Свечение»: ореол вокруг светлого, как на плёнке ───
+// На плёнке свет проходит сквозь эмульсию, отражается от основы и рассеивается обратно —
+// вокруг ярких мест встаёт ореол. Он КРАСНЫЙ: противоореольный слой держит синий и зелёный,
+// а красный проходит дальше всех. Поэтому одним белым размытием не обойтись — это будет
+// обычное «свечение», которое у нас уже есть в движке. Здесь ореол цветной и ложится ТОЛЬКО
+// наружу, в тёмное вокруг источника: внутри самого пересвета его не видно, там и так бело.
+const HAL_TINTS = { 'красное': [255, 96, 58], 'янтарное': [255, 158, 74],
+                    'розовое': [255, 108, 132], 'белое': [255, 226, 208] };
+let halTint = 'красное', halOrig = null, rtHalOp = null;
+function halPaint(cv, amount, spread, tint){
+  const W = cv.width, H = cv.height, ctx = cv.getContext('2d');
+  const c = HAL_TINTS[tint] || HAL_TINTS['красное'];
+  const src = ctx.getImageData(0,0,W,H), sd = src.data;
+  // 1) вытаскиваем только пересветы — мягким порогом, чтобы не было ступеньки по краю
+  const hc = document.createElement('canvas'); hc.width=W; hc.height=H;
+  const hx = hc.getContext('2d');
+  const hi = hx.createImageData(W,H), hd = hi.data;
+  const порог = 176;
+  for(let i=0;i<sd.length;i+=4){
+    const l = (sd[i]+sd[i+1]+sd[i+2])/3;
+    let e = (l - порог)/(255 - порог);
+    if(e <= 0) continue;
+    e = e*Math.sqrt(e);                       // ядро ореола — самые яркие места, но без провала середины
+    hd[i] = hd[i+1] = hd[i+2] = 255; hd[i+3] = Math.round(Math.min(1,e)*255);
+  }
+  hx.putImageData(hi, 0, 0);
+  // 2) разливаем
+  const bc = document.createElement('canvas'); bc.width=W; bc.height=H;
+  const bx2 = bc.getContext('2d');
+  const r = Math.max(2, Math.round(Math.hypot(W,H) * (0.004 + spread*0.00042)));
+  bx2.filter = 'blur('+r+'px)'; bx2.drawImage(hc, 0, 0);
+  const halo = bx2.getImageData(0,0,W,H).data;
+  // 3) кладём наружу: чем темнее место, тем ореол заметнее — как на плёнке.
+  // УСИЛЕНИЕ обязательно: размытие сохраняет общую энергию, поэтому яркая точка,
+  // размазанная по кругу в десятки пикселей, даёт доли процента прозрачности —
+  // на замере это было +0.4 единицы яркости, то есть ничего. Чем шире разлив,
+  // тем сильнее разбавление, поэтому усиление растёт вместе с радиусом.
+  const усиление = 3.2 + r*0.22;
+  const t = Math.max(0, Math.min(1, amount));
+  for(let i=0;i<sd.length;i+=4){
+    const h = Math.min(1, halo[i+3]/255 * усиление); if(h < 0.004) continue;
+    const l = (sd[i]+sd[i+1]+sd[i+2])/3;
+    const снаружи = 1 - Math.min(1, Math.max(0, (l - порог)/(255 - порог)));  // внутри пересвета гасим
+    const a = h * t * снаружи;
+    if(a < 0.004) continue;
+    // экранное наложение: светлое не выбивает в белое, а плавно подходит к нему
+    sd[i]   = clamp(255 - (255-sd[i])   * (255 - c[0]*a) / 255);
+    sd[i+1] = clamp(255 - (255-sd[i+1]) * (255 - c[1]*a) / 255);
+    sd[i+2] = clamp(255 - (255-sd[i+2]) * (255 - c[2]*a) / 255);
+  }
+  ctx.putImageData(src, 0, 0);
+}
+function halRun(cv, op){ if(op && op.amount) halPaint(cv, op.amount, op.spread, op.tint); }
+function halDraw(){
+  const ctx = rtCanvas.getContext('2d');
+  const v = +document.getElementById('rtHal').value;
+  const s = +document.getElementById('rtHalSpread').value;
+  if(halOrig) ctx.putImageData(halOrig, 0, 0);
+  if(v) halPaint(rtCanvas, v/100, s, halTint);
+  rtHalOp = v ? { t:'hal', amount:v/100, spread:s, tint:halTint } : null;
+}
+function halChips(){
+  const host = document.getElementById('rtHalTints');
+  host.innerHTML = '';
+  Object.keys(HAL_TINTS).forEach(n=>{
+    const b = document.createElement('button');
+    b.className = 'rt-tint' + (n === halTint ? ' on' : '');
+    b.style.background = 'rgb('+HAL_TINTS[n].join(',')+')';
+    b.title = n;
+    b.onclick = ()=>{ if(n===halTint) return; halTint = n; halChips(); halDraw(); };
+    host.appendChild(b);
+  });
+}
+function halEnter(){
+  const v = document.getElementById('rtHal'), s = document.getElementById('rtHalSpread');
+  v.value = 0; document.getElementById('rtHalV').textContent = '0';
+  s.value = 45; document.getElementById('rtHalSpreadV').textContent = '45';
+  halOrig = rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height);
+  rtHalOp = null; halChips();
+  document.getElementById('rtTop').textContent = 'Свечение';
+}
+document.getElementById('rtHal').oninput = e=>{
+  rtCmpOff(); document.getElementById('rtHalV').textContent = e.target.value; halDraw();
+};
+document.getElementById('rtHalSpread').oninput = e=>{
+  rtCmpOff(); document.getElementById('rtHalSpreadV').textContent = e.target.value; halDraw();
+};
+
 let bokehOrig = null;
 // Размытие фона убрано: жене не понравилось, а модель ради него тянулась с сети и
 // не справлялась с тем, что рядом с человеком стоит не человек. Россыпи ничего
@@ -7783,8 +7890,8 @@ document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
   rtCmpOff();          // применяем результат, а не то, что показывает шторка
   sourceCanvas.getContext('2d').drawImage(rtCanvas, 0, 0);   // bake retouch into the source
-  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp); if(rtPowderOp) editOps.push(rtPowderOp); if(rtToneOp) editOps.push(rtToneOp); if(rtFlareOp) editOps.push(rtFlareOp); if(rtVigOp) editOps.push(rtVigOp); if(rtBokehOp) editOps.push(rtBokehOp);   // те же правки повторим на оригинале
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; rtVigOp = null;
+  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp); if(rtPowderOp) editOps.push(rtPowderOp); if(rtToneOp) editOps.push(rtToneOp); if(rtFlareOp) editOps.push(rtFlareOp); if(rtVigOp) editOps.push(rtVigOp); if(rtHalOp) editOps.push(rtHalOp); if(rtBokehOp) editOps.push(rtBokehOp);   // те же правки повторим на оригинале
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; rtVigOp = null; rtHalOp = null;
   editedCanvas = null; makePreview(); buildChips(); buildHomeLooks(); render();
   closeRetouch(); goEditor();
 };
