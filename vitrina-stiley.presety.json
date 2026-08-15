@@ -493,7 +493,7 @@
       "name": "Серебро",
       "base": "Ч/Б",
       "intensity": 100,
-      "adjust": { "exposure": 6, "contrast": 12, "temp": 0, "saturation": 0, "grain": 100, "bloom": 0,
+      "adjust": { "exposure": 6, "contrast": 12, "temp": 0, "saturation": 0, "grain": 24, "bloom": 0,
                   "shadows": 12, "highlights": 9, "tint": 0, "splitSh": 0, "splitHi": 0,
                   "vibrance": 0, "vignette": 9 },
       "curve": { "rgb": [[0,2],[40,32],[128,138],[198,206],[255,219]] },
