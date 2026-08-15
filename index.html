@@ -1196,7 +1196,7 @@
     </button>
     <button class="ht" data-go="shadows">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5s3.6-5 9-5 9 5 9 5-3.6 5-9 5-9-5-9-5z"/><circle cx="12" cy="10.5" r="2.3" fill="currentColor" stroke="none"/><path d="M7 17.6c1.8 1.5 8.2 1.5 10 0"/></svg>
-      <b>Тени</b><i>под глазами</i>
+      <b>Консилер</b><i>тени под глазами</i>
     </button>
     <button class="ht" data-go="skin">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.9 0 7 3.1 7 7v3.4c0 4.2-3.1 7.6-7 7.6s-7-3.4-7-7.6V10c0-3.9 3.1-7 7-7z"/><path d="M9.2 10.4h.01M14.8 10.4h.01M12 14.6h.01"/></svg>
@@ -1753,7 +1753,7 @@
       <div class="rt-srow"><span>Размер</span><input type="range" id="rtSize" min="10" max="70" value="22"><b id="rtSizeV">22</b></div>
       <div class="rt-srow"><span>Жёсткость</span><input type="range" id="rtHard" min="0" max="100" value="45"><b id="rtHardV">45</b></div>
       <div class="rt-srow"><span>Сила</span><input type="range" id="rtStr" min="20" max="100" value="100"><b id="rtStrV">100</b></div>
-      <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Тени</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
+      <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Сила</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
       <div class="rt-srow" id="rtSprinkleRow" style="display:none"><span>Россыпь</span><input type="range" id="rtSprinkle" min="0" max="100" value="0"><b id="rtSprinkleV">0</b></div>
       <div class="rt-shapes" id="rtShapes" style="display:none"></div>
       <div class="rt-tints" id="rtTints" style="display:none"></div>
@@ -6098,7 +6098,7 @@ function rtSetTool(tool){
   document.getElementById('rtTints').style.display = bokeh?'flex':'none';
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
-    bags ? 'Тени' : skin ? 'Кожа' : bokeh ? 'Боке' : tool==='paint' ? 'Замазать' : 'Ретушь';
+    bags ? 'Консилер' : skin ? 'Кожа' : bokeh ? 'Боке' : tool==='paint' ? 'Замазать' : 'Ретушь';
   // ряд с «Отменить» — только там, где есть что отменять, то есть у кисти и штампа
   document.getElementById('rtTools').style.display = ползунок ? 'none' : 'flex';
   // Кружки выбора лица принадлежат «Теням» и «Коже». Раньше их никто не убирал, и
@@ -6190,8 +6190,12 @@ function bagsRegions(lms, W, H){
     // за эту границу и говорил «разницы нет».
     // Теперь сила идёт по настоящей глубине тени, светлое внутри зоны не трогается вовсе,
     // поэтому зону раскрываем на весь мешок и вниз к слёзной борозде.
-    const bandCx = ecx + dx*eyeW*0.32, bandCy = ecy + dy*eyeW*0.32;
-    const rx = eyeW*0.64, ry = eyeW*0.34, rot = Math.atan2(ay, ax);
+    // Вниз зона идёт до 0.9 ширины глаза: мешок не кончается на складке, ниже неё лежит
+    // ещё и его собственная тень, и если её не тронуть — видно ровно эту границу.
+    // Раньше такой размах давал плоские пятна на щеке, теперь это невозможно: гасится
+    // только полоса ТЕМНЕЕ собственной кожи, а где тени нет — не меняется ничего.
+    const bandCx = ecx + dx*eyeW*0.42, bandCy = ecy + dy*eyeW*0.42;
+    const rx = eyeW*0.68, ry = eyeW*0.46, rot = Math.atan2(ay, ax);
     const poly = [];
     for(let i=0;i<20;i++){
       const t = i/20*Math.PI*2, lx = Math.cos(t)*rx, ly = Math.sin(t)*ry;
@@ -6274,52 +6278,50 @@ function bagsBuildZone(r, cv){
   // Отсюда и плоские пятна, из-за которых зону когда-то ужали до ленточки.
   // Считаем размах по самой зоне: четверть самых светлых мест не трогаем совсем, самое
   // тёмное получает полную силу. Инструмент подстраивается под кадр и под лицо сам.
-  const гист = new Uint32Array(256); let всего = 0;
-  for(let i=0;i<mask.length;i+=4){
-    if(mask[i+3] < 76) continue;                        // считаем только по сердцевине зоны
-    const d = cheekLum - (darkMap[i]+darkMap[i+1]+darkMap[i+2])/3;
-    гист[Math.max(0, Math.min(255, Math.round(d)))]++; всего++;
+  // ПОДЛОЖКА — освещение лица БЕЗ круга под глазом, но С естественной впадиной глазницы.
+  // Пробовал заращивать зону соседней кожей, как дыру от человека в боке: круг уходил,
+  // но вместе с ним и своя тень глазницы — она от природы темнее щеки, а заплатка росла
+  // как раз со щеки и виска. Замер: подложка выходила на 15–21 единицу светлее кадра,
+  // и лицо читалось набелённым. На тёмной коже это било бы ещё заметнее.
+  // Поэтому подложку берём не издалека, а РАЗМЫТИЕМ самой этой области: круг размером
+  // с полглаза в таком размытии растворяется, а перепад света по лицу остаётся. Тогда
+  // осветлить ярче собственного уровня кожи здесь невозможно в принципе.
+  // Донором может быть только кожа: рядом бывает белая стена, волосы, оправа — их
+  // вырезаем и заращиваем, иначе размытие затянет их светлоту внутрь лица.
+  const dc2 = document.createElement('canvas'); dc2.width=bw; dc2.height=bh;
+  const d2 = dc2.getContext('2d');
+  d2.drawImage(cv, bx, by, bw, bh, 0, 0, bw, bh);
+  const пробы = d2.getImageData(0,0,bw,bh), pd = пробы.data;
+  for(let i=0;i<pd.length;i+=4){
+    // «Кожа или нет» меряем ОТ ЩЕКИ ЭТОГО ЛИЦА, а не по общим порогам: свет по лицу
+    // гуляет, поэтому разрешаем любую яркость, но не чужой оттенок. Так правило одинаково
+    // работает и на светлой коже, и на тёмной.
+    const dr = pd[i]-cheekR, dg = pd[i+1]-cheekG, db = pd[i+2]-cheekB;
+    const l = (dr+dg+db)/3;
+    const оттенок = Math.abs(dr-l) + Math.abs(dg-l) + Math.abs(db-l);
+    if(оттенок > 38 || Math.abs(l) > 78) pd[i+3] = 0;
   }
-  let darkLo = 0, darkHi = 5;
-  if(всего){
-    const квантиль = p => { let s=0; for(let v=0; v<256; v++){ s += гист[v]; if(s >= всего*p) return v; } return 255; };
-    darkLo = квантиль(0.25); darkHi = квантиль(0.92);
-    if(darkHi - darkLo < 5) darkHi = darkLo + 5;         // ровная зона — не раздуваем шум в эффект
-  }
-  // ПОЛЕ ЧИСТОЙ КОЖИ — то, чем зона была бы без мешка.
-  // Тянуть тон к ОДНОМУ цвету щеки бесполезно: у мешка не только тень снизу, но и блик
-  // на выпуклости, и тон вдоль лица сам по себе меняется. Одним числом это не описать —
-  // отсюда и «осветлили ленточку, а складка на месте». Поэтому зону ЗАРАЩИВАЕМ соседней
-  // кожей (тот же приём, что дыра от человека в боке): вырезаем её вместе со всем, что
-  // выше линии глаза, и в несколько заходов затягиваем размытыми соседями. Получается
-  // гладкая подложка, повторяющая освещение конкретного лица. Поверх неё возвращается
-  // настоящая текстура — тогда на полной силе уходит и тень, и складка, а кожа остаётся кожей.
-  const fc = document.createElement('canvas'); fc.width=bw; fc.height=bh;
-  const fx = fc.getContext('2d');
-  fx.drawImage(cv, bx, by, bw, bh, 0, 0, bw, bh);
-  fx.globalCompositeOperation = 'destination-out';
-  for(let k=0;k<3;k++) fx.drawImage(mc, 0, 0);            // трижды — чтобы съесть и мягкий край зоны
-  const верх = Math.max(0, Math.round(ecy + eyeW*0.10));  // всё выше глаза донором быть не может
-  fx.fillStyle = '#000'; fx.fillRect(0, 0, bw, верх);
-  fx.globalCompositeOperation = 'source-over';
+  d2.putImageData(пробы, 0, 0);
   const tmp = document.createElement('canvas'); tmp.width=bw; tmp.height=bh;
   const tx = tmp.getContext('2d');
-  for(let шаг=1; шаг<=5; шаг++){
+  for(let шаг=1; шаг<=4; шаг++){                          // затягиваем вырезанное соседней кожей
     tx.clearRect(0,0,bw,bh);
-    tx.filter = 'blur(' + Math.max(2, Math.round(eyeW*0.12*шаг)) + 'px)';
-    tx.drawImage(fc, 0, 0); tx.filter = 'none';
-    fx.globalCompositeOperation = 'destination-over';
-    fx.drawImage(tmp, 0, 0);
-    fx.globalCompositeOperation = 'source-over';
+    tx.filter = 'blur(' + Math.max(2, Math.round(eyeW*0.16*шаг)) + 'px)';
+    tx.drawImage(dc2, 0, 0); tx.filter = 'none';
+    d2.globalCompositeOperation = 'destination-over';
+    d2.drawImage(tmp, 0, 0);
+    d2.globalCompositeOperation = 'source-over';
   }
-  const sc = document.createElement('canvas'); sc.width=bw; sc.height=bh;
-  const sx = sc.getContext('2d');
-  sx.fillStyle = 'rgb('+Math.round(cheekR)+','+Math.round(cheekG)+','+Math.round(cheekB)+')';
-  sx.fillRect(0,0,bw,bh);                                 // подложка на случай, если что-то не заросло
-  sx.filter = 'blur(' + Math.max(3, Math.round(eyeW*0.18)) + 'px)';
-  sx.drawImage(fc, 0, 0);
-  const field = sx.getImageData(0,0,bw,bh).data;
-  return {bx, by, bw, bh, orig, low, mask, darkMap, field, cheekR, cheekG, cheekB, cheekLum, darkLo, darkHi};
+  const bc = document.createElement('canvas'); bc.width=bw; bc.height=bh;
+  const bxx = bc.getContext('2d');
+  bxx.fillStyle = 'rgb('+Math.round(cheekR)+','+Math.round(cheekG)+','+Math.round(cheekB)+')';
+  bxx.fillRect(0,0,bw,bh);
+  // Размытие обязано быть ШИРЕ самой зоны, иначе круг попадёт и в подложку, и гасить
+  // будет нечего: зона теперь высотой почти в ширину глаза — берём с запасом.
+  bxx.filter = 'blur(' + Math.max(6, Math.round(eyeW*1.15)) + 'px)';
+  bxx.drawImage(dc2, 0, 0);
+  const base = bxx.getImageData(0,0,bw,bh).data;
+  return {bx, by, bw, bh, orig, low, mask, darkMap, base, cheekR, cheekG, cheekB, cheekLum};
 }
 // Кружки выбора лица легко не заметить — подсказка появляется только когда лиц правда
 // несколько, и говорит ровно то, что от неё нужно.
@@ -6853,9 +6855,9 @@ function bagsApply(t, cv, data){
     // прямоугольный шрам. r.orig/r.low остаются чистыми снимками только для формулы эффекта
     const out = ctx.getImageData(r.bx, r.by, r.bw, r.bh);
     const od = out.data, low = r.low, dm = r.darkMap, m = r.mask, bw = r.bw, bh = r.bh;
-    const fld = r.field;
+    const bse = r.base;
     const cR=r.cheekR, cG=r.cheekG, cB=r.cheekB, cLum=r.cheekLum;
-    if(!fld) continue;
+    if(!bse) continue;
     for(let y=0; y<bh; y++) for(let x=0; x<bw; x++){
       const i = (y*bw+x)*4;
       const ageom = m[i+3]/255; if(!ageom) continue;
@@ -6876,23 +6878,21 @@ function bagsApply(t, cv, data){
       // с неверным делителем выше — теперь сила берётся оттуда, а тут только предел.
       const a = ageom * t * 0.92;        // 8% оставляем: под глазом кожа и правда чуть темнее
       if(a < 0.004) continue;
-      // Низкие частоты ведём к полю чистой кожи, высокие (поры, ресничная кромка) кладём
-      // обратно почти целиком — из-за этого уходит и тень, и складка, но лицо не пластик.
-      const hk = 1 - 0.22*a;
+      // Круг и складка живут в СРЕДНЕМ масштабе — между кожей (текстура) и освещением
+      // лица (подложка). Гасим именно эту полосу, и только там, где она ТЕМНЕЕ подложки:
+      // осветлить выше собственного уровня кожи так невозможно — набелить нечем.
+      // Блик на выпуклости мешка (полоса светлее подложки) гасим вполсилы: без этого
+      // припухлость остаётся видна, а полное выравнивание уже читается как пластик.
       const lr=low[i], lg=low[i+1], lb=low[i+2];
-      const fr=fld[i], fg=fld[i+1], fb=fld[i+2];
-      const nr = lr + (fr-lr)*a, ng = lg + (fg-lg)*a, nb = lb + (fb-lb)*a;
-      let oR = clamp(nr + (r.orig.data[i]  -lr)*hk);          // + настоящая текстура поверх
-      let oG = clamp(ng + (r.orig.data[i+1]-lg)*hk);
-      let oB = clamp(nb + (r.orig.data[i+2]-lb)*hk);
-      // Блик на выпуклости мешка гасить НУЖНО — без этого припухлость остаётся видна.
-      // Но заращивание может ошибиться (рядом крыло носа, оправа, прядь), поэтому даём
-      // опуститься лишь немного: заметное затемнение читалось бы как грязь под глазом.
-      const oLum = (oR+oG+oB)/3;
-      const origLum = (r.orig.data[i]+r.orig.data[i+1]+r.orig.data[i+2])/3;
-      const пол = origLum - 14*a;
-      if(oLum < пол && oLum > 1){ const k = пол/oLum; oR*=k; oG*=k; oB*=k; }
-      od[i]   = clamp(oR); od[i+1] = clamp(oG); od[i+2] = clamp(oB);
+      const br=bse[i], bg2=bse[i+1], bb=bse[i+2];
+      const пр=lr-br, пг=lg-bg2, пб=lb-bb;
+      const тень = (пр+пг+пб)/3 < 0;
+      const k = тень ? (1 - a) : (1 - a*0.5);
+      const nr = br + пр*k, ng = bg2 + пг*k, nb = bb + пб*k;
+      const hk = 1 - 0.18*a;                                  // текстуру возвращаем почти целиком
+      od[i]   = clamp(nr + (r.orig.data[i]  -lr)*hk);
+      od[i+1] = clamp(ng + (r.orig.data[i+1]-lg)*hk);
+      od[i+2] = clamp(nb + (r.orig.data[i+2]-lb)*hk);
     }
     ctx.putImageData(out, r.bx, r.by);
   }
@@ -6929,7 +6929,7 @@ async function bagsEnter(){
       bagsBusy = false; return;
     }
     if(rtTool !== 'bags'){ bagsBusy = false; return; }   // пока искали лицо, ушли в другой инструмент
-    top.textContent = 'Тени';
+    top.textContent = 'Консилер';
     slider.disabled = false;
     rtDrawFaces(bagsPickFace);
     // На семейном кадре ребёнка держат ближе к камере, его лицо в кадре шире — и «самое
