@@ -38,7 +38,7 @@
       "hsl": { "red":    {"hue": 8,  "sat": 8,  "lum": 0},
                "orange": {"hue": -8, "sat": 14, "lum": 4},
                "yellow": {"hue": -12,"sat": 20, "lum": 6},
-               "green":  {"hue": -44,"sat": -56,"lum": -4},
+               "green":  {"hue": -36,"sat": -68,"lum": -4},
                "aqua":   {"hue": -24,"sat": -52,"lum": -4},
                "blue":   {"hue": -14,"sat": -26,"lum": -10} }
     },
@@ -89,7 +89,7 @@
       "hsl": { "red":    {"hue": -6, "sat": 16, "lum": -2},
                "orange": {"hue": -10,"sat": 14, "lum": 2},
                "yellow": {"hue": -18,"sat": 20, "lum": 2},
-               "green":  {"hue": -30,"sat": -40,"lum": -4},
+               "green":  {"hue": -30,"sat": -60,"lum": -4},
                "aqua":   {"hue": -20,"sat": -44,"lum": -4},
                "blue":   {"hue": -16,"sat": -20,"lum": -12} }
     },
