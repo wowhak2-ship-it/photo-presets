@@ -1400,6 +1400,7 @@
   <div class="adj-row"><span class="albl">Тон светов</span><input type="range" id="adj-splitHi" min="-100" max="100" value="0"><span class="aval" id="val-splitHi">0</span></div>
   <div class="adj-group">ФАКТУРА</div>
   <div class="adj-row"><span class="albl">Зерно</span><input type="range" id="adj-grain" min="0" max="100" value="0"><span class="aval" id="val-grain">0</span></div>
+  <div class="adj-row"><span class="albl">Зерно в тенях</span><input type="range" id="adj-grainDark" min="0" max="100" value="0"><span class="aval" id="val-grainDark">0</span></div>
   <div class="adj-row"><span class="albl">Свечение</span><input type="range" id="adj-bloom" min="0" max="100" value="0"><span class="aval" id="val-bloom">0</span></div>
   <div class="adj-row"><span class="albl">Виньетка</span><input type="range" id="adj-vignette" min="0" max="100" value="0"><span class="aval" id="val-vignette">0</span></div>
 </div>
@@ -2191,6 +2192,7 @@ function applyAdjust(img, a, y0, y1){
   const tp = a.temp/100*28;            // -28..28 warm/cool
   const sat = 1 + a.saturation/100;    // 0..2
   const gr = a.grain/100*80;           // 0..80 noise amplitude
+  const gFloor = 0.25 + (a.grainDark||0)/100*0.60;   // сколько зерна доходит до теней
   // Тени и света тянутся по ВЕСУ яркости, а не порогом: у порога на плавном небе
   // проступает шов. Вес квадратичный — середина кадра почти не двигается, и правка
   // не оборачивается общим осветлением.
@@ -2253,7 +2255,11 @@ function applyAdjust(img, a, y0, y1){
       }
       if(vg){ const dx = x - vcx, dy = y - vcy;
               const f = 1 - vg*((dx*dx + dy*dy)/vmax); R*=f; G*=f; B*=f; }
-      if(gr){ const u=(R+G+B)/765, g = gLine[x]*(0.25 + 3*u*(1-u)); R+=g; G+=g; B+=g; }   // та же полка, что у пресета
+      // Полка — сколько зерна остаётся в самом тёмном и самом светлом. По умолчанию
+      // четверть (как было), ползунок «Зерно в тенях» поднимает её до 0.85. В середине
+      // тонов вес всегда ровно 1, поэтому кожа не меняется НИ ПРИ КАКОМ положении
+      // ползунка — двигаются только тени и пересветы.
+      if(gr){ const u=(R+G+B)/765, g = gLine[x]*(gFloor + (1-gFloor)*4*u*(1-u)); R+=g; G+=g; B+=g; }
       d[p]=R<0?0:R>255?255:R; d[p+1]=G<0?0:G>255?255:G; d[p+2]=B<0?0:B>255?255:B;
     }
   }
@@ -2457,9 +2463,9 @@ let selected = 0, intensity = 100, sourceCanvas = null, compareMode = false, com
 // и файл набора уносят его вместе с остальными. Без него чужой светящийся вид не продать.
 // НОВЫЕ ключи дописываются В КОНЕЦ: ссылка на пресет пишет значения подряд по этому
 // списку, и разосланные ранее ссылки читаются дальше — недостающее просто станет нулём.
-const ADJ_KEYS = ['exposure','contrast','temp','saturation','grain','bloom',
+const ADJ_KEYS = ['exposure','contrast','temp','saturation','grain','grainDark','bloom',
                   'shadows','highlights','tint','splitSh','splitHi','vibrance','vignette'];
-let adjust = { exposure:0, contrast:0, temp:0, saturation:0, grain:0, bloom:0,
+let adjust = { exposure:0, contrast:0, temp:0, saturation:0, grain:0, grainDark:0, bloom:0,
                shadows:0, highlights:0, tint:0, splitSh:0, splitHi:0, vibrance:0, vignette:0 };
 const stage = document.getElementById('stage');
 const sctx = stage.getContext('2d', { willReadFrequently:true });
@@ -3286,7 +3292,7 @@ function bindSlider(el, onInput){
 }
 // Односторонние ползунки начинаются с нуля и растут вправо — риска середины им не нужна,
 // а плюс перед числом был бы бессмысленным: меньше нуля они не бывают.
-const ADJ_ONE_WAY = ['grain','bloom','vignette'];
+const ADJ_ONE_WAY = ['grain','grainDark','bloom','vignette'];
 function adjValText(k){
   return (ADJ_ONE_WAY.indexOf(k) < 0 && adjust[k] > 0 ? '+' : '') + adjust[k];
 }
@@ -3736,7 +3742,7 @@ function myRender(id, p, orig){
 // Короткая расшифровка рецепта — и в диалоге, и в списке настроек человек видит,
 // что пресет реально делает, а не только как он называется.
 const ADJ_RU = { exposure:'экспозиция', contrast:'контраст', temp:'тепло', saturation:'насыщенность',
-  grain:'зерно', bloom:'свечение', shadows:'тени', highlights:'света', tint:'оттенок',
+  grain:'зерно', grainDark:'зерно в тенях', bloom:'свечение', shadows:'тени', highlights:'света', tint:'оттенок',
   splitSh:'тон теней', splitHi:'тон светов', vibrance:'сочность', vignette:'виньетка' };
 function myRecipeText(p){
   const parts = [ (p.base || LOOKS[0].name).toUpperCase() ];
@@ -3744,7 +3750,7 @@ function myRecipeText(p){
   if(inten !== 100) parts.push('сила ' + inten + '%');
   ADJ_KEYS.forEach(k=>{
     const v = (p.adjust || {})[k] || 0;
-    if(v) parts.push(ADJ_RU[k] + ' ' + (v > 0 && k !== 'grain' && k !== 'bloom' ? '+' : '') + v);
+    if(v) parts.push(ADJ_RU[k] + ' ' + (v > 0 && ADJ_ONE_WAY.indexOf(k) < 0 ? '+' : '') + v);   // односторонние — без знака
   });
   if(p.curve && CURVE_KEYS.some(k=> p.curve[k] && !curveIsFlat(p.curve[k]))) parts.push('кривая');
   if(hslSetTouched(p.hsl)){
