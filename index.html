@@ -966,6 +966,11 @@
     display:flex; align-items:center; justify-content:center; padding:0;}
   .rt-shape canvas{width:22px; height:22px; display:block; opacity:.75;}
   .rt-shape.on{border-color:var(--gold); background:rgba(224,162,74,.10);}
+  /* У засветки вид называется словом: «полоса» и «солнце» кружком не покажешь */
+  .rt-kinds{display:flex; justify-content:center; gap:8px; padding:9px 22px 0;}
+  .rt-kind{background:transparent; border:1px solid var(--line-2); color:var(--dim);
+    font-size:12px; font-weight:600; padding:7px 13px; border-radius:10px; cursor:pointer;}
+  .rt-kind.on{border-color:var(--gold); color:var(--gold);}
   .rt-tints{display:flex; justify-content:center; gap:10px; padding:9px 22px 0;}
   .rt-tint{width:26px; height:26px; border-radius:50%; cursor:pointer; padding:0;
     border:2px solid transparent; box-shadow:0 0 0 1px rgba(255,255,255,.14);}
@@ -1221,6 +1226,10 @@
     <button class="ht" data-go="bokeh">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="10" r="4.2"/><circle cx="16" cy="7" r="2.6"/><circle cx="15.5" cy="15" r="3.4"/></svg>
       <b>Боке</b><i>россыпь огней</i>
+    </button>
+    <button class="ht" data-go="flare">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3.4"/><path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.4 5.4l2.1 2.1M16.5 16.5l2.1 2.1M18.6 5.4l-2.1 2.1M7.5 16.5l-2.1 2.1"/></svg>
+      <b>Засветка</b><i>солнце в объектив</i>
     </button>
     <button class="ht" data-go="build">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9M10 20V4M16 20v-7M22 20V7"/><circle cx="4" cy="6" r="1.6" fill="currentColor" stroke="none"/><circle cx="10" cy="16" r="1.6" fill="currentColor" stroke="none"/><circle cx="16" cy="10" r="1.6" fill="currentColor" stroke="none"/><circle cx="22" cy="4" r="1.6" fill="currentColor" stroke="none"/></svg>
@@ -1770,6 +1779,9 @@
       <div class="rt-srow"><span>Жёсткость</span><input type="range" id="rtHard" min="0" max="100" value="45"><b id="rtHardV">45</b></div>
       <div class="rt-srow"><span>Сила</span><input type="range" id="rtStr" min="20" max="100" value="100"><b id="rtStrV">100</b></div>
       <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Сила</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
+      <div class="rt-srow" id="rtFlareRow" style="display:none"><span>Сила</span><input type="range" id="rtFlare" min="0" max="100" value="0"><b id="rtFlareV">0</b></div>
+      <div class="rt-kinds" id="rtFlareKinds" style="display:none"></div>
+      <div class="rt-tints" id="rtFlareTints" style="display:none"></div>
       <div class="rt-srow" id="rtSprinkleRow" style="display:none"><span>Россыпь</span><input type="range" id="rtSprinkle" min="0" max="100" value="0"><b id="rtSprinkleV">0</b></div>
       <div class="rt-shapes" id="rtShapes" style="display:none"></div>
       <div class="rt-tints" id="rtTints" style="display:none"></div>
@@ -2481,6 +2493,8 @@ function buildFullSource(){
       bagsRun(own(), op.faces, op.amount);
     } else if(op.t === 'skin'){
       skinRun(own(), op.faces, op.amount);
+    } else if(op.t === 'flare'){
+      flareRun(own(), op);
     } else if(op.t === 'tone'){
       toneRun(own(), op.faces, op.amount);
     } else if(op.t === 'powder'){
@@ -3017,6 +3031,7 @@ function applyPendingTool(){
   if(t==='bokeh'){ openBokeh(); return; }
   if(t==='powder'){ openPowder(); return; }
   if(t==='tone'){ openTone(); return; }
+  if(t==='flare'){ openFlare(); return; }
   if(t==='crop'){ openCrop(); return; }
   if(t==='curve'){ goEditor(); setSection('curve'); return; }
   if(t==='hsl'){ goEditor(); setSection('color'); return; }
@@ -5839,7 +5854,7 @@ function openRetouch(){
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFaces = null; skinData = null; powderData = null; toneData = null;
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtFaces = null; skinData = null; powderData = null; toneData = null;
   for(const k in skinFace) delete skinFace[k];   // новый снимок — настройки лиц с нуля
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
@@ -5875,6 +5890,11 @@ function openTone(){
   openRetouch();
   retouchEl.classList.add('shadows-only');
   rtSetTool('tone');
+}
+function openFlare(){
+  openRetouch();
+  retouchEl.classList.add('shadows-only');
+  rtSetTool('flare');
 }
 // «Замазать» — кисть с ведением. Переключатель Умная кисть/Штамп прячем: сюда
 // приходят за одним делом, а лишний выбор только сбивает.
@@ -5937,6 +5957,7 @@ function paintPark(){
   rtHideLoupe();
 }
 function rtHideCursor(){
+  if(rtTool === 'flare'){ rtHideLoupe(); return; }   // точка источника в «Засветке» видна всегда
   if(rtTool === 'paint'){ rtHideLoupe(); return; }   // кружок с рукой в «Замазать» видны всегда
   rtCursor.classList.remove('on'); paintRigOff(); rtHideLoupe();
 }
@@ -6047,6 +6068,9 @@ rtCanvas.addEventListener('pointerdown', e=>{
     // и вместо замазки уезжало фото. Поэтому режим явный, кнопкой.
     rtPan1 = rtCanPan1() ? { x0:e.clientX, y0:e.clientY, tx0:rtTx, ty0:rtTy, on:true } : null;
     if(!rtPan1 && rtTool === 'heal'){ rtDrawing = true; rtLastE = e; rtShowCursor(e); }  // aim only — heal fires on release
+    // Источник засветки ставится пальцем: он может быть и за краем кадра, как настоящее
+    // солнце сбоку, поэтому точка не ограничена холстом.
+    if(!rtPan1 && rtTool === 'flare'){ rtDrawing = true; flareAt(e); }
     if(!rtPan1 && rtTool === 'paint'){
       // у верхнего края кадра кружок ушёл бы за снимок — переворачиваем его вниз
       const cr = rtCanvas.getBoundingClientRect();
@@ -6072,6 +6096,8 @@ rtCanvas.addEventListener('pointermove', e=>{
     rtTx = rtPan1.tx0 + (e.clientX - rtPan1.x0);
     rtTy = rtPan1.ty0 + (e.clientY - rtPan1.y0);
     rtClampPan(); rtApplyTransform();
+  } else if(rtDrawing && rtTool === 'flare' && rtPtrs.size === 1){
+    e.preventDefault(); flareAt(e);
   } else if(rtDrawing && rtPtrs.size === 1){
     e.preventDefault(); rtLastE = e;
     if(rtTool === 'paint' && paintDownE &&
@@ -6146,24 +6172,27 @@ function rtSetTool(tool){
   rtTool=tool;
   rtSyncPan();         // в «Тенях» руки нет, в кисти есть
   document.querySelectorAll('.rt-mode').forEach(b=>b.classList.toggle('active', b.dataset.tool===tool));
-  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin', bokeh=tool==='bokeh', powder=tool==='powder', tone=tool==='tone';
-  const ползунок = bags || skin || bokeh || powder || tone;   // режимы «один ползунок вместо кисти»
+  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin', bokeh=tool==='bokeh', powder=tool==='powder', tone=tool==='tone', flare=tool==='flare';
+  const ползунок = bags || skin || bokeh || powder || tone || flare;   // режимы «один ползунок вместо кисти»
   rtModes.classList.toggle('stamp', stamp);
   rtSrc.classList.toggle('on', stamp); rtTgt.classList.toggle('on', stamp);
   rtSrc.style.pointerEvents=stamp?'auto':'none'; rtTgt.style.pointerEvents=stamp?'auto':'none';
   if(stamp) rtPlaceMarkers();
   document.querySelectorAll('.rt-srow').forEach(r=>{
-    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow')
+    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow' && r.id!=='rtFlareRow')
       r.style.display = ползунок?'none':'flex'; });
   document.getElementById('rtBagsRow').style.display = bags?'flex':'none';
   document.getElementById('rtSkinRow').style.display = skin?'flex':'none';
   document.getElementById('rtPowderRow').style.display = powder?'flex':'none';
   document.getElementById('rtToneRow').style.display = tone?'flex':'none';
+  document.getElementById('rtFlareRow').style.display = flare?'flex':'none';
+  document.getElementById('rtFlareKinds').style.display = flare?'flex':'none';
+  document.getElementById('rtFlareTints').style.display = flare?'flex':'none';
   document.getElementById('rtSprinkleRow').style.display = bokeh?'flex':'none';
   document.getElementById('rtTints').style.display = bokeh?'flex':'none';
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
-    bags ? 'Консилер' : skin ? 'Кожа' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный'
+    bags ? 'Консилер' : skin ? 'Кожа' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка'
          : tool==='paint' ? 'Замазать' : 'Ретушь';
   // ряд с «Отменить» — только там, где есть что отменять, то есть у кисти и штампа
   document.getElementById('rtTools').style.display = ползунок ? 'none' : 'flex';
@@ -6189,6 +6218,7 @@ function rtSetTool(tool){
   if(bokeh) bokehEnter();
   if(powder) powderEnter();
   if(tone) toneEnter();
+  if(flare) flareEnter();
 }
 document.querySelectorAll('.rt-mode').forEach(b=> b.onclick=()=>rtSetTool(b.dataset.tool));
 function markerDrag(el,key){
@@ -7337,6 +7367,148 @@ function bokehDraw(){
     ? { t:'bokeh', sprinkle:россыпь/100, shape:bokehShape, tint:bokehTint }
     : null;
 }
+// ─── «Засветка»: свет, попавший в объектив ───
+// Настоящая засветка — не просто светлое пятно. У неё есть ИСТОЧНИК за краем кадра,
+// от него идёт направленный разлив, и она СЪЕДАЕТ КОНТРАСТ там, куда попала: тени
+// поднимаются, цвет вымывается. Поэтому одним сложением света не обойтись — светлое
+// добавляем, а тёмное под ним подтягиваем вверх, иначе выходит наклейка поверх кадра.
+const FLARE_KINDS = ['мягкая', 'полоса', 'солнце'];
+const FLARE_TINTS = { 'золотая': [255,196,116], 'закатная': [255,138,74],
+                      'розовая': [255,150,168], 'дневная': [255,238,214] };
+let flareKind = 'мягкая', flareTint = 'золотая', flareX = 0.86, flareY = 0.14, flareOrig = null;
+function flarePaint(cv, x, y, amount, kind, tint){
+  const W = cv.width, H = cv.height, ctx = cv.getContext('2d');
+  const c = FLARE_TINTS[tint] || FLARE_TINTS['золотая'];
+  const цвет = (a)=> 'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')';
+  const px = x*W, py = y*H, диаг = Math.hypot(W, H);
+  const слой = document.createElement('canvas'); слой.width = W; слой.height = H;
+  const q = слой.getContext('2d');
+
+  if(kind === 'полоса'){
+    // Полоса идёт от источника через кадр — так ложится свет, пробравшийся вдоль корпуса.
+    const cx = W/2, cy = H/2;
+    const ang = Math.atan2(cy-py, cx-px);
+    q.save(); q.translate(px, py); q.rotate(ang);
+    const g = q.createLinearGradient(0, -диаг*0.30, 0, диаг*0.30);
+    g.addColorStop(0,    цвет(0));
+    g.addColorStop(0.42, цвет(0.30));
+    g.addColorStop(0.5,  цвет(0.75));
+    g.addColorStop(0.58, цвет(0.30));
+    g.addColorStop(1,    цвет(0));
+    q.fillStyle = g; q.fillRect(-диаг, -диаг*0.30, диаг*2.2, диаг*0.60);
+    q.restore();
+  }
+  // Ядро есть у всех видов: источник светится сам по себе
+  const ядро = q.createRadialGradient(px, py, 0, px, py, диаг*(kind==='солнце' ? 0.34 : 0.62));
+  ядро.addColorStop(0,    цвет(kind==='солнце' ? 0.95 : 0.62));
+  ядро.addColorStop(0.22, цвет(kind==='солнце' ? 0.45 : 0.30));
+  ядро.addColorStop(1,    цвет(0));
+  q.fillStyle = ядро; q.fillRect(0,0,W,H);
+
+  if(kind === 'солнце'){
+    // Блики-призраки: отражения между линзами всегда сидят на прямой «источник — центр
+    // кадра», по другую сторону от центра. Без этого «солнце» читается просто пятном.
+    const cx = W/2, cy = H/2;
+    const призраки = [[-0.35,0.16,0.16],[-0.62,0.10,0.10],[-0.88,0.22,0.07],[0.28,0.09,0.12]];
+    for(const [t, r, a] of призраки){
+      const gx = px + (cx-px)*(1-t), gy = py + (cy-py)*(1-t);
+      const rr = диаг*r*0.5;
+      const g2 = q.createRadialGradient(gx, gy, 0, gx, gy, rr);
+      g2.addColorStop(0,    цвет(a*0.15));
+      g2.addColorStop(0.72, цвет(a*0.55));
+      g2.addColorStop(0.9,  цвет(a*0.20));
+      g2.addColorStop(1,    цвет(0));
+      q.fillStyle = g2; q.fillRect(0,0,W,H);
+    }
+  }
+
+  // Сколько света легло в каждую точку — по нему же поднимаем тени и гасим цвет
+  const карта = q.getImageData(0,0,W,H).data;
+  const out = ctx.getImageData(0,0,W,H), od = out.data;
+  const t = Math.max(0, Math.min(1, amount));
+  for(let i=0;i<od.length;i+=4){
+    const a = карта[i+3]/255 * t;
+    if(a < 0.004) continue;
+    const R=od[i], G=od[i+1], B=od[i+2];
+    // 1) подъём теней: засветка не умножает, а ДОБАВЛЯЕТ свет — тёмное светлеет сильнее
+    const дым = a*0.55;
+    let r2 = R + (c[0]-R)*дым*(1-R/255)*1.6;
+    let g2 = G + (c[1]-G)*дым*(1-G/255)*1.6;
+    let b2 = B + (c[2]-B)*дым*(1-B/255)*1.6;
+    // 2) само свечение поверх
+    r2 += c[0]*a*0.55; g2 += c[1]*a*0.55; b2 += c[2]*a*0.55;
+    // 3) вымывание цвета в самом ярком месте
+    const сер = (r2+g2+b2)/3, к = a*0.30;
+    od[i]   = clamp(r2 + (сер-r2)*к);
+    od[i+1] = clamp(g2 + (сер-g2)*к);
+    od[i+2] = clamp(b2 + (сер-b2)*к);
+  }
+  ctx.putImageData(out, 0, 0);
+}
+function flareRun(cv, op){
+  if(!op || !op.amount) return;
+  flarePaint(cv, op.x, op.y, op.amount, op.kind, op.tint);
+}
+let rtFlareOp = null;
+function flareDraw(){
+  const ctx = rtCanvas.getContext('2d');
+  const v = +document.getElementById('rtFlare').value;
+  if(flareOrig) ctx.putImageData(flareOrig, 0, 0);
+  if(v) flarePaint(rtCanvas, flareX, flareY, v/100, flareKind, flareTint);
+  rtFlareOp = v ? { t:'flare', x:flareX, y:flareY, amount:v/100, kind:flareKind, tint:flareTint } : null;
+  flareMark();
+}
+// точка источника видна всегда — иначе непонятно, что её можно двигать пальцем
+function flareMark(){
+  const ar = document.getElementById('rtArea').getBoundingClientRect();
+  const r = rtCanvas.getBoundingClientRect();
+  rtCursor.style.left = (r.left - ar.left + flareX*r.width) + 'px';
+  rtCursor.style.top  = (r.top  - ar.top  + flareY*r.height) + 'px';
+  rtCursor.style.width = '34px'; rtCursor.style.height = '34px';
+  rtCursor.classList.add('on');
+}
+function flareAt(e){
+  const r = rtCanvas.getBoundingClientRect();
+  flareX = Math.max(-0.15, Math.min(1.15, (e.clientX - r.left)/r.width));
+  flareY = Math.max(-0.15, Math.min(1.15, (e.clientY - r.top) /r.height));
+  flareDraw();
+}
+function flareChips(){
+  const host = document.getElementById('rtFlareKinds');
+  host.innerHTML = '';
+  FLARE_KINDS.forEach(k=>{
+    const b = document.createElement('button');
+    b.className = 'rt-kind' + (k === flareKind ? ' on' : '');
+    b.textContent = k;
+    b.onclick = ()=>{ if(k===flareKind) return; flareKind = k; flareChips(); flareDraw(); };
+    host.appendChild(b);
+  });
+  const t = document.getElementById('rtFlareTints');
+  t.innerHTML = '';
+  Object.keys(FLARE_TINTS).forEach(n=>{
+    const b = document.createElement('button');
+    b.className = 'rt-tint' + (n === flareTint ? ' on' : '');
+    b.style.background = 'rgb('+FLARE_TINTS[n].join(',')+')';
+    b.title = n;
+    b.onclick = ()=>{ if(n===flareTint) return; flareTint = n; flareChips(); flareDraw(); };
+    t.appendChild(b);
+  });
+}
+function flareEnter(){
+  const s = document.getElementById('rtFlare');
+  s.value = 0; document.getElementById('rtFlareV').textContent = '0';
+  flareOrig = rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height);
+  flareX = 0.86; flareY = 0.14; rtFlareOp = null;
+  flareChips();
+  document.getElementById('rtTop').textContent = 'Засветка';
+  requestAnimationFrame(flareMark);
+}
+document.getElementById('rtFlare').oninput = e=>{
+  rtCmpOff();
+  document.getElementById('rtFlareV').textContent = e.target.value;
+  flareDraw();
+};
+
 let bokehOrig = null;
 // Размытие фона убрано: жене не понравилось, а модель ради него тянулась с сети и
 // не справлялась с тем, что рядом с человеком стоит не человек. Россыпи ничего
@@ -7492,8 +7664,8 @@ document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
   rtCmpOff();          // применяем результат, а не то, что показывает шторка
   sourceCanvas.getContext('2d').drawImage(rtCanvas, 0, 0);   // bake retouch into the source
-  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp); if(rtPowderOp) editOps.push(rtPowderOp); if(rtToneOp) editOps.push(rtToneOp); if(rtBokehOp) editOps.push(rtBokehOp);   // те же правки повторим на оригинале
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtPowderOp = null; rtToneOp = null;
+  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp); if(rtPowderOp) editOps.push(rtPowderOp); if(rtToneOp) editOps.push(rtToneOp); if(rtFlareOp) editOps.push(rtFlareOp); if(rtBokehOp) editOps.push(rtBokehOp);   // те же правки повторим на оригинале
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null;
   editedCanvas = null; makePreview(); buildChips(); buildHomeLooks(); render();
   closeRetouch(); goEditor();
 };
