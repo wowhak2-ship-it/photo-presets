@@ -967,9 +967,12 @@
   .rt-shape canvas{width:22px; height:22px; display:block; opacity:.75;}
   .rt-shape.on{border-color:var(--gold); background:rgba(224,162,74,.10);}
   /* У засветки вид называется словом: «полоса» и «солнце» кружком не покажешь */
-  .rt-kinds{display:flex; justify-content:center; gap:8px; padding:9px 22px 0;}
+  /* Пять кнопок в «Потёртостях» не влезали в ширину телефона: крайние уезжали за край
+     экрана и их было не нажать. Разрешаем перенос — ряд сам станет двухэтажным. */
+  .rt-kinds{display:flex; justify-content:center; gap:8px; padding:9px 14px 0; flex-wrap:wrap;}
   .rt-kind{background:transparent; border:1px solid var(--line-2); color:var(--dim);
-    font-size:12px; font-weight:600; padding:7px 13px; border-radius:10px; cursor:pointer;}
+    font-size:12px; font-weight:600; padding:7px 13px; border-radius:10px; cursor:pointer;
+    white-space:nowrap; flex:0 0 auto;}
   .rt-kind.on{border-color:var(--gold); color:var(--gold);}
   .rt-tints{display:flex; justify-content:center; gap:10px; padding:9px 22px 0;}
   .rt-tint{width:26px; height:26px; border-radius:50%; cursor:pointer; padding:0;
