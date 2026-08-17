@@ -8437,14 +8437,32 @@ function skinRestore(){                       // вернуть ТЕКУЩЕЕ �
 // каждом переключении и долго, и незачем.
 const skinFace = {};                           // индекс лица → { сила, зоны }
 function skinFaceAmount(i){ return skinFace[i] ? skinFace[i].сила : 0; }
+// В историю кадра уходят ВСЕ лица, которым что-то выставлено
+function skinCollectOps(){
+  rtSkinOp = Object.keys(skinFace)
+    .filter(k=> skinFace[k].сила > 0 && rtFaces[k])
+    .map(k=> ({ t:'skin', faces:[rtFaces[k]], amount:skinFace[k].сила/100 }));
+  if(!rtSkinOp.length) rtSkinOp = null;
+}
 function skinPickFace(){
+  // Ползунок ОСТАЁТСЯ ТАМ, ГДЕ ЕГО ОСТАВИЛИ, и новое лицо сразу получает ту же силу —
+  // ровно как в «Пудре» и «Тональном». Раньше он прыгал к настройке выбранного лица, и
+  // на групповом кадре, где всех сглаживают примерно одинаково, приходилось каждый раз
+  // выставлять заново. Правки соседей при этом не теряются: у каждого лица своя сила
+  // по-прежнему хранится и уходит в историю.
+  const v = +document.getElementById('rtSkin').value;
   const s = skinFace[rtFaceSel];
   if(s && s.зоны) skinData = s.зоны;
   else { skinData = skinPrepare([rtFaces[rtFaceSel]]);
          skinFace[rtFaceSel] = { сила:0, зоны:skinData }; }
-  const v = skinFaceAmount(rtFaceSel);
-  const sl = document.getElementById('rtSkin');
-  sl.value = v; document.getElementById('rtSkinV').textContent = v;
+  if(v && skinData){
+    skinRestore();                             // база — исходные пиксели ЭТОГО лица
+    skinApply(v/100);
+    skinFace[rtFaceSel].сила = v;
+    skinFace[rtFaceSel].зоны = skinData;
+    skinCollectOps();
+  }
+  document.getElementById('rtSkinV').textContent = v;
   rtDrawFaces(skinPickFace);                   // точки перерисуются с отметками «тут уже правлено»
 }
 document.getElementById('rtSkin').oninput = e=>{
@@ -8458,11 +8476,7 @@ document.getElementById('rtSkin').oninput = e=>{
   if(!skinFace[rtFaceSel]) skinFace[rtFaceSel] = { зоны:skinData };
   skinFace[rtFaceSel].сила = v;
   skinFace[rtFaceSel].зоны = skinData;
-  // в историю кадра уходят ВСЕ лица, которым что-то выставлено
-  rtSkinOp = Object.keys(skinFace)
-    .filter(k=> skinFace[k].сила > 0 && rtFaces[k])
-    .map(k=> ({ t:'skin', faces:[rtFaces[k]], amount:skinFace[k].сила/100 }));
-  if(!rtSkinOp.length) rtSkinOp = null;
+  skinCollectOps();
   rtDrawFaces(skinPickFace);
 };
 
