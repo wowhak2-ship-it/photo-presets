@@ -972,11 +972,23 @@
   .rt-kinds{display:flex; justify-content:center; gap:8px; padding:9px 14px 0; flex-wrap:wrap;}
   .rt-kind{background:transparent; border:1px solid var(--line-2); color:var(--dim);
     font-size:12px; font-weight:600; padding:7px 13px; border-radius:10px; cursor:pointer;
-    white-space:nowrap; flex:0 0 auto;}
+    white-space:nowrap; flex:0 0 auto; touch-action:manipulation;
+    transition:transform .08s, border-color .18s, color .18s, box-shadow .18s;}
   .rt-kind.on{border-color:var(--gold); color:var(--gold);}
+  /* На телефоне нет наведения мышью. Без состояния «нажата» кнопка кажется мёртвой,
+     даже когда честно отработала — Артур поймал это на «перемешать»: она ещё и не
+     режим, поэтому не остаётся подсвеченной, и нажатие выглядело как промах. */
+  .rt-kind:active{transform:scale(.96); border-color:var(--gold); color:var(--gold);}
+  /* Вспышка загорается мгновенно (transition:none) и гаснет плавно — плавность
+     возвращает базовое правило, когда класс снимают. Разгораться ей нельзя: за
+     260 мс она не успевала дойти до полной яркости, и ответ выглядел вялым. */
+  .rt-kind.flash{border-color:var(--gold); color:var(--gold);
+    box-shadow:0 0 0 2px rgba(224,162,74,.24); transition:none;}
   .rt-tints{display:flex; justify-content:center; gap:10px; padding:9px 22px 0;}
   .rt-tint{width:26px; height:26px; border-radius:50%; cursor:pointer; padding:0;
-    border:2px solid transparent; box-shadow:0 0 0 1px rgba(255,255,255,.14);}
+    border:2px solid transparent; box-shadow:0 0 0 1px rgba(255,255,255,.14);
+    touch-action:manipulation; transition:transform .08s, border-color .18s, box-shadow .18s;}
+  .rt-tint:active{transform:scale(.96);}
   .rt-tint.on{border-color:var(--gold); box-shadow:0 0 0 1px rgba(0,0,0,.5);}
   .rt-shape.on canvas{opacity:1;}
   /* Кнопки «Отменить» под ползунком больше нет, и он оказался вплотную к нижнему
@@ -8021,7 +8033,14 @@ function dustChips(){
   // нужна кнопка «перемешать».
   const m = document.createElement('button');
   m.className = 'rt-kind'; m.textContent = 'перемешать';
-  m.onclick = ()=>{ dustSeed = (Math.random()*1e9)|0; dustDraw(); };
+  m.onclick = ()=>{
+    dustSeed = (Math.random()*1e9)|0;
+    // Вспышка на четверть секунды: это действие, а не режим, поэтому кнопка не
+    // остаётся подсвеченной — а без ответа палец не понимает, что нажатие прошло.
+    m.classList.add('flash');
+    setTimeout(()=> m.classList.remove('flash'), 260);
+    dustDraw();
+  };
   host.appendChild(m);
 }
 function dustEnter(){
