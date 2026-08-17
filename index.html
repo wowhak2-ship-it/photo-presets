@@ -1839,6 +1839,7 @@
       <div class="rt-srow" id="rtToneRow" style="display:none"><span>Сила</span><input type="range" id="rtTone" min="0" max="100" value="0" disabled><b id="rtToneV">0</b></div>
       <div class="rt-srow" id="rtSkinRow" style="display:none"><span>Кожа</span><input type="range" id="rtSkin" min="0" max="100" value="0" disabled><b id="rtSkinV">0</b></div>
       <div class="rt-srow" id="rtTeethRow" style="display:none"><span>Сила</span><input type="range" id="rtTeeth" min="0" max="100" value="0" disabled><b id="rtTeethV">0</b></div>
+      <div class="rt-srow" id="rtTeethSpotRow" style="display:none"><span>Пятна</span><input type="range" id="rtTeethSpot" min="0" max="100" value="0" disabled><b id="rtTeethSpotV">0</b></div>
     </div>
     <!-- «До / После» отсюда убрано: кнопка теперь в шапке, как и в редакторе -->
     <!-- «Отменить» откатывает МАЗОК КИСТИ. В «Тенях», «Коже» и «Боке» кисти нет,
@@ -2573,7 +2574,7 @@ function buildFullSource(){
     } else if(op.t === 'tone'){
       toneRun(own(), op.faces, op.amount);
     } else if(op.t === 'teeth'){
-      teethRun(own(), op.faces, op.amount);
+      teethRun(own(), op.faces, op.amount, op.spots);
     } else if(op.t === 'powder'){
       powderRun(own(), op.faces, op.amount);
     } else if(op.t === 'bokeh'){
@@ -6292,11 +6293,12 @@ function rtSetTool(tool){
   rtSrc.style.pointerEvents=stamp?'auto':'none'; rtTgt.style.pointerEvents=stamp?'auto':'none';
   if(stamp) rtPlaceMarkers();
   document.querySelectorAll('.rt-srow').forEach(r=>{
-    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtTeethRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow' && r.id!=='rtFlareRow' && r.id!=='rtVigRow' && r.id!=='rtVigSizeRow' && r.id!=='rtHalRow' && r.id!=='rtHalSpreadRow' && r.id!=='rtDblRow' && r.id!=='rtDblScaleRow' && r.id!=='rtDustRow' && r.id!=='rtDustDenRow' && r.id!=='rtDustLenRow')
+    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtTeethRow' && r.id!=='rtTeethSpotRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow' && r.id!=='rtFlareRow' && r.id!=='rtVigRow' && r.id!=='rtVigSizeRow' && r.id!=='rtHalRow' && r.id!=='rtHalSpreadRow' && r.id!=='rtDblRow' && r.id!=='rtDblScaleRow' && r.id!=='rtDustRow' && r.id!=='rtDustDenRow' && r.id!=='rtDustLenRow')
       r.style.display = ползунок?'none':'flex'; });
   document.getElementById('rtBagsRow').style.display = bags?'flex':'none';
   document.getElementById('rtSkinRow').style.display = skin?'flex':'none';
   document.getElementById('rtTeethRow').style.display = teeth?'flex':'none';
+  document.getElementById('rtTeethSpotRow').style.display = teeth?'flex':'none';
   document.getElementById('rtPowderRow').style.display = powder?'flex':'none';
   document.getElementById('rtToneRow').style.display = tone?'flex':'none';
   document.getElementById('rtFlareRow').style.display = flare?'flex':'none';
@@ -7272,47 +7274,102 @@ function teethPrepare(faces, cv){
       видно += wb*wp;
     }
     if(видно < 25) continue;                        // улыбка закрытая — зубов нет
-    zones.push({bx,by,bw,bh,mask,orig,я95,тьма0,тьма1,роз0,роз1});
+
+    // Подложка для пятен. Строим её по холсту «ТОЛЬКО ЗУБЫ»: чужие пиксели (губа, щель,
+    // язык) заменены средним цветом эмали, иначе размытие затянуло бы в подложку красноту
+    // губ, и у края зубы порозовели бы вместо выравнивания.
+    let sr=0,sg=0,sb=0,sn=0;
+    for(let i=0;i<o.length;i+=4){
+      if(mask[i+3] < 160) continue;
+      const lum=(o[i]+o[i+1]+o[i+2])/3, роз=o[i]-(o[i+1]+o[i+2])/2;
+      if(lum < тьма1 || роз > роз1) continue;
+      sr+=o[i]; sg+=o[i+1]; sb+=o[i+2]; sn++;
+    }
+    if(!sn) continue;
+    const эмальR=sr/sn, эмальG=sg/sn, эмальB=sb/sn;
+    const tc = document.createElement('canvas'); tc.width=bw; tc.height=bh;
+    const tx = tc.getContext('2d');
+    const im = tx.createImageData(bw,bh);
+    for(let i=0;i<o.length;i+=4){
+      const lum=(o[i]+o[i+1]+o[i+2])/3, роз=o[i]-(o[i+1]+o[i+2])/2;
+      const свой = mask[i+3] >= 160 && lum >= тьма0 && роз <= роз1;
+      im.data[i]   = свой ? o[i]   : эмальR;
+      im.data[i+1] = свой ? o[i+1] : эмальG;
+      im.data[i+2] = свой ? o[i+2] : эмальB;
+      im.data[i+3] = 255;
+    }
+    tx.putImageData(im,0,0);
+    const размыть = r => { const q = document.createElement('canvas'); q.width=bw; q.height=bh;
+      const g = q.getContext('2d'); g.filter='blur('+r+'px)'; g.drawImage(tc,0,0);
+      return g.getImageData(0,0,bw,bh).data; };
+    const мелк  = размыть(Math.max(1, Math.round(ротW*0.008)));   // граница текстуры эмали
+    const крупн = размыть(Math.max(3, Math.round(ротW*0.06)));    // масштаб самого зуба
+    zones.push({bx,by,bw,bh,mask,orig,я95,тьма0,тьма1,роз0,роз1,мелк,крупн});
   }
   return zones.length ? zones : null;
 }
-function teethApply(t, cv, zones){
+function teethApply(t, cv, zones, пятна){
   cv = cv || rtCanvas; zones = zones || teethData;
   if(!zones) return;
+  пятна = пятна || 0;
   const ctx = cv.getContext('2d');
   for(const z of zones){
     const out = ctx.getImageData(z.bx, z.by, z.bw, z.bh), od = out.data;
     const o = z.orig.data, m = z.mask;
     for(let i=0;i<od.length;i+=4){
       const ag = m[i+3]/255; if(ag < 0.02) continue;
-      const R=o[i], G=o[i+1], B=o[i+2];
-      const lum = (R+G+B)/3;
+      let R=o[i], G=o[i+1], B=o[i+2];
+      let lum = (R+G+B)/3;
       const wb = Math.max(0, Math.min(1, (lum-z.тьма0)/Math.max(1,z.тьма1-z.тьма0)));
       if(wb <= 0){ od[i]=R; od[i+1]=G; od[i+2]=B; continue; }
       const роз = R-(G+B)/2;
       const wp = Math.max(0, Math.min(1, (z.роз1-роз)/(z.роз1-z.роз0)));
-      const сила = ag*wb*wp*t;
+      const зуб = ag*wb*wp;
+      // ПЯТНА. Меловое белёсое пятно и тёмный налёт — это одно и то же: отклонение
+      // среднего масштаба от тона соседней эмали, только в разные стороны. Поэтому
+      // глушим сам средний масштаб, а не «тёмное» или «светлое»: щели между зубами
+      // (крупный масштаб) и текстура эмали (мелкий) остаются на месте — тот же приём
+      // разложения, что вытащил «Кожу» из пластика.
+      if(пятна && зуб > 0.02){
+        const s0=z.мелк[i]-z.крупн[i], s1=z.мелк[i+1]-z.крупн[i+1], s2=z.мелк[i+2]-z.крупн[i+2];
+        let k = зуб*пятна;
+        // Очень контрастное отклонение — это уже не пятно, а край зуба или щель:
+        // их выравнивать нельзя, иначе улыбка станет сплошной белой полосой.
+        const край = Math.max(Math.abs(s0), Math.abs(s1), Math.abs(s2));
+        if(край > 34) k *= Math.max(0, 1 - (край-34)/40);
+        R = clamp(z.крупн[i]   + s0*(1-k) + (R-z.мелк[i]));
+        G = clamp(z.крупн[i+1] + s1*(1-k) + (G-z.мелк[i+1]));
+        B = clamp(z.крупн[i+2] + s2*(1-k) + (B-z.мелк[i+2]));
+        lum = (R+G+B)/3;
+      }
+      const сила = зуб*t;
       if(сила < 0.004){ od[i]=R; od[i+1]=G; od[i+2]=B; continue; }
-      // 1. Желтизна. Гасим не «до белого», а сводим разрыв каналов: синий подтягиваем
-      //    к среднему красного и зелёного, красный чуть опускаем к зелёному. Дальше
-      //    середины не идём никогда — иначе зуб уходит в синеву, это ещё заметнее.
-      const жёлт = Math.max(0, (R+G)/2 - B);
-      const nB = B + жёлт*0.55*сила;
-      const nR = R - Math.max(0, R-G)*0.30*сила;
-      // 2. Свет. Тусклому зубу добавляем до 16%, яркому — почти ничего: белить и без
-      //    того светлое значит выжечь текстуру эмали.
-      const k = 1 + 0.16*сила*(1 - Math.min(1, lum/Math.max(1, z.я95)));
-      od[i]   = clamp(nR*k);
-      od[i+1] = clamp(G*k);
-      od[i+2] = clamp(nB*k);
+      // 1. Цвет. Ведём зуб к НЕЙТРАЛЬНОМУ, а не «гасим жёлтое»: желтизна — лишь один из
+      //    видов налёта. На съёмке при тёплой лампе зуб желтит, под холодной — розовеет
+      //    (проверено на реф-кадре Артура: R159 G144 B142, желтизны почти нет, а зубы
+      //    выглядят грязными). Тянуть каждый канал к собственной яркости пикселя чистит
+      //    любой налёт и не может дать цветной сдвиг: направление задаёт сам пиксель.
+      const s = 0.55*сила;
+      const nR = R + (lum-R)*s, nG = G + (lum-G)*s, nB = B + (lum-B)*s;
+      // 2. Свет. Поднимаем НЕ на процент от яркости, а на долю пути до белого: тусклый
+      //    зуб получает много, светлый — почти ничего, и упереться в 255 невозможно по
+      //    построению. Раньше подъём считался от «самого светлого в этом рту» — а это и
+      //    есть сам зуб, поэтому свет не добавлялся вообще.
+      //    Прибавкой, а не множителем: множитель растягивает и разницу каналов, то есть
+      //    возвращает часть только что убранного налёта (замерено: желтизна отыгрывала
+      //    назад почти вдвое).
+      const свет = (250-lum)*0.25*сила;
+      od[i]   = clamp(nR+свет);
+      od[i+1] = clamp(nG+свет);
+      od[i+2] = clamp(nB+свет);
     }
     ctx.putImageData(out, z.bx, z.by);
   }
 }
-function teethRun(cv, faces, amount){
-  if(!faces || !faces.length || !amount) return;
+function teethRun(cv, faces, amount, пятна){
+  if(!faces || !faces.length || (!amount && !пятна)) return;
   const z = teethPrepare(faces, cv);
-  if(z) teethApply(amount, cv, z);
+  if(z) teethApply(amount||0, cv, z, пятна||0);
 }
 async function powderEnter(){
   const slider = document.getElementById('rtPowder'), top = document.getElementById('rtTop');
@@ -7382,7 +7439,9 @@ async function toneEnter(){
 }
 async function teethEnter(){
   const slider = document.getElementById('rtTeeth'), top = document.getElementById('rtTop');
+  const spots = document.getElementById('rtTeethSpot');
   slider.value = 0; document.getElementById('rtTeethV').textContent = '0'; slider.disabled = true;
+  spots.value = 0; document.getElementById('rtTeethSpotV').textContent = '0'; spots.disabled = true;
   teethData = null; rtTeethOp = null;
   if(bagsBusy) return; bagsBusy = true;
   try{
@@ -7411,7 +7470,7 @@ async function teethEnter(){
     }
     if(rtTool !== 'teeth'){ bagsBusy = false; return; }
     top.textContent = 'Зубы';
-    slider.disabled = false;
+    slider.disabled = false; spots.disabled = false;
     rtDrawFaces(teethPickFace);
     rtFacesHint(faces.length, 'кому отбелить зубы');
   } catch(e){
@@ -7420,25 +7479,30 @@ async function teethEnter(){
   bagsBusy = false;
 }
 function teethPickFace(){
-  const v = +document.getElementById('rtTeeth').value;
+  const v = +document.getElementById('rtTeeth').value, s = +document.getElementById('rtTeethSpot').value;
   if(teethData){ const ctx = rtCanvas.getContext('2d');
     for(const z of teethData) ctx.putImageData(z.orig, z.bx, z.by); }
-  const sl = document.getElementById('rtTeeth');
+  const sl = document.getElementById('rtTeeth'), sp = document.getElementById('rtTeethSpot');
   teethData = teethPrepare([rtFaces[rtFaceSel]]);
   rtDrawFaces(teethPickFace);
-  // У соседа улыбка может быть закрытой — ползунок тогда нечему двигать
+  // У соседа улыбка может быть закрытой — ползункам тогда нечего двигать
   const top = document.getElementById('rtTop');
-  if(!teethData){ sl.disabled = true; top.textContent = 'Зубов не видно'; rtTeethOp = null; return; }
-  sl.disabled = false; top.textContent = 'Зубы';
-  if(v){ teethApply(v/100); rtTeethOp = { t:'teeth', faces:[rtFaces[rtFaceSel]], amount:v/100 }; }
+  if(!teethData){ sl.disabled = true; sp.disabled = true; top.textContent = 'Зубов не видно'; rtTeethOp = null; return; }
+  sl.disabled = false; sp.disabled = false; top.textContent = 'Зубы';
+  if(v || s) teethSliders();
 }
-document.getElementById('rtTeeth').oninput = e=>{
-  rtCmpOff();
-  const v = +e.target.value;
+// Оба ползунка правят ОДИН и тот же кадр и оба считают от исходных пикселей зоны,
+// поэтому применяем их всегда вместе: иначе движение «Пятен» стёрло бы отбеливание.
+function teethSliders(){
+  const v = +document.getElementById('rtTeeth').value;
+  const s = +document.getElementById('rtTeethSpot').value;
   document.getElementById('rtTeethV').textContent = v;
-  teethApply(v/100);
-  rtTeethOp = v ? { t:'teeth', faces:[rtFaces[rtFaceSel]], amount:v/100 } : null;
-};
+  document.getElementById('rtTeethSpotV').textContent = s;
+  teethApply(v/100, undefined, undefined, s/100);
+  rtTeethOp = (v || s) ? { t:'teeth', faces:[rtFaces[rtFaceSel]], amount:v/100, spots:s/100 } : null;
+}
+document.getElementById('rtTeeth').oninput = ()=>{ rtCmpOff(); teethSliders(); };
+document.getElementById('rtTeethSpot').oninput = ()=>{ rtCmpOff(); teethSliders(); };
 function tonePickFace(){
   const v = +document.getElementById('rtTone').value;
   if(toneData){ const ctx = rtCanvas.getContext('2d');
