@@ -5959,7 +5959,7 @@ function openRetouch(){
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtHalOp = null; halOrig = null; rtDblOp = null; dblOrig = null; dblImg = null; rtDustOp = null; dustOrig = null; rtFaces = null; skinData = null; powderData = null; toneData = null; teethData = null; rtTeethOp = null; aiData = null; rtAiOp = null;
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtHalOp = null; halOrig = null; rtDblOp = null; dblOrig = null; dblImg = null; rtDustOp = null; dustOrig = null; rtFaces = null; skinData = null; powderData = null; toneData = null; teethData = null; rtTeethOp = null; aiСброс();
   for(const k in skinFace) delete skinFace[k];   // новый снимок — настройки лиц с нуля
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
@@ -8551,7 +8551,19 @@ async function aiФайл(шаг){
 function aiЗапас(){
   const с = navigator.connection;
   if(с && (с.saveData || /^([23]g|slow-2g)$/.test(с.effectiveType || ''))) return;
-  setTimeout(()=>{ aiФайл(null).catch(()=>{}); }, 30000);
+  // Ждём не полминуты, а только пока приложение закончит свои дела при запуске: человек
+  // открывает карточку в первые же секунды, и к этому моменту запас должен быть готов.
+  const когда = cb => (window.requestIdleCallback ? requestIdleCallback(cb, {timeout:6000}) : setTimeout(cb, 6000));
+  когда(async ()=>{
+    // Тянем заранее И движок, и файл модели. Движок — это ещё несколько мегабайт с
+    // чужого сервера, и раньше они качались в тот момент, когда человек уже открыл
+    // карточку и ждёт: «даже в карточку долго заходит». Сессию заранее НЕ создаём —
+    // она занимает память видеоядра, а карточку могут и не открыть.
+    try{
+      if(!aiOrt){ aiOrt = await import(AI_ДВИЖОК + 'ort.webgpu.bundle.min.mjs'); aiOrt.env.wasm.wasmPaths = AI_ДВИЖОК; }
+    }catch(_){}
+    aiФайл(null).catch(()=>{});
+  });
 }
 if(document.readyState === 'complete') aiЗапас();
 else addEventListener('load', aiЗапас);
@@ -8583,9 +8595,14 @@ async function aiКарта(cv, lms){
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
   for(const p of lms){ const x=p.x*W, y=p.y*H;
     x0=Math.min(x0,x); y0=Math.min(y0,y); x1=Math.max(x1,x); y1=Math.max(y1,y); }
-  const зп = Math.max(x1-x0, y1-y0)*0.35;          // поля, как в исходной реализации
-  const bx = Math.max(0, Math.round(x0-зп)), by = Math.max(0, Math.round(y0-зп));
-  const bw = Math.min(W-bx, Math.round(x1-x0+зп*2)), bh = Math.min(H-by, Math.round(y1-y0+зп*2));
+  // Поля вокруг лица. СВЕРХУ берём больше: разметка лица заканчивается на границе лба,
+  // и при равных полях верх лба оказывался у самого края куска — на детском кадре с сыпью
+  // пятна на лбу так и остались нетронутыми, хотя щёки и подбородок сеть вычистила.
+  const р = Math.max(x1-x0, y1-y0);
+  const зп = р*0.35, зпВерх = р*0.75;
+  const bx = Math.max(0, Math.round(x0-зп)), by = Math.max(0, Math.round(y0-зпВерх));
+  const bw = Math.min(W-bx, Math.round(x1-x0+зп*2));
+  const bh = Math.min(H-by, Math.round(y1-y0+зпВерх+зп));
   if(bw < 32 || bh < 32) return null;
   const s = document.createElement('canvas'); s.width = AI_РАЗМЕР; s.height = AI_РАЗМЕР;
   const sx = s.getContext('2d', {willReadFrequently:true});
@@ -8650,7 +8667,7 @@ function aiRun(cv, op){        // повтор на оригинале при с
 async function aiEnter(){
   const sl = document.getElementById('rtAi'), top = document.getElementById('rtTop');
   sl.value = 0; document.getElementById('rtAiV').textContent = '0'; sl.disabled = true;
-  aiData = null; rtAiOp = null;
+  aiСброс();
   if(bagsBusy) return; bagsBusy = true;
   try{
     top.textContent = bagsKit ? 'Ищу лицо…' : 'Загружаю модель лица…';
@@ -8683,6 +8700,13 @@ async function aiEnter(){
 // и заставлять её считать заново при каждом возврате к соседу нельзя. Артур поймал это
 // сразу: «он так долго переключает лица».
 const aiЛица = {};
+// Карты привязаны к КОНКРЕТНОМУ снимку: в них лежат и координаты куска, и его исходные
+// пиксели. Оставить их при смене кадра — значит вклеить в новый снимок прямоугольник из
+// старого. Именно это Артур и увидел: поверх фотографии кусок предыдущей.
+function aiСброс(){
+  for(const k in aiЛица) delete aiЛица[k];
+  aiData = null; rtAiOp = null;
+}
 async function aiPickFace(){
   const sl = document.getElementById('rtAi'), top = document.getElementById('rtTop');
   const v = +sl.value;
