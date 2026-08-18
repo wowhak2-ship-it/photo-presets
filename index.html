@@ -2600,6 +2600,7 @@ function claimLoad(){ return ++loadSeq; }
 function loadIsCurrent(n){ return n === loadSeq; }
 
 function setSource(img){
+  setTimeout(aiПрогрев, 1200);   // снимок открыт — человек вот-вот пойдёт по инструментам
   // оригинал держим целиком — это то, что уйдёт в файл при сохранении
   const fs = Math.min(1, FULL_MAX/Math.max(img.width, img.height));
   fullSource = document.createElement('canvas');
@@ -8548,46 +8549,70 @@ async function aiФайл(шаг){
 // Запас впрок: через полминуты после запуска, когда приложение уже не занято, тихо
 // докачиваем модель. Не трогаем, если человек экономит трафик или сидит на мобильном
 // интернете — 51 МБ за его счёт качать нельзя.
+function aiПрогрев(){                       // зовётся и после загрузки снимка
+  const с = navigator.connection;
+  if(с && (с.saveData || /^([23]g|slow-2g)$/.test(с.effectiveType || ''))) return;
+  // Модель ПОИСКА ЛИЦА грузится при первом входе в любой инструмент по лицу и стоит
+  // несколько секунд ожидания — на замере это и оказалось главным «долго заходит»,
+  // а вовсе не наша сеть. Греем её всегда: она нужна и «Коже», и «Консилеру», и «Зубам».
+  if(typeof loadFaceKit === 'function') loadFaceKit().catch(()=>{});
+  if(aiSess || (navigator.deviceMemory && navigator.deviceMemory < 3)) return;
+  aiСессия(null).catch(()=>{});
+}
 function aiЗапас(){
   const с = navigator.connection;
   if(с && (с.saveData || /^([23]g|slow-2g)$/.test(с.effectiveType || ''))) return;
   // Ждём не полминуты, а только пока приложение закончит свои дела при запуске: человек
   // открывает карточку в первые же секунды, и к этому моменту запас должен быть готов.
   const когда = cb => (window.requestIdleCallback ? requestIdleCallback(cb, {timeout:6000}) : setTimeout(cb, 6000));
-  когда(async ()=>{
+  когда(async function запас(попытка){
     // Тянем заранее И движок, и файл модели. Движок — это ещё несколько мегабайт с
     // чужого сервера, и раньше они качались в тот момент, когда человек уже открыл
     // карточку и ждёт: «даже в карточку долго заходит». Сессию заранее НЕ создаём —
     // она занимает память видеоядра, а карточку могут и не открыть.
+    // ГОТОВИМ ВСЁ ЗАРАНЕЕ: движок, файл модели и саму сессию. Разбор 51 МБ и заливка в
+    // видеоядро — это и есть то ожидание, на которое Артур жалуется при открытии
+    // карточки. На слабой памяти сессию не держим: карточку могут и не открыть.
     try{
-      if(!aiOrt){ aiOrt = await import(AI_ДВИЖОК + 'ort.webgpu.bundle.min.mjs'); aiOrt.env.wasm.wasmPaths = AI_ДВИЖОК; }
-    }catch(_){}
-    aiФайл(null).catch(()=>{});
+      if(navigator.deviceMemory && navigator.deviceMemory < 3) { await aiФайл(null); return; }
+      await aiСессия(null);
+    }catch(e){
+      // Сеть могла моргнуть — один повтор через полминуты, дальше не навязываемся.
+      if(!попытка) setTimeout(()=> запас(1), 30000);
+    }
   });
 }
 if(document.readyState === 'complete') aiЗапас();
 else addEventListener('load', aiЗапас);
 
-async function aiДвижок(top){
-  if(aiSess) return aiSess;
-  if(!aiOrt){
-    top.textContent = 'Загружаю движок…';
-    aiOrt = await import(AI_ДВИЖОК + 'ort.webgpu.bundle.min.mjs');
-    aiOrt.env.wasm.wasmPaths = AI_ДВИЖОК;
-  }
-  const буф = await aiФайл(доля => {
-    top.textContent = доля < 0 ? 'Загружаю модель (51 МБ, один раз)…'
-                               : 'Загружаю модель… ' + Math.round(доля*100) + '%';
+// Готовим сессию: разбор модели и заливка в видеоядро. Зовётся и из фонового запаса,
+// и при открытии карточки — второй раз возвращает уже готовое.
+let aiСессЖдём = null;
+function aiСессия(шаг){
+  if(aiSess) return Promise.resolve(aiSess);
+  if(aiСессЖдём) return aiСессЖдём;
+  aiСессЖдём = (async ()=>{
+    if(!aiOrt){ aiOrt = await import(AI_ДВИЖОК + 'ort.webgpu.bundle.min.mjs'); aiOrt.env.wasm.wasmPaths = AI_ДВИЖОК; }
+    const буф = await aiФайл(шаг);
+    if(шаг) шаг(2);                       // «готовлю»
+    for(const p of (navigator.gpu ? ['webgpu','wasm'] : ['wasm'])){
+      try{ aiSess = await aiOrt.InferenceSession.create(буф, {executionProviders:[p]}); aiПров = p; break; }
+      catch(e){ /* пробуем следующий */ }
+    }
+    if(!aiSess) throw new Error('ИИ не запустился');
+    return aiSess;
+  })();
+  try{ return aiСессЖдём; }
+  finally{ aiСессЖдём.catch(()=>{ aiСессЖдём = null; }); }
+}
+// Сжатая вдвое версия модели (fp16) на WebGPU выдаёт нули — проверено замером, поэтому
+// держим полную точность, хоть файл и вдвое больше.
+function aiДвижок(top){
+  return aiСессия(доля => {
+    top.textContent = доля === 2 ? 'Готовлю ИИ…'
+                    : доля < 0   ? 'Загружаю модель (51 МБ, один раз)…'
+                                 : 'Загружаю модель… ' + Math.round(доля*100) + '%';
   });
-  top.textContent = 'Готовлю ИИ…';
-  // Сжатая вдвое версия модели (fp16) на WebGPU выдаёт нули — проверено замером, поэтому
-  // держим полную точность, хоть файл и вдвое больше.
-  for(const p of (navigator.gpu ? ['webgpu','wasm'] : ['wasm'])){
-    try{ aiSess = await aiOrt.InferenceSession.create(буф, {executionProviders:[p]}); aiПров = p; break; }
-    catch(e){ /* пробуем следующий */ }
-  }
-  if(!aiSess) throw new Error('ИИ не запустился');
-  return aiSess;
 }
 // Кусок кадра с лицом → карта коррекции 512×512 (холст). Один прогон сети.
 async function aiКарта(cv, lms){
@@ -8643,10 +8668,16 @@ function aiНаложить(cv, з, сила){
   tx.imageSmoothingQuality = 'high';
   tx.drawImage(з.mg, 0, 0, bw, bh);
   const M = tx.getImageData(0,0,bw,bh).data;
+  // Шкала растянута: ползунок доводит карту не до её собственной силы, а до полутора.
+  // На середине получается примерно то, что раньше давал максимум — на замере нижняя
+  // половина трогала 0.1–0.4% пикселей, и Артур справедливо сказал «толку нет».
+  // Карта после растяжки держится в 0..1, как в исходной реализации: за этими краями
+  // кривая начинает выворачивать цвет.
+  const степень = сила * 1.5;
   const im = ctx.getImageData(bx, by, bw, bh), od = im.data;
   for(let i=0;i<od.length;i+=4) for(let k=0;k<3;k++){
     const c = od[i+k]/255;
-    const m = 0.5 + (M[i+k]/255 - 0.5)*сила;
+    const m = Math.max(0, Math.min(1, 0.5 + (M[i+k]/255 - 0.5)*степень));
     od[i+k] = clamp(((1-2*m)*c*c + 2*m*c)*255);
   }
   ctx.putImageData(im, bx, by);
