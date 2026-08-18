@@ -1242,6 +1242,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 9.8c2.6-1.9 5.2-2.8 7.8-2.8s5.2.9 7.8 2.8c-1.1 4.8-4 7.2-7.8 7.2s-6.7-2.4-7.8-7.2z"/><path d="M5.7 11.2h12.6"/><path d="M9.6 11.2v3.6M14.4 11.2v3.6"/></svg>
       <b>Зубы</b><i>отбелить улыбку</i>
     </button>
+    <button class="ht" data-go="ai">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2c4.6 0 7.4 3.1 7.4 7.6 0 4.9-3.3 9.6-7.4 9.6S4.6 15.7 4.6 10.8c0-4.5 2.8-7.6 7.4-7.6z"/><path d="M8.9 11.4c.9-.8 2-.8 2.9 0M15.1 11.4c-.6-.5-1.3-.7-2-.5"/><path d="M17.6 4.2l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5z" fill="currentColor" stroke="none"/></svg>
+      <b>ИИ-ретушь</b><i>мешки и кожа</i>
+    </button>
     <button class="ht" data-go="bokeh">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="10" r="4.2"/><circle cx="16" cy="7" r="2.6"/><circle cx="15.5" cy="15" r="3.4"/></svg>
       <b>Боке</b><i>россыпь огней</i>
@@ -1838,6 +1842,7 @@
       <div class="rt-srow" id="rtPowderRow" style="display:none"><span>Сила</span><input type="range" id="rtPowder" min="0" max="100" value="0" disabled><b id="rtPowderV">0</b></div>
       <div class="rt-srow" id="rtToneRow" style="display:none"><span>Сила</span><input type="range" id="rtTone" min="0" max="100" value="0" disabled><b id="rtToneV">0</b></div>
       <div class="rt-srow" id="rtSkinRow" style="display:none"><span>Кожа</span><input type="range" id="rtSkin" min="0" max="100" value="0" disabled><b id="rtSkinV">0</b></div>
+      <div class="rt-srow" id="rtAiRow" style="display:none"><span>Сила</span><input type="range" id="rtAi" min="0" max="100" value="0" disabled><b id="rtAiV">0</b></div>
       <div class="rt-srow" id="rtTeethRow" style="display:none"><span>Сила</span><input type="range" id="rtTeeth" min="0" max="100" value="0" disabled><b id="rtTeethV">0</b></div>
       <div class="rt-srow" id="rtTeethSpotRow" style="display:none"><span>Пятна</span><input type="range" id="rtTeethSpot" min="0" max="100" value="0" disabled><b id="rtTeethSpotV">0</b></div>
     </div>
@@ -2575,6 +2580,8 @@ function buildFullSource(){
       toneRun(own(), op.faces, op.amount);
     } else if(op.t === 'teeth'){
       teethRun(own(), op.faces, op.amount, op.spots);
+    } else if(op.t === 'ai'){
+      aiRun(own(), op);
     } else if(op.t === 'powder'){
       powderRun(own(), op.faces, op.amount);
     } else if(op.t === 'bokeh'){
@@ -3110,6 +3117,7 @@ function applyPendingTool(){
   if(t==='powder'){ openPowder(); return; }
   if(t==='tone'){ openTone(); return; }
   if(t==='teeth'){ openTeeth(); return; }
+  if(t==='ai'){ openAi(); return; }
   if(t==='flare'){ openFlare(); return; }
   if(t==='vig'){ openVig(); return; }
   if(t==='hal'){ openHal(); return; }
@@ -5951,7 +5959,7 @@ function openRetouch(){
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtHalOp = null; halOrig = null; rtDblOp = null; dblOrig = null; dblImg = null; rtDustOp = null; dustOrig = null; rtFaces = null; skinData = null; powderData = null; toneData = null; teethData = null; rtTeethOp = null;
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtHalOp = null; halOrig = null; rtDblOp = null; dblOrig = null; dblImg = null; rtDustOp = null; dustOrig = null; rtFaces = null; skinData = null; powderData = null; toneData = null; teethData = null; rtTeethOp = null; aiData = null; rtAiOp = null;
   for(const k in skinFace) delete skinFace[k];   // новый снимок — настройки лиц с нуля
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
@@ -5992,6 +6000,11 @@ function openTeeth(){
   openRetouch();
   retouchEl.classList.add('shadows-only');
   rtSetTool('teeth');
+}
+function openAi(){
+  openRetouch();
+  retouchEl.classList.add('shadows-only');
+  rtSetTool('ai');
 }
 function openFlare(){
   openRetouch();
@@ -6300,18 +6313,19 @@ function rtSetTool(tool){
   rtTool=tool;
   rtSyncPan();         // в «Тенях» руки нет, в кисти есть
   document.querySelectorAll('.rt-mode').forEach(b=>b.classList.toggle('active', b.dataset.tool===tool));
-  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin', bokeh=tool==='bokeh', powder=tool==='powder', tone=tool==='tone', flare=tool==='flare', vig=tool==='vig', hal=tool==='hal', dbl=tool==='dbl', dust=tool==='dust', teeth=tool==='teeth';
-  const ползунок = bags || skin || bokeh || powder || tone || flare || vig || hal || dbl || dust || teeth;   // режимы «один ползунок вместо кисти»
+  const stamp=tool==='stamp', bags=tool==='bags', skin=tool==='skin', bokeh=tool==='bokeh', powder=tool==='powder', tone=tool==='tone', flare=tool==='flare', vig=tool==='vig', hal=tool==='hal', dbl=tool==='dbl', dust=tool==='dust', teeth=tool==='teeth', ai=tool==='ai';
+  const ползунок = bags || skin || bokeh || powder || tone || flare || vig || hal || dbl || dust || teeth || ai;   // режимы «один ползунок вместо кисти»
   rtModes.classList.toggle('stamp', stamp);
   rtSrc.classList.toggle('on', stamp); rtTgt.classList.toggle('on', stamp);
   rtSrc.style.pointerEvents=stamp?'auto':'none'; rtTgt.style.pointerEvents=stamp?'auto':'none';
   if(stamp) rtPlaceMarkers();
   document.querySelectorAll('.rt-srow').forEach(r=>{
-    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtTeethRow' && r.id!=='rtTeethSpotRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow' && r.id!=='rtFlareRow' && r.id!=='rtVigRow' && r.id!=='rtVigSizeRow' && r.id!=='rtHalRow' && r.id!=='rtHalSpreadRow' && r.id!=='rtDblRow' && r.id!=='rtDblScaleRow' && r.id!=='rtDustRow' && r.id!=='rtDustDenRow' && r.id!=='rtDustLenRow')
+    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtTeethRow' && r.id!=='rtAiRow' && r.id!=='rtTeethSpotRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow' && r.id!=='rtFlareRow' && r.id!=='rtVigRow' && r.id!=='rtVigSizeRow' && r.id!=='rtHalRow' && r.id!=='rtHalSpreadRow' && r.id!=='rtDblRow' && r.id!=='rtDblScaleRow' && r.id!=='rtDustRow' && r.id!=='rtDustDenRow' && r.id!=='rtDustLenRow')
       r.style.display = ползунок?'none':'flex'; });
   document.getElementById('rtBagsRow').style.display = bags?'flex':'none';
   document.getElementById('rtSkinRow').style.display = skin?'flex':'none';
   document.getElementById('rtTeethRow').style.display = teeth?'flex':'none';
+  document.getElementById('rtAiRow').style.display = ai?'flex':'none';
   document.getElementById('rtTeethSpotRow').style.display = teeth?'flex':'none';
   document.getElementById('rtPowderRow').style.display = powder?'flex':'none';
   document.getElementById('rtToneRow').style.display = tone?'flex':'none';
@@ -6336,13 +6350,13 @@ function rtSetTool(tool){
   document.getElementById('rtTints').style.display = bokeh?'flex':'none';
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
-    bags ? 'Консилер' : skin ? 'Кожа' : teeth ? 'Зубы' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка' : vig ? 'Виньетка' : hal ? 'Свечение' : dbl ? 'Двойная' : dust ? 'Потёртости'
+    bags ? 'Консилер' : skin ? 'Кожа' : teeth ? 'Зубы' : ai ? 'ИИ-ретушь' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка' : vig ? 'Виньетка' : hal ? 'Свечение' : dbl ? 'Двойная' : dust ? 'Потёртости'
          : tool==='paint' ? 'Замазать' : 'Ретушь';
   // ряд с «Отменить» — только там, где есть что отменять, то есть у кисти и штампа
   document.getElementById('rtTools').style.display = ползунок ? 'none' : 'flex';
   // Кружки выбора лица принадлежат «Теням» и «Коже». Раньше их никто не убирал, и
   // после этих инструментов они оставались висеть поверх кадра в кисти и штампе.
-  if(!bags && !skin && !powder && !tone && !teeth) rtClearFaces();
+  if(!bags && !skin && !powder && !tone && !teeth && !ai) rtClearFaces();
   // Площадку ползунка ставим не только по наблюдателю: он может сработать в тот миг,
   // когда строка ещё нулевой ширины, и тогда площадка останется спрятанной — ползунок
   // выглядит живым, но не тянется. Досчитываем на следующих кадрах, когда размеры уже
@@ -6368,6 +6382,7 @@ function rtSetTool(tool){
   if(dbl) dblEnter();
   if(dust) dustEnter();
   if(teeth) teethEnter();
+  if(ai) aiEnter();
 }
 document.querySelectorAll('.rt-mode').forEach(b=> b.onclick=()=>rtSetTool(b.dataset.tool));
 function markerDrag(el,key){
@@ -8480,6 +8495,171 @@ document.getElementById('rtSkin').oninput = e=>{
   rtDrawFaces(skinPickFace);
 };
 
+// ─── «ИИ-ретушь»: сеть ABPN (Alibaba, CVPR 2022), лицензия Apache 2.0 ───
+// Всё остальное в этом файле — формулы, написанные руками: «гаси то, что темнее
+// подложки», «сведи каналы к яркости». Их беда в том, что каждое правило верно для
+// одних лиц и вредно для других: подглазье ребёнка и мешок взрослого выглядят
+// по-разному, а числа в формуле одни. Здесь вместо правил — сеть, обученная на парах
+// «до/после» от живых ретушёров: она выдаёт КАРТУ КОРРЕКЦИИ на лицо, приведённое к
+// 512×512, и уже эта карта решает, где тронуть, а где нет.
+// Считается ОДИН раз на лицо, поэтому ползунок остаётся живым: он лишь ослабляет
+// готовую карту к нейтральной середине (0.5 = «ничего не менять»).
+// Модель работает на самом устройстве через WebGPU — снимок никуда не уходит.
+const AI_ДВИЖОК = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+const AI_МОДЕЛЬ = './model/retouch.onnx';
+const AI_РАЗМЕР = 512;                       // вход сети
+let aiOrt = null, aiSess = null, aiПров = '', aiData = null, rtAiOp = null;
+
+async function aiДвижок(top){
+  if(aiSess) return aiSess;
+  if(!aiOrt){
+    top.textContent = 'Загружаю движок…';
+    aiOrt = await import(AI_ДВИЖОК + 'ort.webgpu.bundle.min.mjs');
+    aiOrt.env.wasm.wasmPaths = AI_ДВИЖОК;
+  }
+  // Модель весит 51 МБ. Кладём её в кэш браузера: качается один раз, дальше берётся
+  // с устройства — иначе каждое открытие карточки стоило бы гигабайтов трафика.
+  top.textContent = 'Загружаю модель (51 МБ, один раз)…';
+  let буф = null;
+  try{
+    const c = await caches.open('photo-presets-ai');
+    let r = await c.match(AI_МОДЕЛЬ);
+    if(!r){ await c.add(AI_МОДЕЛЬ); r = await c.match(AI_МОДЕЛЬ); }
+    if(r) буф = await r.arrayBuffer();
+  }catch(_){}
+  if(!буф) буф = await (await fetch(AI_МОДЕЛЬ)).arrayBuffer();
+  top.textContent = 'Готовлю ИИ…';
+  // Сжатая вдвое версия модели (fp16) на WebGPU выдаёт нули — проверено замером, поэтому
+  // держим полную точность, хоть файл и вдвое больше.
+  for(const p of (navigator.gpu ? ['webgpu','wasm'] : ['wasm'])){
+    try{ aiSess = await aiOrt.InferenceSession.create(буф, {executionProviders:[p]}); aiПров = p; break; }
+    catch(e){ /* пробуем следующий */ }
+  }
+  if(!aiSess) throw new Error('ИИ не запустился');
+  return aiSess;
+}
+// Кусок кадра с лицом → карта коррекции 512×512 (холст). Один прогон сети.
+async function aiКарта(cv, lms){
+  const W = cv.width, H = cv.height;
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const p of lms){ const x=p.x*W, y=p.y*H;
+    x0=Math.min(x0,x); y0=Math.min(y0,y); x1=Math.max(x1,x); y1=Math.max(y1,y); }
+  const зп = Math.max(x1-x0, y1-y0)*0.35;          // поля, как в исходной реализации
+  const bx = Math.max(0, Math.round(x0-зп)), by = Math.max(0, Math.round(y0-зп));
+  const bw = Math.min(W-bx, Math.round(x1-x0+зп*2)), bh = Math.min(H-by, Math.round(y1-y0+зп*2));
+  if(bw < 32 || bh < 32) return null;
+  const s = document.createElement('canvas'); s.width = AI_РАЗМЕР; s.height = AI_РАЗМЕР;
+  const sx = s.getContext('2d', {willReadFrequently:true});
+  sx.drawImage(cv, bx, by, bw, bh, 0, 0, AI_РАЗМЕР, AI_РАЗМЕР);
+  const d = sx.getImageData(0,0,AI_РАЗМЕР,AI_РАЗМЕР).data;
+  const N = AI_РАЗМЕР*AI_РАЗМЕР, вх = new Float32Array(3*N);
+  for(let i=0,p=0;i<N;i++,p+=4){        // сеть ждёт значения от -1 до 1, каналы отдельно
+    вх[i]     = d[p]  /127.5-1;
+    вх[N+i]   = d[p+1]/127.5-1;
+    вх[2*N+i] = d[p+2]/127.5-1;
+  }
+  const о = await aiSess.run({ [aiSess.inputNames[0]]: new aiOrt.Tensor('float32', вх, [1,3,AI_РАЗМЕР,AI_РАЗМЕР]) });
+  const mg = о[aiSess.outputNames[0]].data;
+  const mc = document.createElement('canvas'); mc.width = AI_РАЗМЕР; mc.height = AI_РАЗМЕР;
+  const mx = mc.getContext('2d');
+  const mi = mx.createImageData(AI_РАЗМЕР, AI_РАЗМЕР);
+  for(let i=0,p=0;i<N;i++,p+=4){
+    mi.data[p]   = clamp(mg[i]*255);
+    mi.data[p+1] = clamp(mg[N+i]*255);
+    mi.data[p+2] = clamp(mg[2*N+i]*255);
+    mi.data[p+3] = 255;
+  }
+  mx.putImageData(mi, 0, 0);
+  return { bx, by, bw, bh, mg:mc, rx:bx/W, ry:by/H, rw:bw/W, rh:bh/H };
+}
+// Наложение карты. Кривая та же, что у авторов: pred = (1-2m)·c² + 2m·c, где m —
+// значение карты. m = 0.5 не меняет пиксель вообще, поэтому «сила» просто стягивает
+// карту к 0.5. Карта растягивается до размера куска браузером — она гладкая.
+function aiНаложить(cv, з, сила){
+  const ctx = cv.getContext('2d');
+  const bx = з.bx !== undefined ? з.bx : Math.round(з.rx*cv.width);
+  const by = з.by !== undefined ? з.by : Math.round(з.ry*cv.height);
+  const bw = з.bw !== undefined ? з.bw : Math.round(з.rw*cv.width);
+  const bh = з.bh !== undefined ? з.bh : Math.round(з.rh*cv.height);
+  if(bw < 8 || bh < 8) return;
+  const t = document.createElement('canvas'); t.width = bw; t.height = bh;
+  const tx = t.getContext('2d', {willReadFrequently:true});
+  tx.imageSmoothingQuality = 'high';
+  tx.drawImage(з.mg, 0, 0, bw, bh);
+  const M = tx.getImageData(0,0,bw,bh).data;
+  const im = ctx.getImageData(bx, by, bw, bh), od = im.data;
+  for(let i=0;i<od.length;i+=4) for(let k=0;k<3;k++){
+    const c = od[i+k]/255;
+    const m = 0.5 + (M[i+k]/255 - 0.5)*сила;
+    od[i+k] = clamp(((1-2*m)*c*c + 2*m*c)*255);
+  }
+  ctx.putImageData(im, bx, by);
+}
+function aiПрименить(сила){
+  if(!aiData) return;
+  const ctx = rtCanvas.getContext('2d');
+  for(const з of aiData){ ctx.putImageData(з.orig, з.bx, з.by); }   // всегда от исходного
+  if(сила > 0) for(const з of aiData) aiНаложить(rtCanvas, з, сила);
+}
+function aiRun(cv, op){        // повтор на оригинале при сохранении — карта уже готова
+  if(!op || !op.зоны || !op.amount) return;
+  for(const з of op.зоны) aiНаложить(cv, з, op.amount);
+}
+async function aiEnter(){
+  const sl = document.getElementById('rtAi'), top = document.getElementById('rtTop');
+  sl.value = 0; document.getElementById('rtAiV').textContent = '0'; sl.disabled = true;
+  aiData = null; rtAiOp = null;
+  if(bagsBusy) return; bagsBusy = true;
+  try{
+    top.textContent = bagsKit ? 'Ищу лицо…' : 'Загружаю модель лица…';
+    const kit = await loadFaceKit();
+    if(rtTool !== 'ai'){ bagsBusy = false; return; }
+    let res = kit.detect(rtCanvas);
+    let faces = (res && res.faceLandmarks) || [];
+    if(!faces.length){ top.textContent = 'Лицо не найдено'; bagsBusy = false; return; }
+    rtFaces = faces;
+    rtFaceSel = biggestFace(faces, rtCanvas.width, rtCanvas.height);
+    await aiДвижок(top);
+    if(rtTool !== 'ai'){ bagsBusy = false; return; }
+    top.textContent = 'Считаю…';
+    const з = await aiКарта(rtCanvas, faces[rtFaceSel]);
+    if(!з){ top.textContent = 'Лицо слишком мелкое'; bagsBusy = false; return; }
+    з.orig = rtCanvas.getContext('2d').getImageData(з.bx, з.by, з.bw, з.bh);
+    aiData = [з];
+    if(rtTool !== 'ai'){ bagsBusy = false; return; }
+    top.textContent = 'ИИ-ретушь' + (aiПров === 'wasm' ? ' (без ускорения)' : '');
+    sl.disabled = false;
+    rtDrawFaces(aiPickFace);
+    rtFacesHint(faces.length, 'кому править кожу');
+  } catch(e){
+    top.textContent = 'ИИ недоступен — проверьте интернет';
+  }
+  bagsBusy = false;
+}
+async function aiPickFace(){
+  const sl = document.getElementById('rtAi'), top = document.getElementById('rtTop');
+  const v = +sl.value;
+  aiПрименить(0);                                  // снимаем правку с прежнего лица
+  sl.disabled = true; top.textContent = 'Считаю…';
+  try{
+    const з = await aiКарта(rtCanvas, rtFaces[rtFaceSel]);
+    if(!з){ top.textContent = 'Лицо слишком мелкое'; return; }
+    з.orig = rtCanvas.getContext('2d').getImageData(з.bx, з.by, з.bw, з.bh);
+    aiData = [з];
+    top.textContent = 'ИИ-ретушь';
+    sl.disabled = false;
+    if(v) aiСлайдер();
+  }catch(e){ top.textContent = 'ИИ не смог посчитать это лицо'; }
+  rtDrawFaces(aiPickFace);
+}
+function aiСлайдер(){
+  const v = +document.getElementById('rtAi').value;
+  document.getElementById('rtAiV').textContent = v;
+  aiПрименить(v/100);
+  rtAiOp = (v && aiData) ? { t:'ai', зоны:aiData.map(з=>({rx:з.rx, ry:з.ry, rw:з.rw, rh:з.rh, mg:з.mg})), amount:v/100 } : null;
+}
+document.getElementById('rtAi').oninput = ()=>{ rtCmpOff(); aiСлайдер(); };
+
 // ─── «До/После» в ретуши ───
 // Раньше здесь было «зажми и держи», а в редакторе — шторка с перетаскиванием. Один
 // и тот же вопрос «что я изменил» решался двумя разными жестами; теперь жест один.
@@ -8543,8 +8723,8 @@ document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
   rtCmpOff();          // применяем результат, а не то, что показывает шторка
   sourceCanvas.getContext('2d').drawImage(rtCanvas, 0, 0);   // bake retouch into the source
-  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp); if(rtPowderOp) editOps.push(rtPowderOp); if(rtToneOp) editOps.push(rtToneOp); if(rtTeethOp) editOps.push(rtTeethOp); if(rtFlareOp) editOps.push(rtFlareOp); if(rtVigOp) editOps.push(rtVigOp); if(rtHalOp) editOps.push(rtHalOp); if(rtDblOp) editOps.push(rtDblOp); if(rtDustOp) editOps.push(rtDustOp); if(rtBokehOp) editOps.push(rtBokehOp);   // те же правки повторим на оригинале
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtPowderOp = null; rtToneOp = null; rtTeethOp = null; rtFlareOp = null; rtVigOp = null; rtHalOp = null; rtDblOp = null; rtDustOp = null;
+  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp); if(rtPowderOp) editOps.push(rtPowderOp); if(rtToneOp) editOps.push(rtToneOp); if(rtTeethOp) editOps.push(rtTeethOp); if(rtAiOp) editOps.push(rtAiOp); if(rtFlareOp) editOps.push(rtFlareOp); if(rtVigOp) editOps.push(rtVigOp); if(rtHalOp) editOps.push(rtHalOp); if(rtDblOp) editOps.push(rtDblOp); if(rtDustOp) editOps.push(rtDustOp); if(rtBokehOp) editOps.push(rtBokehOp);   // те же правки повторим на оригинале
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtPowderOp = null; rtToneOp = null; rtTeethOp = null; rtAiOp = null; rtFlareOp = null; rtVigOp = null; rtHalOp = null; rtDblOp = null; rtDustOp = null;
   editedCanvas = null; makePreview(); buildChips(); buildHomeLooks(); render();
   closeRetouch(); goEditor();
 };
