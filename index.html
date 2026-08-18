@@ -6014,10 +6014,16 @@ function openTeeth(){
   rtSetTool('teeth');
 }
 function openAi(){
-  aiЖду(aiSess ? 'Открываю…' : 'Готовлю ИИ…');   // до всякой работы, чтобы нажатие было видно
-  openRetouch();
-  retouchEl.classList.add('shadows-only');
-  rtSetTool('ai');
+  aiЖду(aiSess ? 'Открываю…' : 'Готовлю ИИ…');
+  // ДАЁМ БРАУЗЕРУ НАРИСОВАТЬ кружок, прежде чем занимать поток. Открытие оверлея —
+  // тяжёлая синхронная работа на несколько секунд; если запустить её сразу, экран
+  // ожидания не появится вовсе, хотя код его «показал». Артур это и увидел: кружка нет.
+  // Два кадра подряд: первый ставит стили, второй гарантирует, что они уже на экране.
+  requestAnimationFrame(()=> requestAnimationFrame(()=>{
+    openRetouch();
+    retouchEl.classList.add('shadows-only');
+    rtSetTool('ai');
+  }));
 }
 function openFlare(){
   openRetouch();
