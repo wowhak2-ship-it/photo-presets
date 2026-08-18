@@ -8510,6 +8510,52 @@ const AI_МОДЕЛЬ = './model/retouch.onnx';
 const AI_РАЗМЕР = 512;                       // вход сети
 let aiOrt = null, aiSess = null, aiПров = '', aiData = null, rtAiOp = null;
 
+// Файл модели: один раз с сети, дальше с телефона. Скачивание идёт с показом процента —
+// 51 МБ без обратной связи выглядят как зависшее приложение. Качается заранее, в фоне
+// (см. aiЗапас ниже), поэтому к открытию карточки файл обычно уже на месте.
+let aiФайлЖдём = null;
+async function aiФайл(шаг){
+  if(aiФайлЖдём) return aiФайлЖдём;
+  aiФайлЖдём = (async ()=>{
+    let c = null;
+    try{ c = await caches.open('photo-presets-ai'); }catch(_){}
+    if(c){
+      const есть = await c.match(AI_МОДЕЛЬ);
+      if(есть) return await есть.arrayBuffer();
+    }
+    if(шаг) шаг(-1);
+    const resp = await fetch(AI_МОДЕЛЬ);
+    if(!resp.ok) throw new Error('модель не скачалась');
+    const всего = +resp.headers.get('content-length') || 0;
+    // читаем потоком, чтобы показывать проценты
+    const куски = []; let принято = 0;
+    const reader = resp.body && resp.body.getReader ? resp.body.getReader() : null;
+    if(reader){
+      for(;;){
+        const {done, value} = await reader.read();
+        if(done) break;
+        куски.push(value); принято += value.length;
+        if(шаг && всего) шаг(принято/всего);
+      }
+    }
+    const буф = reader ? await new Blob(куски).arrayBuffer() : await resp.arrayBuffer();
+    if(c){ try{ await c.put(AI_МОДЕЛЬ, new Response(буф.slice(0))); }catch(_){} }
+    return буф;
+  })();
+  try{ return await aiФайлЖдём; }
+  catch(e){ aiФайлЖдём = null; throw e; }
+}
+// Запас впрок: через полминуты после запуска, когда приложение уже не занято, тихо
+// докачиваем модель. Не трогаем, если человек экономит трафик или сидит на мобильном
+// интернете — 51 МБ за его счёт качать нельзя.
+function aiЗапас(){
+  const с = navigator.connection;
+  if(с && (с.saveData || /^([23]g|slow-2g)$/.test(с.effectiveType || ''))) return;
+  setTimeout(()=>{ aiФайл(null).catch(()=>{}); }, 30000);
+}
+if(document.readyState === 'complete') aiЗапас();
+else addEventListener('load', aiЗапас);
+
 async function aiДвижок(top){
   if(aiSess) return aiSess;
   if(!aiOrt){
@@ -8517,17 +8563,10 @@ async function aiДвижок(top){
     aiOrt = await import(AI_ДВИЖОК + 'ort.webgpu.bundle.min.mjs');
     aiOrt.env.wasm.wasmPaths = AI_ДВИЖОК;
   }
-  // Модель весит 51 МБ. Кладём её в кэш браузера: качается один раз, дальше берётся
-  // с устройства — иначе каждое открытие карточки стоило бы гигабайтов трафика.
-  top.textContent = 'Загружаю модель (51 МБ, один раз)…';
-  let буф = null;
-  try{
-    const c = await caches.open('photo-presets-ai');
-    let r = await c.match(AI_МОДЕЛЬ);
-    if(!r){ await c.add(AI_МОДЕЛЬ); r = await c.match(AI_МОДЕЛЬ); }
-    if(r) буф = await r.arrayBuffer();
-  }catch(_){}
-  if(!буф) буф = await (await fetch(AI_МОДЕЛЬ)).arrayBuffer();
+  const буф = await aiФайл(доля => {
+    top.textContent = доля < 0 ? 'Загружаю модель (51 МБ, один раз)…'
+                               : 'Загружаю модель… ' + Math.round(доля*100) + '%';
+  });
   top.textContent = 'Готовлю ИИ…';
   // Сжатая вдвое версия модели (fp16) на WebGPU выдаёт нули — проверено замером, поэтому
   // держим полную точность, хоть файл и вдвое больше.
@@ -8595,11 +8634,14 @@ function aiНаложить(cv, з, сила){
   }
   ctx.putImageData(im, bx, by);
 }
+// Правка идёт по ВСЕМ лицам, которые уже посчитаны: на групповом кадре человек ждёт,
+// что выставленная сила осталась и на соседе, а не перескочила вместе с выбором.
+function aiВсе(){ const с = Object.keys(aiЛица).map(k=>aiЛица[k]); return с.length ? с : (aiData||[]); }
 function aiПрименить(сила){
-  if(!aiData) return;
   const ctx = rtCanvas.getContext('2d');
-  for(const з of aiData){ ctx.putImageData(з.orig, з.bx, з.by); }   // всегда от исходного
-  if(сила > 0) for(const з of aiData) aiНаложить(rtCanvas, з, сила);
+  const зоны = aiВсе();
+  for(const з of зоны){ ctx.putImageData(з.orig, з.bx, з.by); }     // всегда от исходного
+  if(сила > 0) for(const з of зоны) aiНаложить(rtCanvas, з, сила);
 }
 function aiRun(cv, op){        // повтор на оригинале при сохранении — карта уже готова
   if(!op || !op.зоны || !op.amount) return;
@@ -8625,6 +8667,7 @@ async function aiEnter(){
     const з = await aiКарта(rtCanvas, faces[rtFaceSel]);
     if(!з){ top.textContent = 'Лицо слишком мелкое'; bagsBusy = false; return; }
     з.orig = rtCanvas.getContext('2d').getImageData(з.bx, з.by, з.bw, з.bh);
+    aiЛица[rtFaceSel] = з;
     aiData = [з];
     if(rtTool !== 'ai'){ bagsBusy = false; return; }
     top.textContent = 'ИИ-ретушь' + (aiПров === 'wasm' ? ' (без ускорения)' : '');
@@ -8636,27 +8679,41 @@ async function aiEnter(){
   }
   bagsBusy = false;
 }
+// Посчитанные карты держим по лицам: сеть — самая дорогая операция во всём приложении,
+// и заставлять её считать заново при каждом возврате к соседу нельзя. Артур поймал это
+// сразу: «он так долго переключает лица».
+const aiЛица = {};
 async function aiPickFace(){
   const sl = document.getElementById('rtAi'), top = document.getElementById('rtTop');
   const v = +sl.value;
-  aiПрименить(0);                                  // снимаем правку с прежнего лица
+  const готовая = aiЛица[rtFaceSel];
+  if(готовая){                                     // это лицо уже считали — берём готовое
+    aiData = [готовая];
+    if(v) aiСлайдер();
+    rtDrawFaces(aiPickFace);
+    return;
+  }
   sl.disabled = true; top.textContent = 'Считаю…';
   try{
     const з = await aiКарта(rtCanvas, rtFaces[rtFaceSel]);
-    if(!з){ top.textContent = 'Лицо слишком мелкое'; return; }
+    if(!з){ top.textContent = 'Лицо слишком мелкое'; sl.disabled = false; return; }
     з.orig = rtCanvas.getContext('2d').getImageData(з.bx, з.by, з.bw, з.bh);
+    aiЛица[rtFaceSel] = з;
     aiData = [з];
     top.textContent = 'ИИ-ретушь';
     sl.disabled = false;
     if(v) aiСлайдер();
-  }catch(e){ top.textContent = 'ИИ не смог посчитать это лицо'; }
+  }catch(e){ top.textContent = 'ИИ не смог посчитать это лицо'; sl.disabled = false; }
   rtDrawFaces(aiPickFace);
 }
 function aiСлайдер(){
   const v = +document.getElementById('rtAi').value;
   document.getElementById('rtAiV').textContent = v;
   aiПрименить(v/100);
-  rtAiOp = (v && aiData) ? { t:'ai', зоны:aiData.map(з=>({rx:з.rx, ry:з.ry, rw:з.rw, rh:з.rh, mg:з.mg})), amount:v/100 } : null;
+  // В кадр уходят ВСЕ лица, которым выставлена сила: на групповом снимке иначе
+  // сохранилось бы только последнее, а работа по остальным пропала бы.
+  const все = aiВсе();
+  rtAiOp = v ? { t:'ai', зоны:все.map(з=>({rx:з.rx, ry:з.ry, rw:з.rw, rh:з.rh, mg:з.mg})), amount:v/100 } : null;
 }
 document.getElementById('rtAi').oninput = ()=>{ rtCmpOff(); aiСлайдер(); };
 
