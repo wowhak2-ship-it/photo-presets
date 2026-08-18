@@ -1,5 +1,5 @@
 // Service worker — offline cache for the Photo Presets PWA
-const CACHE = 'photo-presets-v129';
+const CACHE = 'photo-presets-v131';
 const ASSETS = [
   './',
   './index.html',
@@ -34,6 +34,14 @@ self.addEventListener('activate', e => {
 // приложение на обычный адрес, откуда оно этот снимок уже забирает.
 const SHARE_CACHE = 'photo-presets-share';
 const SHARE_KEY = './shared-photo';
+
+// Приложение открывают и с корня, и с /index.html, и с хвостом ?p=…; в кэше лежит одна
+// копия — ищем её по всем этим видам адреса, иначе страница «не нашлась» и пошла бы в сеть.
+async function kэшНайти(кэш, req) {
+  return (await кэш.match(req, { ignoreSearch: true })) ||
+         (await кэш.match('./index.html')) ||
+         (await кэш.match('./'));
+}
 
 self.addEventListener('fetch', e => {
   const req = e.request;
@@ -76,16 +84,30 @@ self.addEventListener('fetch', e => {
   // а не новой версией приложения. Под cache-first список замёрз бы навсегда.
   const isLive = url.pathname.endsWith('/packs.json');
 
-  if (isHTML || isLive) {
-    // Network-first, bypassing the browser's HTTP cache — GitHub Pages serves
-    // index.html with max-age=600, so a plain fetch() could hand back a stale
-    // copy for ten minutes after a deploy.
+  if (isHTML) {
+    // Страницу отдаём ИЗ ПАМЯТИ СРАЗУ, а свежую копию тянем в фоне — она пойдёт в дело
+    // при следующем запуске. Раньше здесь стояло «сначала сеть», и запуск приложения ждал
+    // ответа GitHub: у Артура без VPN провайдер отдаёт его медленно, и это были те самые
+    // секунды белого экрана (с VPN всё летало — так и нашли причину).
+    // Обновление от этого не теряется: новую версию по-прежнему приносит служебный
+    // воркер — он ставится в фоне и перезагружает страницу, когда готов.
+    e.respondWith((async () => {
+      const кэш = await caches.open(CACHE);
+      const свой = await kэшНайти(кэш, req);
+      const сеть = fetch(req, { cache: 'no-store' }).then(resp => {
+        кэш.put('./index.html', resp.clone()).catch(() => {});
+        return resp;
+      }).catch(() => null);
+      return свой || (await сеть) || new Response('нет сети', { status: 504 });
+    })());
+  } else if (isLive) {
+    // Витрина наборов — наоборот, всегда из сети: новый набор должен появляться сразу.
     e.respondWith(
       fetch(req, { cache: 'no-store' }).then(resp => {
         const copy = resp.clone();
         caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
         return resp;
-      }).catch(() => caches.match(req).then(r => r || (isHTML ? caches.match('./index.html') : undefined)))
+      }).catch(() => caches.match(req))
     );
   } else {
     // Cache-first for static assets (icons, manifest)
