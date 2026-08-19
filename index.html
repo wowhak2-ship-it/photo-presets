@@ -8996,11 +8996,13 @@ function точПоказать(точки){
   x.clearRect(0,0,area.width,area.height);
   if(!точки || !точки.length){ сл.classList.remove('on'); return; }
   const кx = cv.width/rtCanvas.width, кy = cv.height/rtCanvas.height;
-  x.strokeStyle = 'rgba(224,162,74,.95)'; x.lineWidth = 1.6;
-  x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 3;
+  // Кружок должен обводить саму точку, а не пол-лица: прежний множитель 1.25 и
+  // минимум в 7 px давали круги крупнее самих изъянов.
+  x.strokeStyle = 'rgba(224,162,74,.95)'; x.lineWidth = 1.2;
+  x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 2;
   for(const т of точки){
     const цx = cv.left - area.left + т.x*кx, цy = cv.top - area.top + т.y*кy;
-    const р = Math.max(7, т.r*кx*1.25);
+    const р = Math.max(3.5, т.r*кx*0.85);
     x.beginPath(); x.arc(цx, цy, р, 0, Math.PI*2); x.stroke();
   }
   сл.classList.add('on');
