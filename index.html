@@ -3180,10 +3180,10 @@ function запомнитьПорядок(){
 }
 function включитьПеретаскивание(){
   const хост = document.getElementById('homeTools'); if(!хост) return;
-  let взято = null, таймер = null, стартX = 0, стартY = 0, сдвигX = 0, сдвигY = 0, двигали = false, обменВремя = 0;
+  let взято = null, таймер = null, стартX = 0, стартY = 0, сдвигX = 0, сдвигY = 0, двигали = false, обменВремя = 0, дx = 0, дy = 0;
   const отменить = ()=>{ clearTimeout(таймер); таймер = null; };
   const взять = (б, e)=>{
-    взято = б; двигали = false;
+    взято = б; двигали = false; дx = 0; дy = 0;
     const r = б.getBoundingClientRect();
     сдвигX = e.clientX - r.left - r.width/2;
     сдвигY = e.clientY - r.top - r.height/2;
@@ -3193,13 +3193,18 @@ function включитьПеретаскивание(){
     if(navigator.vibrate) navigator.vibrate(12);      // короткий отклик: «взял»
     вести(e);
   };
-  const вести = (e)=>{
+  // Сдвиг держим ЧИСЛАМИ. Раньше я вычитал его, разбирая строку style.transform —
+  // а браузер пишет мелкие значения в виде 9.15527e-05, разбор на этом ломался, сдвиг
+  // считался нулём, и карточка отскакивала через полэкрана. Отсюда были «прыжки».
+  const поставить = (e)=>{
     const r = взято.getBoundingClientRect();
-    const цx = r.left + r.width/2, цy = r.top + r.height/2;
-    const был = взято.style.transform.match(/translate\((-?[\d.]+)px, (-?[\d.]+)px\)/);
-    const бx = был ? +был[1] : 0, бy = был ? +был[2] : 0;
-    взято.style.transform = 'translate(' + (бx + e.clientX - цx - сдвигX) + 'px, '
-                                          + (бy + e.clientY - цy - сдвигY) + 'px) scale(1.06)';
+    const цx = r.left + r.width/2 - дx, цy = r.top + r.height/2 - дy;   // центр без нашего сдвига
+    дx = e.clientX - цx - сдвигX;
+    дy = e.clientY - цy - сдвигY;
+    взято.style.transform = 'translate(' + дx + 'px, ' + дy + 'px) scale(1.06)';
+  };
+  const вести = (e)=>{
+    поставить(e);
     // КУДА БРОСАЕМ. Наивное «палец внутри чужой карточки» давало тряску: после обмена
     // сетка сдвигается, палец снова оказывается над соседкой — и они меняются местами по
     // кругу. Поэтому обмен требует, чтобы палец зашёл ЗА середину цели (мёртвая зона у
@@ -3219,10 +3224,7 @@ function включитьПеретаскивание(){
     const позже = дети.indexOf(цель) > дети.indexOf(взято);
     хост.insertBefore(взято, позже ? цель.nextSibling : цель);
     обменВремя = Date.now();
-    // после переноса в DOM карточка стоит на новом месте — сдвиг считаем заново
-    const нов = взято.getBoundingClientRect();
-    взято.style.transform = 'translate(' + (e.clientX - (нов.left + нов.width/2) - сдвигX) + 'px, '
-                                          + (e.clientY - (нов.top + нов.height/2) - сдвигY) + 'px) scale(1.06)';
+    поставить(e);                     // карточка переехала в списке — сдвиг пересчитываем
   };
   const бросить = ()=>{
     if(!взято) return;
