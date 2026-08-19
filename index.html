@@ -3188,6 +3188,7 @@ function включитьПеретаскивание(){
     сдвигX = e.clientX - r.left - r.width/2;
     сдвигY = e.clientY - r.top - r.height/2;
     б.classList.add('drag');
+    б.style.touchAction = 'none';                 // и на самой карточке, для верности
     хост.classList.add('dragging');
     if(navigator.vibrate) navigator.vibrate(12);      // короткий отклик: «взял»
     вести(e);
@@ -3217,7 +3218,7 @@ function включитьПеретаскивание(){
   const бросить = ()=>{
     if(!взято) return;
     взято.classList.remove('drag'); взято.classList.add('dropping');
-    взято.style.transform = '';
+    взято.style.transform = ''; взято.style.touchAction = '';
     setTimeout(()=> взято && взято.classList.remove('dropping'), 200);
     хост.classList.remove('dragging');
     запомнитьПорядок();
@@ -3228,13 +3229,20 @@ function включитьПеретаскивание(){
     стартX = e.clientX; стартY = e.clientY;
     таймер = setTimeout(()=>{ таймер = null; try{ б.setPointerCapture(e.pointerId); }catch(_){} взять(б, e); }, 450);
   });
-  хост.addEventListener('pointermove', e=>{
+  // Пока карточка в руке — ГАСИМ ПРОКРУТКУ на каждом движении пальца. Одного
+  // touch-action у родителя мало: браузер решает судьбу жеста в момент касания, а мы
+  // берём карточку только через полсекунды после него. На телефоне это выглядело как
+  // «хватается, но не перетаскивается»: страница забирала жест себе, и перенос срывался.
+  document.addEventListener('touchmove', e=>{ if(взято) e.preventDefault(); }, {passive:false});
+  // Слушаем ВЕСЬ экран, а не только сетку: палец легко уходит за её край, и там события
+  // до сетки уже не доходили — карточка застывала на месте.
+  document.addEventListener('pointermove', e=>{
     if(взято){ e.preventDefault(); двигали = true; вести(e); return; }
     // до срабатывания долгого нажатия палец мог поехать — это листание, не перенос
     if(таймер && Math.hypot(e.clientX-стартX, e.clientY-стартY) > 10) отменить();
-  });
-  хост.addEventListener('pointerup', ()=>{ отменить(); бросить(); });
-  хост.addEventListener('pointercancel', ()=>{ отменить(); бросить(); });
+  }, {passive:false});
+  document.addEventListener('pointerup', ()=>{ отменить(); бросить(); });
+  document.addEventListener('pointercancel', ()=>{ отменить(); бросить(); });
   // после переноса не открываем инструмент: палец отпущен на карточке, но человек
   // переставлял, а не нажимал
   хост.addEventListener('click', e=>{ if(двигали){ e.stopPropagation(); e.preventDefault(); двигали = false; } }, true);
