@@ -3180,7 +3180,7 @@ function запомнитьПорядок(){
 }
 function включитьПеретаскивание(){
   const хост = document.getElementById('homeTools'); if(!хост) return;
-  let взято = null, таймер = null, стартX = 0, стартY = 0, сдвигX = 0, сдвигY = 0, двигали = false;
+  let взято = null, таймер = null, стартX = 0, стартY = 0, сдвигX = 0, сдвигY = 0, двигали = false, обменВремя = 0;
   const отменить = ()=>{ clearTimeout(таймер); таймер = null; };
   const взять = (б, e)=>{
     взято = б; двигали = false;
@@ -3200,20 +3200,29 @@ function включитьПеретаскивание(){
     const бx = был ? +был[1] : 0, бy = был ? +был[2] : 0;
     взято.style.transform = 'translate(' + (бx + e.clientX - цx - сдвигX) + 'px, '
                                           + (бy + e.clientY - цy - сдвигY) + 'px) scale(1.06)';
-    // куда бросаем: ближайшая по центру чужая карточка под пальцем
+    // КУДА БРОСАЕМ. Наивное «палец внутри чужой карточки» давало тряску: после обмена
+    // сетка сдвигается, палец снова оказывается над соседкой — и они меняются местами по
+    // кругу. Поэтому обмен требует, чтобы палец зашёл ЗА середину цели (мёртвая зона у
+    // границы), и не чаще чем раз в 150 мс.
+    if(Date.now() - обменВремя < 150) return;
+    let цель = null, ближе = 1e9;
     for(const б of хост.children){
       if(б === взято) continue;
       const rr = б.getBoundingClientRect();
-      if(e.clientX >= rr.left && e.clientX <= rr.right && e.clientY >= rr.top && e.clientY <= rr.bottom){
-        const позже = [...хост.children].indexOf(б) > [...хост.children].indexOf(взято);
-        хост.insertBefore(взято, позже ? б.nextSibling : б);
-        // после переноса в DOM карточка стоит на новом месте — сдвиг считаем заново
-        const нов = взято.getBoundingClientRect();
-        взято.style.transform = 'translate(' + (e.clientX - (нов.left + нов.width/2) - сдвигX) + 'px, '
-                                              + (e.clientY - (нов.top + нов.height/2) - сдвигY) + 'px) scale(1.06)';
-        break;
-      }
+      const d = Math.hypot(e.clientX - (rr.left+rr.width/2), e.clientY - (rr.top+rr.height/2));
+      if(d < ближе){ ближе = d; цель = б; }
     }
+    if(!цель) return;
+    const rr = цель.getBoundingClientRect();
+    if(ближе > Math.min(rr.width, rr.height)*0.42) return;      // не дошёл до середины — рано
+    const дети = [...хост.children];
+    const позже = дети.indexOf(цель) > дети.indexOf(взято);
+    хост.insertBefore(взято, позже ? цель.nextSibling : цель);
+    обменВремя = Date.now();
+    // после переноса в DOM карточка стоит на новом месте — сдвиг считаем заново
+    const нов = взято.getBoundingClientRect();
+    взято.style.transform = 'translate(' + (e.clientX - (нов.left + нов.width/2) - сдвигX) + 'px, '
+                                          + (e.clientY - (нов.top + нов.height/2) - сдвигY) + 'px) scale(1.06)';
   };
   const бросить = ()=>{
     if(!взято) return;
