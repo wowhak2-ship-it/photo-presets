@@ -3188,13 +3188,17 @@ function найтиПрокрутку(эл){
 }
 function включитьПеретаскивание(){
   const хост = document.getElementById('homeTools'); if(!хост) return;
-  let взято = null, таймер = null, стартX = 0, стартY = 0, сдвигX = 0, сдвигY = 0, двигали = false, обменВремя = 0, дx = 0, дy = 0, палец = null, стоп = null, стопБыло = '', стопМесто = 0;
+  let взято = null, таймер = null, стартX = 0, стартY = 0, сдвигX = 0, сдвигY = 0, двигали = false, обменВремя = 0, дx = 0, дy = 0, палец = null, стоп = null, стопБыло = '', стопМесто = 0, базаX = 0, базаY = 0;
   const отменить = ()=>{ clearTimeout(таймер); таймер = null; };
   const взять = (б, e)=>{
     взято = б; двигали = false; дx = 0; дy = 0;
+    б.classList.remove('dropping');   // плавный возврат мог ещё идти — он ломает замер
+    б.style.transition = 'none';
+    б.style.transform = '';
     const r = б.getBoundingClientRect();
-    сдвигX = e.clientX - r.left - r.width/2;
-    сдвигY = e.clientY - r.top - r.height/2;
+    базаX = r.left + r.width/2; базаY = r.top + r.height/2;
+    сдвигX = e.clientX - базаX;
+    сдвигY = e.clientY - базаY;
     б.classList.add('drag');
     б.style.touchAction = 'none';
     хост.classList.add('dragging');
@@ -3214,11 +3218,18 @@ function включитьПеретаскивание(){
   // Сдвиг держим ЧИСЛАМИ. Раньше я вычитал его, разбирая строку style.transform —
   // а браузер пишет мелкие значения в виде 9.15527e-05, разбор на этом ломался, сдвиг
   // считался нулём, и карточка отскакивала через полэкрана. Отсюда были «прыжки».
-  const поставить = (e)=>{
+  // База — центр карточки БЕЗ нашего сдвига. Снимается один раз при захвате и потом
+  // только после перестановки в списке. Раньше я каждый раз вычитал сдвиг из текущего
+  // положения — и если на карточке ещё шла плавная анимация возврата, браузер отдавал
+  // ПРОМЕЖУТОЧНОЕ положение, ошибка складывалась сама с собой, и карточка улетала за
+  // миллион пикселей. Это и было «прыгает, но не всегда».
+  const снятьБазу = ()=>{
     const r = взято.getBoundingClientRect();
-    const цx = r.left + r.width/2 - дx, цy = r.top + r.height/2 - дy;   // центр без нашего сдвига
-    дx = e.clientX - цx - сдвигX;
-    дy = e.clientY - цy - сдвигY;
+    базаX = r.left + r.width/2 - дx; базаY = r.top + r.height/2 - дy;
+  };
+  const поставить = (e)=>{
+    дx = e.clientX - базаX - сдвигX;
+    дy = e.clientY - базаY - сдвигY;
     взято.style.transform = 'translate(' + дx + 'px, ' + дy + 'px) scale(1.06)';
   };
   const вести = (e)=>{
@@ -3242,12 +3253,13 @@ function включитьПеретаскивание(){
     const позже = дети.indexOf(цель) > дети.indexOf(взято);
     хост.insertBefore(взято, позже ? цель.nextSibling : цель);
     обменВремя = Date.now();
-    поставить(e);                     // карточка переехала в списке — сдвиг пересчитываем
+    снятьБазу();                      // карточка переехала в списке — база другая
+    поставить(e);
   };
   const бросить = ()=>{
     if(!взято) return;
     взято.classList.remove('drag'); взято.classList.add('dropping');
-    взято.style.transform = ''; взято.style.touchAction = '';
+    взято.style.transform = ''; взято.style.touchAction = ''; взято.style.transition = '';
     setTimeout(()=> взято && взято.classList.remove('dropping'), 200);
     хост.classList.remove('dragging');
     if(стоп){ стоп.style.overflow = стопБыло; стоп.scrollTop = стопМесто; стоп = null; }
@@ -3259,7 +3271,7 @@ function включитьПеретаскивание(){
     if(взято || таймер) return;                    // одна карточка за раз
     палец = e.pointerId;
     стартX = e.clientX; стартY = e.clientY;
-    таймер = setTimeout(()=>{ таймер = null; try{ б.setPointerCapture(e.pointerId); }catch(_){} взять(б, e); }, 450);
+    таймер = setTimeout(()=>{ таймер = null; try{ б.setPointerCapture(e.pointerId); }catch(_){} взять(б, e); }, window.__порогЗахвата || 450);
   });
   // Пока карточка в руке — ГАСИМ ПРОКРУТКУ на каждом движении пальца. Одного
   // touch-action у родителя мало: браузер решает судьбу жеста в момент касания, а мы
