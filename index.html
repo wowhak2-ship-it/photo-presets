@@ -3178,9 +3178,17 @@ function запомнитьПорядок(){
   const хост = document.getElementById('homeTools');
   SET.set(ПОРЯДОК, [...хост.children].map(ключКарточки));
 }
+// Кто на самом деле прокручивается: у главной свой контейнер, а не окно целиком.
+function найтиПрокрутку(эл){
+  for(let у = эл.parentElement; у; у = у.parentElement){
+    const s = getComputedStyle(у);
+    if(/(auto|scroll)/.test(s.overflowY) && у.scrollHeight > у.clientHeight + 4) return у;
+  }
+  return document.scrollingElement || document.documentElement;
+}
 function включитьПеретаскивание(){
   const хост = document.getElementById('homeTools'); if(!хост) return;
-  let взято = null, таймер = null, стартX = 0, стартY = 0, сдвигX = 0, сдвигY = 0, двигали = false, обменВремя = 0, дx = 0, дy = 0, палец = null;
+  let взято = null, таймер = null, стартX = 0, стартY = 0, сдвигX = 0, сдвигY = 0, двигали = false, обменВремя = 0, дx = 0, дy = 0, палец = null, стоп = null, стопБыло = '', стопМесто = 0;
   const отменить = ()=>{ clearTimeout(таймер); таймер = null; };
   const взять = (б, e)=>{
     взято = б; двигали = false; дx = 0; дy = 0;
@@ -3188,8 +3196,18 @@ function включитьПеретаскивание(){
     сдвигX = e.clientX - r.left - r.width/2;
     сдвигY = e.clientY - r.top - r.height/2;
     б.classList.add('drag');
-    б.style.touchAction = 'none';                 // и на самой карточке, для верности
+    б.style.touchAction = 'none';
     хост.classList.add('dragging');
+    // ЖЁСТКО ОСТАНАВЛИВАЕМ СТРАНИЦУ. Запрета через touch-action мало: если браузер уже
+    // начал прокрутку (а на телефоне она ещё и инерционная), он её не отдаст, и лог с
+    // телефона Артура показал ровно это — палец стоит на 288,263, а карточка уезжает на
+    // 616 и на -1063 вместе с летящей страницей.
+    стоп = найтиПрокрутку(хост);
+    if(стоп){
+      стопБыло = стоп.style.overflow; стопМесто = стоп.scrollTop;
+      стоп.style.overflow = 'hidden';
+      стоп.scrollTop = стопМесто;        // запрет прокрутки не должен сам дёрнуть список
+    }
     if(navigator.vibrate) navigator.vibrate(12);      // короткий отклик: «взял»
     вести(e);
   };
@@ -3232,6 +3250,7 @@ function включитьПеретаскивание(){
     взято.style.transform = ''; взято.style.touchAction = '';
     setTimeout(()=> взято && взято.classList.remove('dropping'), 200);
     хост.classList.remove('dragging');
+    if(стоп){ стоп.style.overflow = стопБыло; стоп.scrollTop = стопМесто; стоп = null; }
     запомнитьПорядок();
     взято = null;
   };
