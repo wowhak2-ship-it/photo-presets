@@ -3180,7 +3180,7 @@ function запомнитьПорядок(){
 }
 function включитьПеретаскивание(){
   const хост = document.getElementById('homeTools'); if(!хост) return;
-  let взято = null, таймер = null, стартX = 0, стартY = 0, сдвигX = 0, сдвигY = 0, двигали = false, обменВремя = 0, дx = 0, дy = 0;
+  let взято = null, таймер = null, стартX = 0, стартY = 0, сдвигX = 0, сдвигY = 0, двигали = false, обменВремя = 0, дx = 0, дy = 0, палец = null;
   const отменить = ()=>{ clearTimeout(таймер); таймер = null; };
   const взять = (б, e)=>{
     взято = б; двигали = false; дx = 0; дy = 0;
@@ -3237,6 +3237,8 @@ function включитьПеретаскивание(){
   };
   хост.addEventListener('pointerdown', e=>{
     const б = e.target.closest('.ht'); if(!б) return;
+    if(взято || таймер) return;                    // одна карточка за раз
+    палец = e.pointerId;
     стартX = e.clientX; стартY = e.clientY;
     таймер = setTimeout(()=>{ таймер = null; try{ б.setPointerCapture(e.pointerId); }catch(_){} взять(б, e); }, 450);
   });
@@ -3248,12 +3250,17 @@ function включитьПеретаскивание(){
   // Слушаем ВЕСЬ экран, а не только сетку: палец легко уходит за её край, и там события
   // до сетки уже не доходили — карточка застывала на месте.
   document.addEventListener('pointermove', e=>{
+    // ТОЛЬКО ТОТ ЖЕ ПАЛЕЦ. Без этой проверки второе касание (ладонь, второй палец)
+    // вело карточку к себе, и она мгновенно перескакивала через весь экран — «прыгает,
+    // но не всегда». На компьютере с одной мышью такое не воспроизводится.
+    if(палец !== null && e.pointerId !== палец) return;
     if(взято){ e.preventDefault(); двигали = true; вести(e); return; }
     // до срабатывания долгого нажатия палец мог поехать — это листание, не перенос
     if(таймер && Math.hypot(e.clientX-стартX, e.clientY-стартY) > 10) отменить();
   }, {passive:false});
-  document.addEventListener('pointerup', ()=>{ отменить(); бросить(); });
-  document.addEventListener('pointercancel', ()=>{ отменить(); бросить(); });
+  const конец = e=>{ if(палец !== null && e.pointerId !== палец) return; отменить(); бросить(); палец = null; };
+  document.addEventListener('pointerup', конец);
+  document.addEventListener('pointercancel', конец);
   // после переноса не открываем инструмент: палец отпущен на карточке, но человек
   // переставлял, а не нажимал
   хост.addEventListener('click', e=>{ if(двигали){ e.stopPropagation(); e.preventDefault(); двигали = false; } }, true);
