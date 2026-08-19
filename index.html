@@ -888,6 +888,9 @@
   .rt-holder{position:relative; line-height:0; touch-action:none; transform-origin:center center; will-change:transform;}
   #rtCanvas{display:block; touch-action:none; cursor:crosshair; z-index:1;}
   /* выбор лица на групповом снимке */
+  /* Кружки поверх найденных точек: без них не видно, ЧТО именно ИИ нашёл и убрал. */
+  .rt-spotsov{position:absolute; inset:0; z-index:5; pointer-events:none; display:none;}
+  .rt-spotsov.on{display:block;}
   .rt-faces{position:absolute; inset:0; z-index:4; pointer-events:none;
     transition:opacity .16s ease;}
   /* пока ведёшь ползунок — метки уходят: они мешают увидеть результат */
@@ -1819,6 +1822,7 @@
     <!-- На групповом кадре обрабатывать всех подряд нельзя: точки над лицами дают
          выбрать нужное. Появляются, только если лиц больше одного. -->
     <div class="rt-faces" id="rtFaces"></div>
+      <canvas class="rt-spotsov" id="rtSpotsOv"></canvas>
     <div class="rt-cursor" id="rtCursor"></div>
     <!-- «Замазать»: место под палец, поводок и кружок. Пока они появлялись только
          при касании, было непонятно, куда вообще ляжет замазка, — теперь пара стоит
@@ -6554,6 +6558,7 @@ function rtSetTool(tool){
   // Кружки выбора лица принадлежат «Теням» и «Коже». Раньше их никто не убирал, и
   // после этих инструментов они оставались висеть поверх кадра в кисти и штампе.
   if(!bags && !skin && !powder && !tone && !teeth && !ai && !spots) rtClearFaces();
+  if(!spots) точПоказать(null);                 // ушли из карточки — кружки убрать
   // Площадку ползунка ставим не только по наблюдателю: он может сработать в тот миг,
   // когда строка ещё нулевой ширины, и тогда площадка останется спрятанной — ползунок
   // выглядит живым, но не тянется. Досчитываем на следующих кадрах, когда размеры уже
@@ -8978,6 +8983,28 @@ function точСобрать(з, порог){
   }
   return точки;
 }
+// Показываем, что нашли: кружок вокруг каждой точки в координатах ЭКРАНА — кадр может
+// быть приближён и сдвинут, поэтому считаем от того, где холст сейчас реально виден.
+function точПоказать(точки){
+  const сл = document.getElementById('rtSpotsOv'); if(!сл) return;
+  const area = document.getElementById('rtArea').getBoundingClientRect();
+  const cv = rtCanvas.getBoundingClientRect();
+  const пл = window.devicePixelRatio || 1;
+  сл.width = Math.round(area.width*пл); сл.height = Math.round(area.height*пл);
+  сл.style.width = area.width+'px'; сл.style.height = area.height+'px';
+  const x = сл.getContext('2d'); x.setTransform(пл,0,0,пл,0,0);
+  x.clearRect(0,0,area.width,area.height);
+  if(!точки || !точки.length){ сл.classList.remove('on'); return; }
+  const кx = cv.width/rtCanvas.width, кy = cv.height/rtCanvas.height;
+  x.strokeStyle = 'rgba(224,162,74,.95)'; x.lineWidth = 1.6;
+  x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 3;
+  for(const т of точки){
+    const цx = cv.left - area.left + т.x*кx, цy = cv.top - area.top + т.y*кy;
+    const р = Math.max(7, т.r*кx*1.25);
+    x.beginPath(); x.arc(цx, цy, р, 0, Math.PI*2); x.stroke();
+  }
+  сл.classList.add('on');
+}
 function точЗамазать(cv, точки){
   for(const т of точки) healSpot(cv, т.x, т.y, т.r, null, { hardness:0.55, strength:1 });
 }
@@ -9033,11 +9060,12 @@ function spotsСлайдер(){
   document.getElementById('rtSpotsV').textContent = v;
   if(!точData) return;
   rtCanvas.getContext('2d').putImageData(точData.orig, точData.bx, точData.by);   // всегда от исходного
-  if(!v){ rtSpotsOp = null; return; }
+  if(!v){ rtSpotsOp = null; точПоказать(null); return; }
   // Ползунок — это порог уверенности сети: чем правее, тем более сомнительное берём.
   const порог = 0.62 - (v/100)*0.5;
   const точки = точСобрать(точData, порог);
   точЗамазать(rtCanvas, точки);
+  точПоказать(точки);
   const W = rtCanvas.width, H = rtCanvas.height;
   rtSpotsOp = точки.length ? { t:'spots', точки: точки.map(т=>({ rx:т.x/W, ry:т.y/H, rr:т.r/W })) } : null;
   document.getElementById('rtSpotsV').textContent = v + ' · ' + точки.length;
