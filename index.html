@@ -1113,7 +1113,13 @@
   .ht.buy{border-color:rgba(224,162,74,.34); background:rgba(224,162,74,.06);}
   @media (prefers-reduced-motion:reduce){ .ht:active{transform:none;} }
 
-  .home-actions{display:flex; gap:10px; align-items:center; padding:4px 0 2px;}
+  .home-actions{display:flex; gap:10px; align-items:center; padding:4px 0 12px;}
+  /* Перестановка карточек долгим нажатием — как значки на телефоне. Нужна, чтобы
+     фотограф вывел в первый ряд то, чем пользуется каждый день. */
+  .home-tools.dragging{touch-action:none;}
+  .home-tools .ht.drag{transform:scale(1.06); box-shadow:0 16px 34px rgba(0,0,0,.55);
+    border-color:var(--gold); z-index:30; opacity:.97; cursor:grabbing;}
+  .home-tools .ht.dropping{transition:transform .16s ease;}
   .ghost-btn{flex:1; padding:14px; border-radius:999px; border:1px solid var(--line);
     background:transparent; color:var(--text); font-size:11px; letter-spacing:.14em; cursor:pointer;}
   .solid-btn{padding:14px 22px; border-radius:999px; border:0; background:var(--gold);
@@ -1213,6 +1219,11 @@
     <svg class="ht-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
   </button>
 
+  <div class="home-actions">
+    <button class="ghost-btn" id="homePick">ВЫБРАТЬ ДРУГОЕ ФОТО</button>
+    <button class="solid-btn" id="homeCam">СНЯТЬ</button>
+  </div>
+
   <!-- Инструменты живут ЗДЕСЬ, а не в редакторе. Пока они прятались в панели
        под фото, фотограф их просто не находил: чтобы добраться до ретуши, надо
        было сперва догадаться открыть кадр. Пять карточек с подписями — видно
@@ -1306,10 +1317,6 @@
     </button>
   </div>
 
-  <div class="home-actions">
-    <button class="ghost-btn" id="homePick">ВЫБРАТЬ ДРУГОЕ ФОТО</button>
-    <button class="solid-btn" id="homeCam">СНЯТЬ</button>
-  </div>
 </section>
 
 <!-- Контактный лист: тот же, что был на главной, только теперь на своём экране -->
@@ -3151,6 +3158,86 @@ function runTool(tool){
   // коллаж набирает кадры сам, открытый снимок ему не нужен — остальным инструментам нужен
   if(tool !== 'collage' && !sourceCanvas){ pendingTool = tool; document.getElementById('file').click(); return; }
   pendingTool = tool; applyPendingTool();
+}
+// ─── Свой порядок карточек ───
+// Долгое нажатие берёт карточку, дальше её ведут пальцем и бросают на новое место —
+// так же, как переставляют значки на телефоне. Порядок запоминается: у каждого своя
+// работа, и первый ряд должен занимать то, чем пользуются каждый день.
+const ПОРЯДОК = 'toolOrder';
+const ключКарточки = б => б.dataset.go || б.id || '';
+function применитьПорядок(){
+  const хост = document.getElementById('homeTools'); if(!хост) return;
+  const сохранён = SET.get(ПОРЯДОК, null); if(!Array.isArray(сохранён)) return;
+  const есть = new Map([...хост.children].map(б => [ключКарточки(б), б]));
+  // Сначала — сохранённые, потом всё, чего в сохранённом нет: новые карточки
+  // приложения обязаны появляться, а не пропадать из-за старой записи.
+  for(const к of сохранён){ const б = есть.get(к); if(б){ хост.appendChild(б); есть.delete(к); } }
+  for(const б of есть.values()) хост.appendChild(б);
+}
+function запомнитьПорядок(){
+  const хост = document.getElementById('homeTools');
+  SET.set(ПОРЯДОК, [...хост.children].map(ключКарточки));
+}
+function включитьПеретаскивание(){
+  const хост = document.getElementById('homeTools'); if(!хост) return;
+  let взято = null, таймер = null, стартX = 0, стартY = 0, сдвигX = 0, сдвигY = 0, двигали = false;
+  const отменить = ()=>{ clearTimeout(таймер); таймер = null; };
+  const взять = (б, e)=>{
+    взято = б; двигали = false;
+    const r = б.getBoundingClientRect();
+    сдвигX = e.clientX - r.left - r.width/2;
+    сдвигY = e.clientY - r.top - r.height/2;
+    б.classList.add('drag');
+    хост.classList.add('dragging');
+    if(navigator.vibrate) navigator.vibrate(12);      // короткий отклик: «взял»
+    вести(e);
+  };
+  const вести = (e)=>{
+    const r = взято.getBoundingClientRect();
+    const цx = r.left + r.width/2, цy = r.top + r.height/2;
+    const был = взято.style.transform.match(/translate\((-?[\d.]+)px, (-?[\d.]+)px\)/);
+    const бx = был ? +был[1] : 0, бy = был ? +был[2] : 0;
+    взято.style.transform = 'translate(' + (бx + e.clientX - цx - сдвигX) + 'px, '
+                                          + (бy + e.clientY - цy - сдвигY) + 'px) scale(1.06)';
+    // куда бросаем: ближайшая по центру чужая карточка под пальцем
+    for(const б of хост.children){
+      if(б === взято) continue;
+      const rr = б.getBoundingClientRect();
+      if(e.clientX >= rr.left && e.clientX <= rr.right && e.clientY >= rr.top && e.clientY <= rr.bottom){
+        const позже = [...хост.children].indexOf(б) > [...хост.children].indexOf(взято);
+        хост.insertBefore(взято, позже ? б.nextSibling : б);
+        // после переноса в DOM карточка стоит на новом месте — сдвиг считаем заново
+        const нов = взято.getBoundingClientRect();
+        взято.style.transform = 'translate(' + (e.clientX - (нов.left + нов.width/2) - сдвигX) + 'px, '
+                                              + (e.clientY - (нов.top + нов.height/2) - сдвигY) + 'px) scale(1.06)';
+        break;
+      }
+    }
+  };
+  const бросить = ()=>{
+    if(!взято) return;
+    взято.classList.remove('drag'); взято.classList.add('dropping');
+    взято.style.transform = '';
+    setTimeout(()=> взято && взято.classList.remove('dropping'), 200);
+    хост.classList.remove('dragging');
+    запомнитьПорядок();
+    взято = null;
+  };
+  хост.addEventListener('pointerdown', e=>{
+    const б = e.target.closest('.ht'); if(!б) return;
+    стартX = e.clientX; стартY = e.clientY;
+    таймер = setTimeout(()=>{ таймер = null; try{ б.setPointerCapture(e.pointerId); }catch(_){} взять(б, e); }, 450);
+  });
+  хост.addEventListener('pointermove', e=>{
+    if(взято){ e.preventDefault(); двигали = true; вести(e); return; }
+    // до срабатывания долгого нажатия палец мог поехать — это листание, не перенос
+    if(таймер && Math.hypot(e.clientX-стартX, e.clientY-стартY) > 10) отменить();
+  });
+  хост.addEventListener('pointerup', ()=>{ отменить(); бросить(); });
+  хост.addEventListener('pointercancel', ()=>{ отменить(); бросить(); });
+  // после переноса не открываем инструмент: палец отпущен на карточке, но человек
+  // переставлял, а не нажимал
+  хост.addEventListener('click', e=>{ if(двигали){ e.stopPropagation(); e.preventDefault(); двигали = false; } }, true);
 }
 document.getElementById('homePick').onclick = ()=>{ pendingTool = null; document.getElementById('file').click(); };
 document.getElementById('homeCam').onclick = ()=>{ pendingTool = null; document.getElementById('camFile').click(); };
@@ -8882,6 +8969,11 @@ document.getElementById('rtApply').onclick = ()=>{
     document.getElementById('iosHint').style.display = 'none';
   };
 })();
+
+// Порядок карточек ставим В КОНЦЕ: хранилище настроек объявлено ниже по файлу, и вызов
+// раньше него роняет весь остаток кода (наступил на это сразу).
+применитьПорядок();
+включитьПеретаскивание();
 
 // ─── PWA ───
 // Обновление установленного приложения. Без этого телефон живёт на старой версии:
