@@ -1,5 +1,5 @@
 // Service worker — offline cache for the Photo Presets PWA
-const CACHE = 'photo-presets-v145';
+const CACHE = 'photo-presets-v146';
 const ASSETS = [
   './',
   './index.html',
@@ -77,7 +77,7 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   // Модель ИИ на 51 МБ приложение кладёт в свой отдельный кэш. Если её тронет ещё и
   // воркер, на телефоне будет лежать две копии — 102 МБ вместо 51.
-  if (url.pathname.endsWith('/retouch.onnx')) return;
+  if (url.pathname.endsWith('/retouch.onnx') || url.pathname.endsWith('/spots.onnx')) return;
   const isHTML = req.mode === 'navigate' || req.destination === 'document' ||
                  url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
   // Витрина наборов должна обновляться сама: новый набор выкладывается файлом на сайт,
