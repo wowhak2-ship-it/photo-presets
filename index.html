@@ -1847,7 +1847,17 @@
       <div class="rt-srow"><span>Размер</span><input type="range" id="rtSize" min="10" max="70" value="22"><b id="rtSizeV">22</b></div>
       <div class="rt-srow"><span>Жёсткость</span><input type="range" id="rtHard" min="0" max="100" value="45"><b id="rtHardV">45</b></div>
       <div class="rt-srow"><span>Сила</span><input type="range" id="rtStr" min="20" max="100" value="100"><b id="rtStrV">100</b></div>
+      <!-- Консилер умеет два способа: сам по точкам лица и вручную пальцем. Автомат не может
+           знать, где у ЭТОГО человека синяк, а где родная тень глазницы: у ребёнка синяков нет
+           вовсе, и любое «улучшение» там портит. Кисть снимает этот вопрос — место показывает
+           человек, ровно как в Facetune и Lightroom. -->
+      <div class="rt-kinds" id="rtBagsModes" style="display:none">
+        <button class="rt-kind on" data-bm="авто">Авто</button>
+        <button class="rt-kind" data-bm="кисть">Кисть</button>
+        <button class="rt-kind" data-bm="ластик">Ластик</button>
+      </div>
       <div class="rt-srow" id="rtBagsRow" style="display:none"><span>Сила</span><input type="range" id="rtBags" min="0" max="100" value="0" disabled><b id="rtBagsV">0</b></div>
+      <div class="rt-srow" id="rtBagsSizeRow" style="display:none"><span>Размер</span><input type="range" id="rtBagsSize" min="10" max="70" value="26"><b id="rtBagsSizeV">26</b></div>
       <div class="rt-srow" id="rtDblRow" style="display:none"><span>Сила</span><input type="range" id="rtDbl" min="0" max="100" value="55"><b id="rtDblV">55</b></div>
       <div class="rt-srow" id="rtDblScaleRow" style="display:none"><span>Масштаб</span><input type="range" id="rtDblScale" min="0" max="100" value="40"><b id="rtDblScaleV">40</b></div>
       <div class="rt-kinds" id="rtDblModes" style="display:none"></div>
@@ -2594,7 +2604,7 @@ function buildFullSource(){
                op.sx != null ? { x:op.sx*cv.width, y:op.sy*cv.height } : null,
                { hardness:op.hardness, strength:op.strength });
     } else if(op.t === 'bags'){
-      bagsRun(own(), op.faces, op.amount);
+      bagsRun(own(), op.faces, op.amount, op.кисть);
     } else if(op.t === 'skin'){
       skinRun(own(), op.faces, op.amount);
     } else if(op.t === 'dbl'){
@@ -6148,7 +6158,7 @@ function openRetouch(){
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtHalOp = null; halOrig = null; rtDblOp = null; dblOrig = null; dblImg = null; rtDustOp = null; dustOrig = null; rtFaces = null; skinData = null; powderData = null; toneData = null; teethData = null; rtTeethOp = null; aiСброс(); точData = null; rtSpotsOp = null;
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtHalOp = null; halOrig = null; rtDblOp = null; dblOrig = null; dblImg = null; rtDustOp = null; dustOrig = null; rtFaces = null; skinData = null; powderData = null; toneData = null; teethData = null; rtTeethOp = null; aiСброс(); точData = null; rtSpotsOp = null; bagsСброситьКисть();
   for(const k in skinFace) delete skinFace[k];   // новый снимок — настройки лиц с нуля
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
@@ -6409,6 +6419,9 @@ rtCanvas.addEventListener('pointerdown', e=>{
     if(!rtPan1 && rtTool === 'heal'){ rtDrawing = true; rtLastE = e; rtShowCursor(e); }  // aim only — heal fires on release
     // Источник засветки ставится пальцем: он может быть и за краем кадра, как настоящее
     // солнце сбоку, поэтому точка не ограничена холстом.
+    if(!rtPan1 && rtTool === 'bags' && bagsРежим !== 'авто' && bagsГотово){
+      rtDrawing = true; bagsШтрихPrev = null; bagsМазал = false; bagsВести(e);
+    }
     if(!rtPan1 && rtTool === 'flare'){ rtDrawing = true; flareAt(e); }
     if(!rtPan1 && rtTool === 'vig'){ rtDrawing = true; vigAt(e); }
     if(!rtPan1 && rtTool === 'dbl' && dblImg){ rtDrawing = true; dblAt(e); }
@@ -6441,6 +6454,8 @@ rtCanvas.addEventListener('pointermove', e=>{
     e.preventDefault(); dblAt(e);
   } else if(rtDrawing && rtTool === 'vig' && rtPtrs.size === 1){
     e.preventDefault(); vigAt(e);
+  } else if(rtDrawing && rtTool === 'bags' && bagsРежим !== 'авто' && rtPtrs.size === 1){
+    e.preventDefault(); bagsВести(e); rtShowCursor(e);
   } else if(rtDrawing && rtTool === 'flare' && rtPtrs.size === 1){
     e.preventDefault(); flareAt(e);
   } else if(rtDrawing && rtPtrs.size === 1){
@@ -6466,6 +6481,7 @@ function rtEnd(e){
     if(finishHeal){ rtSnap(); rtAt(rtLastE); }   // heal exactly where you aimed, on release
     if(tapPaint){ rtSnap(); paintTo(rtLastE); }
     paintPrev = null; paintDownE = null; paintDrew = false;
+    if(rtTool === 'bags' && bagsРежим !== 'авто'){ bagsШтрихPrev = null; if(bagsМазал) bagsЗапомнитьОп(); }
     rtDrawing = false; rtHideCursor();
   }
 }
@@ -6524,9 +6540,11 @@ function rtSetTool(tool){
   rtSrc.style.pointerEvents=stamp?'auto':'none'; rtTgt.style.pointerEvents=stamp?'auto':'none';
   if(stamp) rtPlaceMarkers();
   document.querySelectorAll('.rt-srow').forEach(r=>{
-    if(r.id!=='rtBagsRow' && r.id!=='rtSkinRow' && r.id!=='rtTeethRow' && r.id!=='rtAiRow' && r.id!=='rtSpotsRow' && r.id!=='rtTeethSpotRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow' && r.id!=='rtFlareRow' && r.id!=='rtVigRow' && r.id!=='rtVigSizeRow' && r.id!=='rtHalRow' && r.id!=='rtHalSpreadRow' && r.id!=='rtDblRow' && r.id!=='rtDblScaleRow' && r.id!=='rtDustRow' && r.id!=='rtDustDenRow' && r.id!=='rtDustLenRow')
+    if(r.id!=='rtBagsRow' && r.id!=='rtBagsSizeRow' && r.id!=='rtSkinRow' && r.id!=='rtTeethRow' && r.id!=='rtAiRow' && r.id!=='rtSpotsRow' && r.id!=='rtTeethSpotRow' && r.id!=='rtBokehRow' && r.id!=='rtPowderRow' && r.id!=='rtToneRow' && r.id!=='rtFlareRow' && r.id!=='rtVigRow' && r.id!=='rtVigSizeRow' && r.id!=='rtHalRow' && r.id!=='rtHalSpreadRow' && r.id!=='rtDblRow' && r.id!=='rtDblScaleRow' && r.id!=='rtDustRow' && r.id!=='rtDustDenRow' && r.id!=='rtDustLenRow')
       r.style.display = ползунок?'none':'flex'; });
   document.getElementById('rtBagsRow').style.display = bags?'flex':'none';
+  document.getElementById('rtBagsModes').style.display = bags?'flex':'none';
+  document.getElementById('rtBagsSizeRow').style.display = (bags && bagsРежим!=='авто')?'flex':'none';
   document.getElementById('rtSkinRow').style.display = skin?'flex':'none';
   document.getElementById('rtTeethRow').style.display = teeth?'flex':'none';
   document.getElementById('rtAiRow').style.display = ai?'flex':'none';
@@ -6626,6 +6644,7 @@ var BAGS_BASE_R = 1.15;      // масштаб подложки в ширина�
 var BAGS_ЦЕНТР = 0.36;       // насколько ниже центра глаза стоит середина зоны
 var BAGS_ВЫСОТА = 0.32;      // полувысота зоны в ширинах глаза
 var BAGS_ГЛАЗ = 1.50;        // насколько раздут вырез глаза: больше — дальше от ресниц
+var BAGS_ЦВЕТНОСТЬ = 0;      // 0 — гасим всё тёмное; 1 — только то, что ОТЛИЧАЕТСЯ ПО ЦВЕТУ
 // Зона уже и выше, а вырез глаза больше — выбрано Артуром по картинке из четырёх вариантов
 // на снимках крупным планом. Прежняя широкая зона спускалась на щёку, а поднятая узкая без
 // увеличенного выреза заходила светом на нижнее веко («эффект ложится на глаз»).
@@ -6815,38 +6834,41 @@ function bagsBuildZone(r, cv){
   bxx.filter = 'blur(' + Math.max(6, Math.round(eyeW*BAGS_BASE_R)) + 'px)';
   bxx.drawImage(dc2, 0, 0);
   const base = bxx.getImageData(0,0,bw,bh).data;
-  // ЧЕСТНАЯ ЩЕКА — эталон, к которому подтягиваем подглазье.
-  // Шаг 1: пробыЩ ВНИЗ ПО ЛИЦУ. Они идут вдоль наклона головы, поэтому лежат на щеке при
-  // любом повороте. Берём медиану, а не самую светлую: самая светлая систематически завышена.
-  const пробыЩ = [];
-  for(const k of [0.6, 0.85, 1.1, 1.35]){
-    const px = Math.round(ecx + r.down.x*eyeW*k), py = Math.round(ecy + r.down.y*eyeW*k);
-    const s = 5, x0=Math.max(0,px-s), y0=Math.max(0,py-s), x1=Math.min(bw,px+s), y1=Math.min(bh,py+s);
-    if(x1<=x0 || y1<=y0) continue;
-    let sr=0,sg=0,sb=0,n=0;
-    for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++){ const i=(y*bw+x)*4; sr+=low[i]; sg+=low[i+1]; sb+=low[i+2]; n++; }
-    if(n) пробыЩ.push([sr/n, sg/n, sb/n]);
-  }
-  const медиана = c => { const a = пробыЩ.map(p=>p[c]).sort((x,y)=>x-y);
-    return a.length ? (a[a.length>>1] + a[(a.length-1)>>1])/2 : -1; };
-  const мR = медиана(0), мG = медиана(1), мB = медиана(2);
-  // Шаг 2: усредняем кожу в рамке ниже маски, но берём ТОЛЬКО пиксели, похожие на эту пробу.
-  // Без фильтра в эталон попадали стена, ухо и волосы: на повёрнутой голове рамка выходит
-  // за край лица. У Артура так и вышло — «щекой» оказалась белая стена за плечом, подглазье
-  // потянулось к ней и выцвело в бледное холодное пятно рядом с тёплой кожей.
+  // ЭТАЛОН СОСЕДНЕЙ КОЖИ — то, к чему подтягиваем подглазье.
+  // Берём КОЛЬЦО вплотную вокруг зоны, а не пробы вниз по лицу. Пробы уходили на ширину
+  // глаза вниз и на снимке дочки попали на ярко подсвеченную щёку: эталон вышел 120 при
+  // коже вокруг подглазья 101, зона поднялась до 123 — и под глазом село бледное пятно на
+  // 22 уровня светлее соседей. Кожа рядом с зоной — единственный честный сосед: именно с
+  // ней глаз и сравнивает результат.
   let щr=0, щg=0, щb=0, щn=0;
-  if(мR >= 0){
+  {
     const od2 = orig.data;
-    for(let y=Math.round(bh*0.55); y<bh; y++) for(let x=0; x<bw; x++){
+    // сначала собираем кольцо: вне маски, но близко к ней
+    const кольцо = [];
+    for(let y=0; y<bh; y++) for(let x=0; x<bw; x++){
       const i=(y*bw+x)*4;
-      if(mask[i+3] > 20) continue;
-      if(Math.abs(od2[i]-мR) + Math.abs(od2[i+1]-мG) + Math.abs(od2[i+2]-мB) > 66) continue;
-      щr+=od2[i]; щg+=od2[i+1]; щb+=od2[i+2]; щn++;
+      if(mask[i+3] > 10) continue;
+      const dx=(x-ecx)/eyeW, dy=(y-ecy)/eyeW;
+      const д=Math.sqrt(dx*dx+dy*dy);
+      if(д < 0.35 || д > 1.25) continue;           // не вплотную к глазу и не дальше щеки
+      кольцо.push(i);
+    }
+    // Волосы, фон и ухо в кольцо тоже попадают. Отсекаем их по яркости: берём медиану
+    // кольца и оставляем только похожее на неё. Медиана устойчива — даже если четверть
+    // кольца это волосы, она остаётся на коже.
+    if(кольцо.length > 60){
+      const я = кольцо.map(i => (od2[i]+od2[i+1]+od2[i+2])/3).sort((a,b)=>a-b);
+      const мя = я[я.length>>1];
+      for(const i of кольцо){
+        const v=(od2[i]+od2[i+1]+od2[i+2])/3;
+        if(Math.abs(v-мя) > 26) continue;
+        щr+=od2[i]; щg+=od2[i+1]; щb+=od2[i+2]; щn++;
+      }
     }
   }
-  const щекаR = щn>200 ? щr/щn : (мR>=0 ? мR : cheekR),
-        щекаG = щn>200 ? щg/щn : (мG>=0 ? мG : cheekG),
-        щекаB = щn>200 ? щb/щn : (мB>=0 ? мB : cheekB);
+  const щекаR = щn>60 ? щr/щn : cheekR,
+        щекаG = щn>60 ? щg/щn : cheekG,
+        щекаB = щn>60 ? щb/щn : cheekB;
   return {bx, by, bw, bh, orig, low, mask, darkMap, base, cheekR, cheekG, cheekB, cheekLum, щекаR, щекаG, щекаB};
 }
 // Кружки выбора лица легко не заметить — подсказка появляется только когда лиц правда
@@ -6857,13 +6879,18 @@ function rtFacesHint(n, что){
   if(n > 1){ h.textContent = 'Лиц несколько — выберите кружком, ' + что; h.style.display = 'block'; }
   else h.style.display = 'none';
 }
-function bagsPrepare(faces, cv){
+function bagsPrepare(faces, cv, щедро){
   cv = cv || rtCanvas;
   const W = cv.width, H = cv.height;
   const regs = [];
+  // Под кисть зону берём с запасом: рисовать человек может где угодно под глазом, и всё,
+  // что вне подготовленной области, кисть просто не смогла бы тронуть.
+  const цб=BAGS_ЦЕНТР, вб=BAGS_ВЫСОТА;
+  if(щедро){ BAGS_ЦЕНТР=0.50; BAGS_ВЫСОТА=0.62; }
   for(const lms of (faces||[])) for(const r of bagsRegions(lms, W, H)){
     const z = bagsBuildZone(r, cv); if(z) regs.push(z);
   }
+  BAGS_ЦЕНТР=цб; BAGS_ВЫСОТА=вб;
   if(cv !== rtCanvas) return regs.length ? {regs} : null;
   bagsData = regs.length ? {regs} : null;
   return regs.length;
@@ -7945,8 +7972,24 @@ function bagsApply(t, cv, data){
       // Запас в 8% («под глазом кожа и правда чуть темнее») Артур забраковал на глаз:
       // из шести вариантов, показанных бок о бок на его лице, он выбрал полное гашение
       // тени. Естественную впадину глазницы это не трогает — она живёт в подложке.
-      const a = ageom * t;
+      let a = ageom * t;
       if(a < 0.004) continue;
+      // ЦВЕТ ИЛИ ТЕНЬ. Настоящий круг под глазом отличается от соседней кожи ЦВЕТОМ —
+      // синевой или краснотой. Тень от рельефа (впадина глазницы, тень мешка) имеет тот же
+      // цвет кожи, только темнее. Поэтому сравниваем цвет места с цветом соседней кожи,
+      // приведённым к ТОЙ ЖЕ яркости: совпал — это форма лица, трогать нечего.
+      // Поймано на снимке дочки: у ребёнка синяков нет вовсе, а инструмент всё равно
+      // осветлял впадину и сажал под глаз бледное пятно.
+      if(BAGS_ЦВЕТНОСТЬ > 0){
+        const я = (low[i]+low[i+1]+low[i+2])/3;
+        const щя = (r.щекаR+r.щекаG+r.щекаB)/3 || 1;
+        const k = я/щя;
+        const откл = (Math.abs(low[i]-r.щекаR*k) + Math.abs(low[i+1]-r.щекаG*k)
+                    + Math.abs(low[i+2]-r.щекаB*k))/3;
+        const цвет = Math.min(1, откл/4.5);           // 4.5 уровня расхождения = полноценная окраска
+        a *= (1 - BAGS_ЦВЕТНОСТЬ) + BAGS_ЦВЕТНОСТЬ*цвет;
+        if(a < 0.004) continue;
+      }
       // Круг и складка живут в СРЕДНЕМ масштабе — между кожей (текстура) и освещением
       // лица (подложка). Гасим именно эту полосу, и только там, где она ТЕМНЕЕ подложки:
       // осветлить выше собственного уровня кожи так невозможно — набелить нечем.
@@ -8012,10 +8055,123 @@ function bagsApply(t, cv, data){
 }
 // Повтор «теней» на любом холсте: точки лица нормированные (0..1), поэтому те же
 // зоны строятся хоть на 1400 px, хоть на оригинале — без пересчёта детектором.
-function bagsRun(cv, faces, amount){
+function bagsRun(cv, faces, amount, кисть){
   if(!faces || !faces.length || !amount) return;
+  // Кистью правится только то, по чему провели пальцем. При сохранении снимок больше
+  // превью, поэтому мазок растягиваем по размеру кадра — маска хранится в долях холста.
+  if(кисть){
+    const было = document.createElement('canvas'); было.width=cv.width; было.height=cv.height;
+    было.getContext('2d').drawImage(cv, 0, 0);
+    const данные = bagsPrepare(faces, cv, true);
+    if(!данные) return;
+    bagsApply(amount, cv, данные);
+    const т = document.createElement('canvas'); т.width=cv.width; т.height=cv.height;
+    const тx = т.getContext('2d');
+    тx.drawImage(cv, 0, 0);
+    тx.globalCompositeOperation = 'destination-in';
+    тx.drawImage(кисть, 0, 0, cv.width, cv.height);
+    const c = cv.getContext('2d');
+    c.drawImage(было, 0, 0);
+    c.drawImage(т, 0, 0);
+    return;
+  }
   const data = bagsPrepare(faces, cv);
   if(data) bagsApply(amount, cv, data);
+}
+// ─── Кисть консилера ───
+// Автомат не знает, где у ЭТОГО лица синяк, а где родная тень: у ребёнка синяков нет, и
+// осветление впадины портит кадр (поймано на снимке дочки). Кисть отдаёт выбор человеку —
+// так устроены Facetune, Snapseed и Lightroom. Приём простой: заранее считаем кадр
+// С ПОЛНОСТЬЮ применённым эффектом, а палец лишь проявляет его сквозь маску мазка.
+let bagsРежим = 'авто', bagsМаска = null, bagsГотово = null, bagsОриг = null;
+let bagsШтрихPrev = null, bagsМазал = false, bagsВрем = null;
+function bagsКистьR(){
+  const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width;
+  return (+document.getElementById('rtBagsSize').value) * (rtCanvas.width/disp) * 0.5;
+}
+function bagsХолст(w, h){
+  const c = document.createElement('canvas'); c.width=w; c.height=h; return c;
+}
+function bagsСброситьКисть(){
+  bagsРежим = 'авто'; bagsМаска = null; bagsГотово = null; bagsОриг = null;
+  bagsШтрихPrev = null; bagsМазал = false;
+  document.querySelectorAll('#rtBagsModes .rt-kind').forEach(b=> b.classList.toggle('on', b.dataset.bm==='авто'));
+  const р = document.getElementById('rtBagsSizeRow'); if(р) р.style.display='none';
+}
+// Пересобрать «кадр с эффектом» под текущую силу ползунка
+function bagsГотовитьЭффект(сила){
+  if(!bagsОриг) return;
+  bagsГотово = bagsХолст(rtCanvas.width, rtCanvas.height);
+  bagsГотово.getContext('2d').drawImage(bagsОриг, 0, 0);
+  if(сила > 0 && rtFaces && rtFaces.length){
+    const данные = bagsPrepare([rtFaces[rtFaceSel]], bagsГотово, true);
+    if(данные) bagsApply(сила, bagsГотово, данные);
+  }
+}
+// Показать результат: в «авто» весь эффект, в кисти — только там, где мазали
+function bagsПоказатьВсё(){
+  if(!bagsОриг) return;
+  const c = rtCanvas.getContext('2d');
+  c.drawImage(bagsОриг, 0, 0);
+  if(bagsРежим === 'авто') return;                 // автоматический путь рисует сам, отдельно
+  if(!bagsГотово || !bagsМаска) return;
+  const т = bagsХолст(rtCanvas.width, rtCanvas.height);
+  const тx = т.getContext('2d');
+  тx.drawImage(bagsГотово, 0, 0);
+  тx.globalCompositeOperation = 'destination-in';
+  тx.drawImage(bagsМаска, 0, 0);
+  c.drawImage(т, 0, 0);
+}
+// Один отпечаток кисти: мажем в маску и тут же проявляем эффект в этом месте
+function bagsОтпечаток(x, y, R, стереть){
+  const m = bagsМаска.getContext('2d');
+  m.globalCompositeOperation = стереть ? 'destination-out' : 'source-over';
+  const г = m.createRadialGradient(x, y, R*0.35, x, y, R);
+  г.addColorStop(0, 'rgba(255,255,255,1)');
+  г.addColorStop(1, 'rgba(255,255,255,0)');
+  m.fillStyle = г; m.beginPath(); m.arc(x, y, R, 0, 7); m.fill();
+  m.globalCompositeOperation = 'source-over';
+  const x0 = Math.max(0, Math.floor(x-R-2)), y0 = Math.max(0, Math.floor(y-R-2));
+  const x1 = Math.min(rtCanvas.width, Math.ceil(x+R+2)), y1 = Math.min(rtCanvas.height, Math.ceil(y+R+2));
+  const w = x1-x0, h = y1-y0; if(w<=0 || h<=0) return;
+  if(!bagsВрем || bagsВрем.width < w || bagsВрем.height < h) bagsВрем = bagsХолст(Math.max(w,64), Math.max(h,64));
+  const тx = bagsВрем.getContext('2d');
+  тx.clearRect(0, 0, bagsВрем.width, bagsВрем.height);
+  тx.globalCompositeOperation = 'source-over';
+  тx.drawImage(bagsГотово, x0, y0, w, h, 0, 0, w, h);
+  тx.globalCompositeOperation = 'destination-in';
+  тx.drawImage(bagsМаска, x0, y0, w, h, 0, 0, w, h);
+  const c = rtCanvas.getContext('2d');
+  c.drawImage(bagsОриг, x0, y0, w, h, x0, y0, w, h);
+  c.drawImage(bagsВрем, 0, 0, w, h, x0, y0, w, h);
+}
+// Ведём мазок с шагом, как в «Замазать»: иначе на быстром движении остаются пропуски
+function bagsВести(e){
+  if(!bagsГотово || !bagsМаска) return;
+  const r = rtCanvas.getBoundingClientRect();
+  const bx = (e.clientX-r.left)*(rtCanvas.width/r.width);
+  const by = (e.clientY-r.top) *(rtCanvas.height/r.height);
+  const R = bagsКистьR(), шаг = Math.max(2, R*0.4), стереть = bagsРежим==='ластик';
+  if(!bagsШтрихPrev){ bagsШтрихPrev={x:bx,y:by}; bagsОтпечаток(bx,by,R,стереть); bagsМазал=true; return; }
+  const dx=bx-bagsШтрихPrev.x, dy=by-bagsШтрихPrev.y, d=Math.hypot(dx,dy);
+  if(d < шаг) return;
+  const n = Math.min(40, Math.floor(d/шаг));
+  for(let i=1;i<=n;i++){ const k=i*шаг/d; bagsОтпечаток(bagsШтрихPrev.x+dx*k, bagsШтрихPrev.y+dy*k, R, стереть); }
+  const k=n*шаг/d;
+  bagsШтрихPrev = {x:bagsШтрихPrev.x+dx*k, y:bagsШтрихPrev.y+dy*k};
+  bagsМазал = true;
+}
+function bagsЗапомнитьОп(){
+  const v = +document.getElementById('rtBags').value;
+  if(bagsРежим === 'авто'){
+    rtBagsOp = v ? { t:'bags', faces:[rtFaces[rtFaceSel]], amount:v/100 } : null;
+    return;
+  }
+  // маску кладём в саму правку: при сохранении её растянут на полный размер снимка
+  if(!v || !bagsМаска){ rtBagsOp = null; return; }
+  const м = bagsХолст(bagsМаска.width, bagsМаска.height);
+  м.getContext('2d').drawImage(bagsМаска, 0, 0);
+  rtBagsOp = { t:'bags', faces:[rtFaces[rtFaceSel]], amount:v/100, кисть:м };
 }
 async function bagsEnter(){
   const slider = document.getElementById('rtBags'), top = document.getElementById('rtTop');
@@ -8044,6 +8200,9 @@ async function bagsEnter(){
     if(rtTool !== 'bags'){ bagsBusy = false; return; }   // пока искали лицо, ушли в другой инструмент
     top.textContent = 'Консилер';
     slider.disabled = false;
+    bagsСброситьКисть();
+    bagsОриг = bagsХолст(rtCanvas.width, rtCanvas.height);
+    bagsОриг.getContext('2d').drawImage(rtCanvas, 0, 0);
     rtDrawFaces(bagsPickFace);
     // На семейном кадре ребёнка держат ближе к камере, его лицо в кадре шире — и «самое
     // крупное» открывалось на нём. Выбрать «кому нужнее» по картинке нельзя: у ребёнка
@@ -8057,6 +8216,17 @@ async function bagsEnter(){
 }
 function bagsPickFace(){
   const v = +document.getElementById('rtBags').value;
+  // В ручном режиме кадр возвращаем целиком из чистой копии: мазок мог выйти за зоны,
+  // которые сейчас пересобираются под другое лицо, и «вернуть по зонам» его бы не стёрло.
+  if(bagsРежим !== 'авто' && bagsОриг){
+    rtCanvas.getContext('2d').drawImage(bagsОриг, 0, 0);
+    bagsМаска = bagsХолст(rtCanvas.width, rtCanvas.height);   // мазок принадлежал прошлому лицу
+    bagsГотовитьЭффект(v/100);
+    bagsПоказатьВсё();
+    rtDrawFaces(bagsPickFace);
+    bagsЗапомнитьОп();
+    return;
+  }
   if(bagsData){ const ctx=rtCanvas.getContext('2d');
     for(const r of bagsData.regs) ctx.putImageData(r.orig, r.bx, r.by); }
   bagsPrepare([rtFaces[rtFaceSel]]);
@@ -8067,9 +8237,39 @@ document.getElementById('rtBags').oninput = e=>{
   rtCmpOff();          // тронули ползунок — сравнивать больше нечего, показываем результат
   const v = +e.target.value;
   document.getElementById('rtBagsV').textContent = v;
-  bagsApply(v/100);
-  rtBagsOp = v ? { t:'bags', faces:[rtFaces[rtFaceSel]], amount:v/100 } : null;
+  if(bagsРежим === 'авто'){ bagsApply(v/100); }
+  else { bagsГотовитьЭффект(v/100); bagsПоказатьВсё(); }
+  bagsЗапомнитьОп();
 };
+document.getElementById('rtBagsSize').oninput = e=>{
+  document.getElementById('rtBagsSizeV').textContent = e.target.value;
+};
+// Переключение «Авто / Кисть / Ластик»
+document.querySelectorAll('#rtBagsModes .rt-kind').forEach(b=>{
+  b.onclick = ()=>{
+    if(!bagsОриг) return;
+    const был = bagsРежим, стал = b.dataset.bm;
+    document.querySelectorAll('#rtBagsModes .rt-kind').forEach(x=> x.classList.toggle('on', x===b));
+    bagsРежим = стал;
+    document.getElementById('rtBagsSizeRow').style.display = (стал==='авто')?'none':'flex';
+    const v = +document.getElementById('rtBags').value;
+    if(стал === 'авто'){
+      // возвращаем автоматический путь: чистый кадр и обычный расчёт по точкам лица
+      rtCanvas.getContext('2d').drawImage(bagsОриг, 0, 0);
+      bagsPrepare([rtFaces[rtFaceSel]]);
+      if(v) bagsApply(v/100);
+      rtFacesHint((rtFaces||[]).length, 'чьи тени убрать');
+    } else if(был === 'авто'){
+      // уходим в ручной режим: с чистого листа, эффект появится только под пальцем
+      bagsМаска = bagsХолст(rtCanvas.width, rtCanvas.height);
+      bagsГотовитьЭффект(v/100);
+      bagsПоказатьВсё();
+      const h=document.getElementById('rtHint');
+      if(h){ h.textContent='Проведите пальцем по тени под глазом'; h.style.display='block'; }
+    }
+    bagsЗапомнитьОп();
+  };
+});
 
 // ─── «Боке» ───
 let rtBokehOp = null;
@@ -8837,6 +9037,12 @@ async function aiФайл(шаг, адрес, хранилище){
     if(шаг) шаг(-1);
     const resp = await fetch(адрес);
     if(!resp.ok) throw new Error('модель не скачалась');
+    // В КЭШ КЛАДЁМ СРАЗУ ПОТОКОМ, до чтения в память. Раньше сеть сначала целиком читалась
+    // в буфер, а в кэш уходила его копия (буф.slice) — это лишние 68 МБ разом, и на телефоне
+    // копия могла не выделиться. Ошибка глушилась, файл в кэш не попадал, и при каждом
+    // запуске он качался заново (Артур: «бегут проценты»).
+    let вКэш = null;
+    if(c){ try{ вКэш = c.put(адрес, resp.clone()).catch(()=>{ вКэш = null; }); }catch(_){} }
     const всего = +resp.headers.get('content-length') || 0;
     // читаем потоком, чтобы показывать проценты
     const куски = []; let принято = 0;
@@ -8850,7 +9056,15 @@ async function aiФайл(шаг, адрес, хранилище){
       }
     }
     const буф = reader ? await new Blob(куски).arrayBuffer() : await resp.arrayBuffer();
-    if(c){ try{ await c.put(адрес, new Response(буф.slice(0))); }catch(_){} }
+    // Убеждаемся, что файл В САМОМ ДЕЛЕ лёг в кэш. Молчаливый провал здесь читается как
+    // «приложение каждый раз качает 68 МБ» — а понять причину со стороны невозможно.
+    if(c){
+      try{ if(вКэш) await вКэш; }catch(_){}
+      try{
+        if(!(await c.match(адрес))) await c.put(адрес, new Response(буф.slice(0)));
+        if(!(await c.match(адрес))) console.warn('модель не сохранилась в память устройства:', адрес);
+      }catch(e){ console.warn('модель не сохранилась в память устройства:', адрес, e); }
+    }
     return буф;
   })();
   try{ return await aiФайлОчередь[адрес]; }
@@ -8893,6 +9107,13 @@ function aiЗапас(){
     try{
       if(navigator.deviceMemory && navigator.deviceMemory < 3) { await aiФайл(null); return; }
       await aiСессия(null);
+      // «Точки» держат свою сеть (69 МБ) и разворачивают её при каждом запуске заново —
+      // это те самые секунды ожидания при входе в карточку. Готовим и её, но ПОСЛЕ
+      // ретуши и только на телефонах с запасом памяти: две сессии в видеоядре разом
+      // слабое устройство не потянет.
+      if(!(navigator.deviceMemory && navigator.deviceMemory < 6) && typeof точСессия === 'function'){
+        setTimeout(()=> точСессия(null).catch(()=>{}), 4000);
+      }
     }catch(e){
       // Сеть могла моргнуть — один повтор через полминуты, дальше не навязываемся.
       if(!попытка) setTimeout(()=> запас(1), 30000);
@@ -9345,6 +9566,13 @@ document.getElementById('rtApply').onclick = ()=>{
 включитьПеретаскивание();
 
 // ─── PWA ───
+// ПОСТОЯННОЕ ХРАНИЛИЩЕ. Модели ИИ занимают больше сотни мегабайт, и обычный кэш браузер
+// вправе выбросить, когда на телефоне становится тесно. Тогда при следующем запуске всё
+// качается заново — именно это Артур и видел («бегут проценты»). Разрешение просим один
+// раз; браузер даёт его установленным приложениям молча, без вопросов пользователю.
+if(navigator.storage && navigator.storage.persist){
+  navigator.storage.persisted().then(есть=>{ if(!есть) return navigator.storage.persist(); }).catch(()=>{});
+}
 // Обновление установленного приложения. Без этого телефон живёт на старой версии:
 // сам sw.js браузер перепроверяет редко, а страница не узнаёт, что вышла новая.
 if('serviceWorker' in navigator){
