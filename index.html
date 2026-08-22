@@ -404,6 +404,12 @@
   .onb-third{padding:13px; border-radius:14px; background:transparent; border:0; color:var(--gold);
     font-size:13px; font-weight:600; letter-spacing:.02em; cursor:pointer;}
   .onb-third:active{transform:scale(.97);}
+  .onb-install{margin-top:6px; padding:12px 16px; border-radius:14px; background:transparent;
+    border:1px solid var(--line); color:var(--fg); display:flex; flex-direction:column; gap:3px;
+    align-items:center; cursor:pointer; transition:transform .12s;}
+  .onb-install b{font-size:14px; font-weight:600;}
+  .onb-install s{font-size:11px; color:var(--dim); text-decoration:none;}
+  .onb-install:active{transform:scale(.97);}
   .onb-second{padding:15px; border-radius:14px; background:transparent; border:1px solid var(--line);
     color:var(--text); font-size:13px; cursor:pointer;}
   .onb-primary:active,.onb-second:active{transform:scale(.97);}
@@ -1631,6 +1637,13 @@
     <!-- коллаж — самостоятельный вход, а не продолжение обработки: он набирает
          свои кадры сам, и заставлять сперва открыть один снимок было бы лишним шагом -->
     <button class="onb-third" id="onbCollage">Собрать коллаж</button>
+    <!-- Установка живёт здесь, на первом экране: раньше кнопка была маленькой пилюлей в
+         шапке второго экрана, куда попадают уже после выбора фото, — там её не видели.
+         Показывается, только когда браузер действительно предлагает установку. -->
+    <button class="onb-install" id="onbInstall" style="display:none">
+      <b>Установить приложение</b>
+      <s>Откроется с рабочего стола и будет работать без интернета</s>
+    </button>
   </div>
   <div class="onb-perm">Нужен доступ к галерее и камере. Фото обрабатываются на телефоне и никуда не отправляются.</div>
 </div>
@@ -9689,9 +9702,41 @@ if('serviceWorker' in navigator){
 }
 let deferredPrompt = null;
 const installBtn = document.getElementById('install');
-window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredPrompt = e; installBtn.style.display = 'inline-flex'; });
-installBtn.onclick = async ()=>{ if(!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; installBtn.style.display='none'; };
-window.addEventListener('appinstalled', ()=> { installBtn.style.display = 'none'; });
+const onbInstall = document.getElementById('onbInstall');
+// Кнопок установки две: заметная на первом экране и прежняя пилюля в шапке. Обе живут
+// от одного разрешения браузера и гаснут вместе — держать их порознь значит однажды
+// показать кнопку, которая уже ничего не делает.
+function установкаВидна(да){
+  installBtn.style.display = да ? 'inline-flex' : 'none';
+  if(onbInstall) onbInstall.style.display = да ? 'flex' : 'none';
+}
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredPrompt = e; установкаВидна(true); });
+// АЙФОН. Safari не разрешает приложению вызвать установку — там её делают руками через
+// «Поделиться → На экран „Домой“», и события beforeinstallprompt не будет никогда.
+// Значит на iPhone кнопка обязана не устанавливать, а ОБЪЯСНЯТЬ; иначе на первом экране
+// у половины людей не будет ничего.
+(function айфон(){
+  const ua = navigator.userAgent || '';
+  const это_iOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const уже = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  if(!это_iOS || уже || !onbInstall) return;
+  onbInstall.querySelector('b').textContent = 'Установить на iPhone';
+  onbInstall.querySelector('s').textContent = 'Внизу Safari: «Поделиться» → «На экран „Домой“»';
+  onbInstall.style.display = 'flex';
+  onbInstall.onclick = ()=>{
+    const п = document.getElementById('iosHint');
+    if(п){ п.style.display = 'flex'; try{ localStorage.removeItem('iosHintHidden'); }catch(_){} }
+  };
+})();
+async function поставитьПриложение(){
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null; установкаВидна(false);
+}
+installBtn.onclick = поставитьПриложение;
+if(onbInstall) onbInstall.onclick = поставитьПриложение;
+window.addEventListener('appinstalled', ()=> установкаВидна(false));
 
 // ─── Аппаратная кнопка «Назад» (Android PWA): с любого экрана — на главную;
 // с главной — «нажмите ещё раз для выхода», повторное нажатие в течение 2с — реально выходит.
