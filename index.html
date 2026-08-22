@@ -422,17 +422,10 @@
     background:radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0,0,0,.28) 100%);}
   body.shooting .виньетка{display:none;}
 
-  /* затвор: две шторки сходятся и расходятся — как срабатывание камеры */
-  .затвор{position:fixed; inset:0; pointer-events:none; z-index:10001; display:none;}
-  .затвор.идёт{display:block;}
-  .затвор i{position:absolute; left:0; right:0; height:50%; background:#0A0908; display:block;}
-  .затвор i:first-child{top:0; transform:translateY(-100%);}
-  .затвор i:last-child{bottom:0; transform:translateY(100%);}
-  .затвор.идёт i:first-child{animation:шторкаВерх .19s cubic-bezier(.4,0,.2,1);}
-  .затвор.идёт i:last-child{animation:шторкаНиз .19s cubic-bezier(.4,0,.2,1);}
-  @keyframes шторкаВерх{0%{transform:translateY(-100%)}45%{transform:translateY(0)}100%{transform:translateY(-100%)}}
-  @keyframes шторкаНиз{0%{transform:translateY(100%)}45%{transform:translateY(0)}100%{transform:translateY(100%)}}
-
+  /* Затвора здесь НЕТ намеренно. Он был красив, но Артур прочитал его как сбой
+     («экран моргает, так и должно быть?»), и это приговор приёму: инструмент открывают
+     десятки раз за обработку кадра, и каждый раз это лишние две десятых секунды ожидания.
+     Такие эффекты работают один раз за сеанс — например, при съёмке, — а не на кнопке. */
   /* счётчик кадров: цифры одной ширины, при смене — щелчок вверх, как в камере */
   .roll{font-family:var(--mono); font-variant-numeric:tabular-nums; letter-spacing:.12em;}
   .roll.щёлк{animation:щелчок .22s ease-out;}
@@ -1248,7 +1241,6 @@
 <body>
 <div class="filmgrain"></div>
 <div class="виньетка"></div>
-<div class="затвор" id="затвор"><i></i><i></i></div>
 
 <header>
   <button class="icon-btn" id="backBtn" aria-label="Домой">
@@ -9765,16 +9757,9 @@ if('serviceWorker' in navigator){
 // Вибрация: короткий тик подтверждает нажатие раньше, чем экран успеет перерисоваться.
 // На iPhone Safari её нет вовсе — там вызов просто ничего не сделает, и это нормально.
 function дрогнуть(мс){ try{ navigator.vibrate && navigator.vibrate(мс); }catch(_){} }
-// Затвор проигрываем только при входе в инструмент: если ставить его на каждое нажатие,
-// он из приёма превращается в задержку.
-function затворЩёлк(){
-  const з=document.getElementById('затвор'); if(!з) return;
-  з.classList.remove('идёт'); void з.offsetWidth; з.classList.add('идёт');
-  setTimeout(()=> з.classList.remove('идёт'), 220);
-}
 document.addEventListener('pointerdown', e=>{
   const карточка = e.target.closest && e.target.closest('#home .ht');
-  if(карточка){ дрогнуть(8); затворЩёлк(); return; }
+  if(карточка){ дрогнуть(8); return; }
   if(e.target.closest && e.target.closest('button')) дрогнуть(5);
 }, true);
 // Счётчик кадров в шапке: цифра меняется — цифра щёлкает.
