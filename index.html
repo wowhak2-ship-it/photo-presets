@@ -6382,9 +6382,10 @@ const rtPtrs = new Map();
 function rtSyncPan(){
   const b = document.getElementById('rtPanBtn');
   if(!b) return;
-  // В «Тенях» мазать нечем, поэтому палец там таскает кадр без всякого режима —
-  // и кнопка не нужна. Она только для кисти и штампа, где ведение это прицеливание.
-  const можно = rtScale > 1 && rtTool !== 'bags';
+  // В автоматическом консилере мазать нечем, поэтому палец там таскает кадр без всякого
+  // режима — и кнопка не нужна. Но с ручной кистью палец рисует, и двигать кадр становится
+  // нечем: кнопка обязана появиться, как в «Замазать» (Артур: «нету кнопки двигать»).
+  const можно = rtScale > 1 && (rtTool !== 'bags' || bagsРежим !== 'авто');
   b.classList.toggle('on', можно);
   if(!можно) rtPanMode = false;
   b.classList.toggle('active', rtPanMode);
@@ -6437,7 +6438,9 @@ rtCanvas.addEventListener('pointerdown', e=>{
     // Источник засветки ставится пальцем: он может быть и за краем кадра, как настоящее
     // солнце сбоку, поэтому точка не ограничена холстом.
     if(!rtPan1 && rtTool === 'bags' && bagsРежим !== 'авто' && bagsГотово){
-      rtDrawing = true; bagsШтрихPrev = null; bagsМазал = false; bagsВести(e); rtShowCursor(e);
+      rtDrawing = true; bagsШтрихPrev = null; bagsМазал = false;
+      bagsСнимок();                       // чтобы «Отменить» снимало мазок целиком
+      bagsВести(e); rtShowCursor(e);
     }
     if(!rtPan1 && rtTool === 'flare'){ rtDrawing = true; flareAt(e); }
     if(!rtPan1 && rtTool === 'vig'){ rtDrawing = true; vigAt(e); }
@@ -6511,6 +6514,8 @@ rtCanvas.addEventListener('wheel', e=>{
   if(rtScale === 1){ rtTx = 0; rtTy = 0; } rtClampPan(); rtApplyTransform();
 }, {passive:false});
 document.getElementById('rtUndo').onclick = ()=>{
+  // мазки кисти консилера живут в своём журнале — их отменяем первыми
+  if(rtTool === 'bags' && bagsРежим !== 'авто'){ if(bagsОтменить()) return; }
   rtCmpOff();
   if(!rtUndo.length) return;
   const u = rtUndo.pop();
@@ -6593,7 +6598,10 @@ function rtSetTool(tool){
     spots ? 'Точки' : bags ? 'Консилер' : skin ? 'Кожа' : teeth ? 'Зубы' : ai ? 'ИИ-ретушь' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка' : vig ? 'Виньетка' : hal ? 'Свечение' : dbl ? 'Двойная' : dust ? 'Потёртости'
          : tool==='paint' ? 'Замазать' : 'Ретушь';
   // ряд с «Отменить» — только там, где есть что отменять, то есть у кисти и штампа
-  document.getElementById('rtTools').style.display = ползунок ? 'none' : 'flex';
+  // «Отменить» нужна и в консилере, но только с кистью: в автоматическом режиме отменять
+  // нечего — там всё меняет ползунок.
+  document.getElementById('rtTools').style.display =
+    (!ползунок || (bags && bagsРежим !== 'авто')) ? 'flex' : 'none';
   // Кружки выбора лица принадлежат «Теням» и «Коже». Раньше их никто не убирал, и
   // после этих инструментов они оставались висеть поверх кадра в кисти и штампе.
   if(!bags && !skin && !powder && !tone && !teeth && !ai && !spots) rtClearFaces();
@@ -8109,7 +8117,7 @@ function bagsХолст(w, h){
   const c = document.createElement('canvas'); c.width=w; c.height=h; return c;
 }
 function bagsСброситьКисть(){
-  bagsРежим = 'авто'; bagsМаска = null; bagsГотово = null; bagsОриг = null;
+  bagsРежим = 'авто'; bagsМаска = null; bagsГотово = null; bagsОриг = null; bagsОтмены = [];
   bagsШтрихPrev = null; bagsМазал = false;
   document.querySelectorAll('#rtBagsModes .rt-kind').forEach(b=> b.classList.toggle('on', b.dataset.bm==='авто'));
   const р = document.getElementById('rtBagsSizeRow'); if(р) р.style.display='none';
@@ -8189,6 +8197,27 @@ function bagsВести(e){
   const k=n*шаг/d;
   bagsШтрихPrev = {x:bagsШтрихPrev.x+dx*k, y:bagsШтрихPrev.y+dy*k};
   bagsМазал = true;
+}
+// Снимок перед мазком — для кнопки «Отменить». Помним и кадр, и саму маску: без маски
+// отмена вернула бы картинку, но кисть продолжала бы считать это место закрашенным.
+let bagsОтмены = [];
+function bagsСнимок(){
+  if(!bagsМаска) return;
+  const м = bagsХолст(bagsМаска.width, bagsМаска.height);
+  м.getContext('2d').drawImage(bagsМаска, 0, 0);
+  bagsОтмены.push({ маска: м,
+    кадр: rtCanvas.getContext('2d', {willReadFrequently:true}).getImageData(0,0,rtCanvas.width,rtCanvas.height) });
+  if(bagsОтмены.length > 10) bagsОтмены.shift();
+  const b = document.getElementById('rtUndo'); if(b) b.disabled = false;
+}
+function bagsОтменить(){
+  const у = bagsОтмены.pop(); if(!у) return false;
+  rtCanvas.getContext('2d').putImageData(у.кадр, 0, 0);
+  bagsМаска = у.маска;
+  bagsЗапомнитьОп();
+  const b = document.getElementById('rtUndo');
+  if(b) b.disabled = bagsОтмены.length === 0;
+  return true;
 }
 // Кружок кисти паркуем на подглазье, как «Замазать» паркует свою пару «палец+кружок»:
 // иначе непонятно, каким размером и куда ляжет мазок, пока не начнёшь вести.
@@ -8293,6 +8322,10 @@ document.querySelectorAll('#rtBagsModes .rt-kind').forEach(b=>{
     document.getElementById('rtBagsSizeRow').style.display = (стал==='авто')?'none':'flex';
     // в ручном режиме курсор — прицел, в авто — рука (кадр таскают пальцем)
     rtCanvas.style.cursor = (стал==='авто') ? 'grab' : 'crosshair';
+    rtSyncPan();                                   // рука появляется вместе с кистью
+    document.getElementById('rtTools').style.display = (стал==='авто') ? 'none' : 'flex';
+    if(стал==='авто'){ bagsОтмены = []; }
+    const кн = document.getElementById('rtUndo'); if(кн) кн.disabled = !bagsОтмены.length;
     let v = +document.getElementById('rtBags').value;
     if(стал === 'авто'){
       // возвращаем автоматический путь: чистый кадр и обычный расчёт по точкам лица
