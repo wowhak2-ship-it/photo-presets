@@ -8102,10 +8102,23 @@ function bagsСброситьКисть(){
 function bagsГотовитьЭффект(сила){
   if(!bagsОриг) return;
   bagsГотово = bagsХолст(rtCanvas.width, rtCanvas.height);
-  bagsГотово.getContext('2d').drawImage(bagsОриг, 0, 0);
-  if(сила > 0 && rtFaces && rtFaces.length){
-    const данные = bagsPrepare([rtFaces[rtFaceSel]], bagsГотово, true);
-    if(данные) bagsApply(сила, bagsГотово, данные);
+  const гx = bagsГотово.getContext('2d', {willReadFrequently:true});
+  гx.drawImage(bagsОриг, 0, 0);
+  if(!(сила > 0) || !rtFaces || !rtFaces.length) return;
+  const данные = bagsPrepare([rtFaces[rtFaceSel]], bagsГотово, true);
+  if(!данные) return;
+  bagsApply(сила, bagsГотово, данные);
+  // КИСТЬ ТОЛЬКО ОСВЕТЛЯЕТ. В зоне есть и светлые места (выпуклость мешка, блик), и общий
+  // расчёт их приглушает — то есть мазок по светлому делал бы его ТЕМНЕЕ. Замер поймал это
+  // прямо: −6 уровней. Для ручной кисти это бессмыслица: пальцем ведут, чтобы убрать тень.
+  const оx = bagsОриг.getContext('2d', {willReadFrequently:true});
+  for(const z of данные.regs){
+    const н = гx.getImageData(z.bx, z.by, z.bw, z.bh), о = оx.getImageData(z.bx, z.by, z.bw, z.bh);
+    const a = н.data, b = о.data;
+    for(let i = 0; i < a.length; i += 4){
+      if((a[i]+a[i+1]+a[i+2]) < (b[i]+b[i+1]+b[i+2])){ a[i]=b[i]; a[i+1]=b[i+1]; a[i+2]=b[i+2]; }
+    }
+    гx.putImageData(н, z.bx, z.by);
   }
 }
 // Показать результат: в «авто» весь эффект, в кисти — только там, где мазали
@@ -8252,7 +8265,7 @@ document.querySelectorAll('#rtBagsModes .rt-kind').forEach(b=>{
     document.querySelectorAll('#rtBagsModes .rt-kind').forEach(x=> x.classList.toggle('on', x===b));
     bagsРежим = стал;
     document.getElementById('rtBagsSizeRow').style.display = (стал==='авто')?'none':'flex';
-    const v = +document.getElementById('rtBags').value;
+    let v = +document.getElementById('rtBags').value;
     if(стал === 'авто'){
       // возвращаем автоматический путь: чистый кадр и обычный расчёт по точкам лица
       rtCanvas.getContext('2d').drawImage(bagsОриг, 0, 0);
@@ -8262,6 +8275,14 @@ document.querySelectorAll('#rtBagsModes .rt-kind').forEach(b=>{
     } else if(был === 'авто'){
       // уходим в ручной режим: с чистого листа, эффект появится только под пальцем
       bagsМаска = bagsХолст(rtCanvas.width, rtCanvas.height);
+      // При входе в карточку ползунок стоит на нуле. Нажать «Кисть» и водить пальцем по
+      // нулевой силе — значит не увидеть ничего: проявлять нечем. Артур так и сказал:
+      // «не работает». Поэтому при переходе в ручной режим сила сама встаёт на рабочую.
+      if(!v){
+        v = 70;
+        const п = document.getElementById('rtBags');
+        п.value = v; document.getElementById('rtBagsV').textContent = v;
+      }
       bagsГотовитьЭффект(v/100);
       bagsПоказатьВсё();
       const h=document.getElementById('rtHint');
