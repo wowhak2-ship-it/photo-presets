@@ -6253,7 +6253,14 @@ function openPaint(){
   rtSetTool('paint');
 }
 function closeRetouch(){ rtCmpOff(); retouchEl.classList.remove('open'); retouchEl.classList.remove('shadows-only'); }
-function rtBrushR(){ const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width; return rtSize * (rtCanvas.width/disp) * 0.5; }
+// Размер кисти на экране: в консилере своя кисть, и кружок обязан показывать ЕЁ,
+// иначе нарисованное не совпадает с тем, что было обведено.
+function rtSizeНаЭкране(){
+  if(rtTool === 'bags' && bagsРежим !== 'авто') return +document.getElementById('rtBagsSize').value;
+  return rtSize;
+}
+function rtBrushR(){ const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width;
+  return rtSizeНаЭкране() * (rtCanvas.width/disp) * 0.5; }
 function rtAt(e){ const r = rtCanvas.getBoundingClientRect();
   const bx = (e.clientX-r.left)*(rtCanvas.width/r.width), by = (e.clientY-r.top)*(rtCanvas.height/r.height);
   healSpot(rtCanvas, bx, by, rtBrushR(), null, rtOpts());
@@ -6281,7 +6288,7 @@ function rtShowCursor(e){
   e = rtAim(e);
   rtCursor.style.left = (e.clientX - ar.left) + 'px';
   rtCursor.style.top  = (e.clientY - ar.top)  + 'px';
-  rtCursor.style.width = rtSize + 'px'; rtCursor.style.height = rtSize + 'px';
+  rtCursor.style.width = rtSizeНаЭкране() + 'px'; rtCursor.style.height = rtSizeНаЭкране() + 'px';
   rtCursor.classList.add('on');
   if(rtTool === 'paint') paintRig(палец, ar);
   rtUpdateLoupe(e, ar);
@@ -6308,6 +6315,9 @@ function paintPark(){
 function rtHideCursor(){
   if(rtTool === 'flare' || rtTool === 'vig' || rtTool === 'dbl'){ rtHideLoupe(); return; }   // точка источника в «Засветке» видна всегда
   if(rtTool === 'paint'){ rtHideLoupe(); return; }   // кружок с рукой в «Замазать» видны всегда
+  // Кисть консилера ведут так же, как в «Замазать»: кружок остаётся на кадре, чтобы было
+  // видно, куда ляжет следующий мазок. Убираем только лупу.
+  if(rtTool === 'bags' && bagsРежим !== 'авто'){ rtHideLoupe(); return; }
   rtCursor.classList.remove('on'); paintRigOff(); rtHideLoupe();
 }
 // loupe: magnified preview of the area under the finger so you can see if you hit the spot
@@ -6378,10 +6388,17 @@ function rtSyncPan(){
   b.classList.toggle('on', можно);
   if(!можно) rtPanMode = false;
   b.classList.toggle('active', rtPanMode);
-  rtCanvas.style.cursor = (rtPanMode || rtTool === 'bags') ? 'grab' : 'crosshair';
+  rtCanvas.style.cursor = (rtPanMode || (rtTool === 'bags' && bagsРежим === 'авто')) ? 'grab' : 'crosshair';
 }
 // таскать одним пальцем можно: включённой рукой либо в «Тенях», где кисти нет
-function rtCanPan1(){ return rtScale > 1 && (rtPanMode || rtTool === 'bags'); }
+function rtCanPan1(){
+  // В консилере палец таскал кадр всегда, стоило приблизить снимок: карточка была
+  // «один ползунок», и вести пальцем было нечем. С кистью это правило отнимало каждый
+  // мазок — Артур: «не могу вести пальцем, и лупа пропадает при увеличении».
+  // В ручном режиме кадр двигают либо кнопкой-рукой, либо двумя пальцами.
+  if(rtTool === 'bags' && bagsРежим !== 'авто') return rtPanMode && rtScale > 1;
+  return rtScale > 1 && (rtPanMode || rtTool === 'bags');
+}
 // положение шторки берём от кадра, а не от экрана: холст может быть приближён и сдвинут
 function rtCmpAt(e){
   const r = rtCanvas.getBoundingClientRect();
@@ -6420,7 +6437,7 @@ rtCanvas.addEventListener('pointerdown', e=>{
     // Источник засветки ставится пальцем: он может быть и за краем кадра, как настоящее
     // солнце сбоку, поэтому точка не ограничена холстом.
     if(!rtPan1 && rtTool === 'bags' && bagsРежим !== 'авто' && bagsГотово){
-      rtDrawing = true; bagsШтрихPrev = null; bagsМазал = false; bagsВести(e);
+      rtDrawing = true; bagsШтрихPrev = null; bagsМазал = false; bagsВести(e); rtShowCursor(e);
     }
     if(!rtPan1 && rtTool === 'flare'){ rtDrawing = true; flareAt(e); }
     if(!rtPan1 && rtTool === 'vig'){ rtDrawing = true; vigAt(e); }
@@ -8085,10 +8102,9 @@ function bagsRun(cv, faces, amount, кисть){
 // С ПОЛНОСТЬЮ применённым эффектом, а палец лишь проявляет его сквозь маску мазка.
 let bagsРежим = 'авто', bagsМаска = null, bagsГотово = null, bagsОриг = null;
 let bagsШтрихPrev = null, bagsМазал = false, bagsВрем = null;
-function bagsКистьR(){
-  const disp = rtCanvas.getBoundingClientRect().width || rtCanvas.width;
-  return (+document.getElementById('rtBagsSize').value) * (rtCanvas.width/disp) * 0.5;
-}
+// Один источник радиуса на всё: и мазок, и кружок, и лупа. Раньше кисть считала свой
+// радиус отдельно — кружок показывал одно, красило другое.
+function bagsКистьR(){ return rtBrushR(); }
 function bagsХолст(w, h){
   const c = document.createElement('canvas'); c.width=w; c.height=h; return c;
 }
@@ -8173,6 +8189,16 @@ function bagsВести(e){
   const k=n*шаг/d;
   bagsШтрихPrev = {x:bagsШтрихPrev.x+dx*k, y:bagsШтрихPrev.y+dy*k};
   bagsМазал = true;
+}
+// Кружок кисти паркуем на подглазье, как «Замазать» паркует свою пару «палец+кружок»:
+// иначе непонятно, каким размером и куда ляжет мазок, пока не начнёшь вести.
+function bagsПарк(){
+  const z = bagsData && bagsData.regs && bagsData.regs[0];
+  if(!z) return;
+  const r = rtCanvas.getBoundingClientRect();
+  rtShowCursor({ clientX: r.left + (z.bx + z.bw*0.5)*(r.width/rtCanvas.width),
+                 clientY: r.top  + (z.by + z.bh*0.55)*(r.height/rtCanvas.height) });
+  rtHideLoupe();
 }
 function bagsЗапомнитьОп(){
   const v = +document.getElementById('rtBags').value;
@@ -8265,6 +8291,8 @@ document.querySelectorAll('#rtBagsModes .rt-kind').forEach(b=>{
     document.querySelectorAll('#rtBagsModes .rt-kind').forEach(x=> x.classList.toggle('on', x===b));
     bagsРежим = стал;
     document.getElementById('rtBagsSizeRow').style.display = (стал==='авто')?'none':'flex';
+    // в ручном режиме курсор — прицел, в авто — рука (кадр таскают пальцем)
+    rtCanvas.style.cursor = (стал==='авто') ? 'grab' : 'crosshair';
     let v = +document.getElementById('rtBags').value;
     if(стал === 'авто'){
       // возвращаем автоматический путь: чистый кадр и обычный расчёт по точкам лица
@@ -8285,6 +8313,7 @@ document.querySelectorAll('#rtBagsModes .rt-kind').forEach(b=>{
       }
       bagsГотовитьЭффект(v/100);
       bagsПоказатьВсё();
+      bagsПарк();
       const h=document.getElementById('rtHint');
       if(h){ h.textContent='Проведите пальцем по тени под глазом'; h.style.display='block'; }
     }
