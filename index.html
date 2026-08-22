@@ -404,6 +404,64 @@
   .onb-third{padding:13px; border-radius:14px; background:transparent; border:0; color:var(--gold);
     font-size:13px; font-weight:600; letter-spacing:.02em; cursor:pointer;}
   .onb-third:active{transform:scale(.97);}
+
+  /* ── ПЛЁНОЧНЫЙ СЛОЙ ─────────────────────────────────────────────────────────────
+     Палитра и моноширинные подписи у нас плёночные с самого начала, а вот экраны
+     читались как обычное тёмное приложение. Три детали возвращают характер, не трогая
+     ни одной кнопки: зерно по фону, номер кадра на карточке и перфорация по кромке.
+     Зерно вешаем НА ЭКРАНЫ, а не на всё окно: поверх фотографии в редакторе оно мешало
+     бы судить о ретуши — а именно по ней тут принимают решения. */
+
+  /* ── ПЛЁНОЧНАЯ ОТДЕЛКА ──────────────────────────────────────────────────────────
+     Четыре детали, которые не меняют ни одной кнопки, но задают характер: падение
+     света по краям, затвор при входе в инструмент, механический счётчик кадров и
+     узкая гротеска в заголовках, как на коробке плёнки. */
+
+  /* падение света объектива: к краям кадра темнее, как на настоящей оптике */
+  .виньетка{position:fixed; inset:0; pointer-events:none; z-index:9998;
+    background:radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0,0,0,.28) 100%);}
+  body.shooting .виньетка{display:none;}
+
+  /* затвор: две шторки сходятся и расходятся — как срабатывание камеры */
+  .затвор{position:fixed; inset:0; pointer-events:none; z-index:10001; display:none;}
+  .затвор.идёт{display:block;}
+  .затвор i{position:absolute; left:0; right:0; height:50%; background:#0A0908; display:block;}
+  .затвор i:first-child{top:0; transform:translateY(-100%);}
+  .затвор i:last-child{bottom:0; transform:translateY(100%);}
+  .затвор.идёт i:first-child{animation:шторкаВерх .19s cubic-bezier(.4,0,.2,1);}
+  .затвор.идёт i:last-child{animation:шторкаНиз .19s cubic-bezier(.4,0,.2,1);}
+  @keyframes шторкаВерх{0%{transform:translateY(-100%)}45%{transform:translateY(0)}100%{transform:translateY(-100%)}}
+  @keyframes шторкаНиз{0%{transform:translateY(100%)}45%{transform:translateY(0)}100%{transform:translateY(100%)}}
+
+  /* счётчик кадров: цифры одной ширины, при смене — щелчок вверх, как в камере */
+  .roll{font-family:var(--mono); font-variant-numeric:tabular-nums; letter-spacing:.12em;}
+  .roll.щёлк{animation:щелчок .22s ease-out;}
+  @keyframes щелчок{0%{transform:translateY(-40%); opacity:.25}100%{transform:translateY(0); opacity:1}}
+
+  /* заголовки узкой плотной гротеской — так набирают надписи на коробке плёнки.
+     Файл шрифта не вшиваем: берём то, что уже стоит в системе, иначе офлайн-приложение
+     потянуло бы за собой ещё десятки килобайт. */
+  .ht b, .onb-h1, .cam-title, .set-gl{
+    font-family:'Roboto Condensed','Arial Narrow','Helvetica Neue Condensed',var(--mono),system-ui;
+    letter-spacing:.02em;}
+
+  /* Своего зерна тут НЕТ намеренно: в приложении уже работает общий слой .filmgrain
+     поверх всех экранов. Второй такой же слой я добавил по невнимательности — шум
+     удваивался, и на границе первого экрана шла видимая ступенька. */
+  /* номер кадра — как на краю негатива: 1, 1A, 2, 2A… */
+  .ht[data-кадр]{ position:relative; }
+  .ht[data-кадр]::before{
+    content:attr(data-кадр); position:absolute; right:10px; top:9px;
+    font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.08em;
+    color:rgba(224,162,74,.55); pointer-events:none;
+  }
+  /* перфорация по верхней кромке карточки */
+  .ht[data-кадр]::after{
+    content:''; position:absolute; left:10px; right:10px; top:0; height:5px; pointer-events:none;
+    background-image:radial-gradient(circle at 4px 2.5px, rgba(224,162,74,.22) 1.6px, transparent 1.8px);
+    background-size:11px 5px; background-repeat:repeat-x;
+  }
+
   .onb-install{margin-top:6px; padding:12px 16px; border-radius:14px; background:transparent;
     border:1px solid var(--line); color:var(--fg); display:flex; flex-direction:column; gap:3px;
     align-items:center; cursor:pointer; transition:transform .12s;}
@@ -1189,6 +1247,8 @@
 </head>
 <body>
 <div class="filmgrain"></div>
+<div class="виньетка"></div>
+<div class="затвор" id="затвор"><i></i><i></i></div>
 
 <header>
   <button class="icon-btn" id="backBtn" aria-label="Домой">
@@ -9700,6 +9760,40 @@ if('serviceWorker' in navigator){
     if(!document.hidden) navigator.serviceWorker.getRegistration().then(r=> r && r.update()).catch(()=>{});
   });
 }
+
+// ── ПЛЁНОЧНАЯ ОТДЕЛКА: отклик в пальце, затвор, счётчик ──────────────────────────
+// Вибрация: короткий тик подтверждает нажатие раньше, чем экран успеет перерисоваться.
+// На iPhone Safari её нет вовсе — там вызов просто ничего не сделает, и это нормально.
+function дрогнуть(мс){ try{ navigator.vibrate && navigator.vibrate(мс); }catch(_){} }
+// Затвор проигрываем только при входе в инструмент: если ставить его на каждое нажатие,
+// он из приёма превращается в задержку.
+function затворЩёлк(){
+  const з=document.getElementById('затвор'); if(!з) return;
+  з.classList.remove('идёт'); void з.offsetWidth; з.classList.add('идёт');
+  setTimeout(()=> з.classList.remove('идёт'), 220);
+}
+document.addEventListener('pointerdown', e=>{
+  const карточка = e.target.closest && e.target.closest('#home .ht');
+  if(карточка){ дрогнуть(8); затворЩёлк(); return; }
+  if(e.target.closest && e.target.closest('button')) дрогнуть(5);
+}, true);
+// Счётчик кадров в шапке: цифра меняется — цифра щёлкает.
+(function счётчик(){
+  const r=document.getElementById('rollInfo'); if(!r) return;
+  let было=r.textContent;
+  new MutationObserver(()=>{
+    if(r.textContent===было) return;
+    было=r.textContent;
+    r.classList.remove('щёлк'); void r.offsetWidth; r.classList.add('щёлк');
+  }).observe(r,{childList:true,characterData:true,subtree:true});
+})();
+
+// Номера кадров расставляем в коде, а не руками в разметке: карточки то добавляются,
+// то переезжают, и вручную нумерация разъехалась бы при первом же изменении.
+(function номераКадров(){
+  const карточки = [...document.querySelectorAll('#home .ht')].filter(k=> !k.classList.contains('ht-wide'));
+  карточки.forEach((k, i)=>{ const n = Math.floor(i/2) + 1; k.setAttribute('data-кадр', (i%2 ? n+'A' : ''+n)); });
+})();
 let deferredPrompt = null;
 const installBtn = document.getElementById('install');
 const onbInstall = document.getElementById('onbInstall');
