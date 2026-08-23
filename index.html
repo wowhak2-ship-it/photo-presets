@@ -2284,6 +2284,59 @@ function lookLayers(look, mix){
   const h = hslSetTouched(look && look.hsl) ? hslSetToTables(look.hsl, mix) : null;
   return { curve:c, hsl:h };
 }
+// ─── Подстройка пресета под свет кадра ───
+// Референс «Маминых цветов» — мягко освещённая студия. На кадре с жёстким полуденным
+// солнцем ТА ЖЕ молочная кривая читается как вымытость: чёрное поднято, света укатаны,
+// а исходного контраста и не было. Поэтому у пресетов с adaptDR подъём чёрного тем
+// меньше, чем шире реальный диапазон кадра, и наоборот — на мягком свете всё как задумано.
+// Это не новый ползунок: человек ничего не крутит, пресет сам считает один раз на снимок.
+// Правим ПОЛЯ САМОГО ЛУКА, а не отдельную копию: лук читают и лента, и контактный лист,
+// и рабочие потоки при сохранении — иначе превью и файл разошлись бы.
+const ADAPT_БАЗА = new WeakMap();
+// Кадр берём аргументом (по умолчанию — рабочий): sourceCanvas объявлен через let и
+// снаружи не виден, из-за чего стенд молча мерил демо-снимок вместо проверяемого.
+function looksAdapt(src){
+  src = src || sourceCanvas;
+  if(!src) return 0;
+  // Диапазон меряем по уменьшенной копии: 160 px хватает, полный кадр тут не нужен.
+  const s = Math.min(1, 160/Math.max(src.width, src.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(src.width*s));
+  c.height = Math.max(1, Math.round(src.height*s));
+  c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  // Считаем НЕ долю выбитых пикселей — на солнечных кадрах их почти нет, и первая версия
+  // этой подстройки просто не срабатывала (померено на шести кадрах Артура: тени темнее 34
+  // занимали 0.2–6 %, света ярче 226 — 0–2.4 %). Смотрим, где реально начинается тень:
+  // пятый процентиль яркости. У «вымытого» кадра с бочкой он 86 — чёрного там нет вовсе,
+  // и поднимать его ещё раз значит лить молоко. У кадров с настоящей тенью он 30–39,
+  // и подъём им к лицу.
+  const гист = new Uint32Array(256);
+  let n = 0;
+  for(let i=0;i<d.length;i+=4){
+    гист[(LUM[0]*d[i] + LUM[1]*d[i+1] + LUM[2]*d[i+2]) | 0]++;
+    n++;
+  }
+  let сум = 0, p5 = 0;
+  for(let v=0; v<256; v++){ сум += гист[v]; if(сум >= n*0.05){ p5 = v; break; } }
+  const ж = clamp01((p5 - 40)/45);
+  for(const look of LOOKS){
+    if(!look.adaptDR) continue;
+    let б = ADAPT_БАЗА.get(look);
+    if(!б){                                  // исходные числа пресета запоминаем один раз
+      б = { shadowsLift:look.shadowsLift, highlightsRoll:look.highlightsRoll,
+            contrast:look.contrast, чёрный:look.curve.rgb[0][1], низ:look.curve.rgb[1][1] };
+      ADAPT_БАЗА.set(look, б);
+    }
+    look.shadowsLift    = +(б.shadowsLift * (1 - 0.55*ж)).toFixed(4);
+    look.highlightsRoll = +(б.highlightsRoll + 0.06*ж).toFixed(4);
+    look.contrast       = +(б.contrast + 0.05*ж).toFixed(4);   // середине возвращаем объём
+    look.curve.rgb[0][1] = Math.round(б.чёрный - 6*ж);
+    look.curve.rgb[1][1] = Math.round(б.низ    - 5*ж);
+    look._lut = null;                        // таблица пересчитается с новыми числами
+  }
+  return ж;
+}
 // Итоговые таблицы: сперва то, что заложено в пресет, следом ручная правка.
 let mixCurve = null, mixHsl = null;
 function syncTables(){
@@ -2564,6 +2617,32 @@ const LOOKS = [
     hsl:{ red:{sat:-14,lum:8}, orange:{sat:-4,lum:12}, yellow:{sat:-24,lum:10},
           green:{sat:-30,lum:8}, aqua:{sat:-32,lum:10}, blue:{sat:-32,lum:12} } },
 
+  // «Мамины цветы» (MamasFlowers / MintPeachFamily) — собран по трём кадрам семейной
+  // студийной съёмки: мятный свитер, персиковый берет, сливочно-жёлтый фон, мягкий
+  // бирюзовый пол. Мягкий дневной свет, низкий контраст, приподнятый чёрный, белая
+  // точка 245 (96 %) — кремовая, а не цифровая. Это НЕ старая повреждённая плёнка:
+  // ни пыли, ни царапин, зерно мягкое и отдельное, виньетка почти незаметна.
+  // ВАЖНО ПРО ЗНАКИ: движок пишет G += tint, поэтому «оттенок в магенту» — это
+  // ОТРИЦАТЕЛЬНЫЙ tint, а «зелёный в мяту» — ПОЛОЖИТЕЛЬНЫЙ hue (шкала ±30° на ±100).
+  // Числа взяты из задания Артура, но три пришлось отвести от буквы — на его же кадрах
+  // буквальные значения давали молоко (сплошная зелень и жёлтая стена теряли глубину):
+  // свечение 0.10 → 0.05, подъём чёрного в кривой 16 → 11, а насыщенность зелёного и
+  // жёлтого срезана слабее, потому что глобальная saturation режет их второй раз.
+  // ЦВЕТ ВОЗВРАЩЁН ЧЕРЕЗ HSL, А НЕ ЧЕРЕЗ ОБЩУЮ НАСЫЩЕННОСТЬ. Прошлая версия резала
+  // всё сразу — глобальные −7 % плюс −15…−30 по диапазонам, — и уличные кадры уходили
+  // в молочно-серое: голубая бочка становилась циановой, земля и зелень на мостике —
+  // серо-бежевой массой. Теперь глобально почти не трогаем (0.96), а каждый цвет
+  // приглушаем ровно настолько, насколько он этого требует.
+  // adaptDR — мягкая подстройка под свет кадра, см. looksAdapt().
+  { name:"Мамины цветы", temp:8, tint:-4, contrast:-0.08, fade:0, shadowsLift:0.13, highlightsRoll:0.20,
+    shSplit:[-6,2,6], hiSplit:[10,5,-5], vibrance:-0.02, saturation:0.96, vignette:0.05, grain:0.05,
+    bloom:0.05, adaptDR:true,
+    curve:{ rgb:[[0,8],[46,50],[128,134],[200,206],[255,245]],
+            b:[[0,7],[128,129],[255,246]] },
+    hsl:{ red:{hue:3,sat:-6,lum:4}, orange:{hue:-4,sat:-5,lum:9}, yellow:{hue:-18,sat:-12,lum:8},
+          green:{hue:28,sat:-13,lum:2}, aqua:{hue:-8,sat:-7,lum:7}, blue:{hue:-10,sat:-8,lum:5},
+          magenta:{sat:-6,lum:4} } },
+
   // Пасмурно и зима: холод, но кожа остаётся живой
   { name:"Северный", temp:-6, tint:1, contrast:0.10, fade:0.03, shadowsLift:0.06, highlightsRoll:0.10,
     shSplit:[-6,0,8], hiSplit:[4,4,2], vibrance:0.08, saturation:0.94, vignette:0.10, grain:0.03,
@@ -2737,6 +2816,7 @@ function setSource(img){
   sourceCanvas.width = w; sourceCanvas.height = h;
   sourceCanvas.getContext('2d').drawImage(img, 0, 0, w, h);
   makePreview();
+  looksAdapt();            // пресет подстраивается под свет ЭТОГО кадра — до первой отрисовки
   stage.width = w; stage.height = h;
   document.getElementById('empty').style.display = 'none';
   stage.style.display = 'block';
