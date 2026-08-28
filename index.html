@@ -1032,8 +1032,11 @@
   .st-card{background:var(--panel); border:1px solid var(--line); border-radius:18px;
     overflow:hidden;}
   .st-card.feat{border-color:var(--line-2); box-shadow:0 10px 34px rgba(0,0,0,.45);}
-  .st-shot{position:relative; width:100%; aspect-ratio:4/5; background:#15110B; overflow:hidden;
-    touch-action:pan-y;}
+  /* touch-action НЕ ограничиваем. Здесь стояло pan-y — оно спасало прокрутку страницы,
+     пока шторка тянулась касанием по всему кадру. Но заодно оно запрещало горизонтальный
+     жест, и ленту «На разных кадрах» нельзя было пролистать пальцем. Теперь тянется
+     только кружок (у него свой touch-action:none), а кадр отдан жестам целиком. */
+  .st-shot{position:relative; width:100%; aspect-ratio:4/5; background:#15110B; overflow:hidden;}
   .st-card.feat .st-shot{aspect-ratio:3/4;}
   /* Кадрируем не по центру, а выше: почти все витринные снимки — портреты, и при обрезке
      по центру у человека срезается лицо — на широкой карточке особенно грубо. */
@@ -1045,12 +1048,21 @@
   .st-hand{position:absolute; top:0; bottom:0; width:2px; background:rgba(255,255,255,.92);
     box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 0 18px rgba(0,0,0,.5); pointer-events:none;
     transform:translateX(-1px);}
-  .st-hand i{position:absolute; top:50%; left:50%; width:44px; height:44px; margin:-22px 0 0 -22px;
+  /* Кружок — единственная взятка для перетаскивания. Раньше тянулось касанием по всему
+     кадру, и по фотографии нельзя было ни пролистать, ни нажать без сдвига шторки.
+     Сама линия остаётся сквозной (pointer-events:none), ловит только кружок.
+     Зона нажатия шире рисунка: сам круг 34 px, но невидимое поле вокруг доводит её
+     до 46 px — палец попадает, а на глаз метка остаётся аккуратной. */
+  .st-hand i{position:absolute; top:50%; left:50%; width:34px; height:34px; margin:-17px 0 0 -17px;
     border-radius:50%; background:rgba(20,16,10,.55); border:1.5px solid rgba(255,255,255,.9);
     -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
-    display:flex; align-items:center; justify-content:center;}
-  .st-hand i::before{content:'‹ ›'; font-size:15px; color:#fff; letter-spacing:.08em;
-    line-height:44px; font-family:var(--mono);}
+    display:flex; align-items:center; justify-content:center;
+    pointer-events:auto; cursor:grab; touch-action:none;}
+  .st-hand i::after{content:''; position:absolute; left:-6px; right:-6px; top:-6px; bottom:-6px;
+    border-radius:50%;}
+  .st-hand i:active{cursor:grabbing;}
+  .st-hand i::before{content:'‹ ›'; font-size:13px; color:#fff; letter-spacing:.06em;
+    line-height:32px; font-family:var(--mono);}
   /* Подписи «до/после» живут ВНИЗУ кадра: наверху их перекрывали значки коллекции
      («БЕСПЛАТНО» ложилось прямо на «ДО» — поймано на первом же прогоне). */
   .st-tag{position:absolute; bottom:12px; font-family:var(--mono); font-size:9px; letter-spacing:.16em;
@@ -1582,10 +1594,14 @@
   .hti-ph img.after{clip-path:inset(0 0 0 50%);}
   .hti-div{position:absolute; top:0; bottom:0; left:50%; width:1.5px;
     background:rgba(255,255,255,.9); box-shadow:0 0 12px rgba(0,0,0,.5);}
-  .hti-div i{position:absolute; top:50%; left:50%; width:34px; height:34px; margin:-17px 0 0 -17px;
+  /* Кружок с двумя стрелками — тот же знак, что на карточках магазина: он говорит,
+     что половины можно сравнить. Стрелки задаются здесь; без них на главной был
+     просто пустой диск. */
+  .hti-div i{position:absolute; top:50%; left:50%; width:30px; height:30px; margin:-15px 0 0 -15px;
     border-radius:50%; border:1.5px solid rgba(255,255,255,.9); background:rgba(20,16,10,.5);
     -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
-    font-family:var(--mono); font-size:11px; color:#fff; line-height:32px; text-align:center;}
+    font-family:var(--mono); font-size:11px; color:#fff; line-height:28px; text-align:center;}
+  .hti-div i::before{content:'‹ ›'; letter-spacing:.06em;}
   .hti-sh{position:absolute; left:0; right:0; bottom:0; height:62%; pointer-events:none;
     background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.78) 100%);}
   .hti-tx{position:absolute; left:14px; right:14px; bottom:12px; display:flex;
@@ -5204,23 +5220,29 @@ function stСравнение(опц){
     поставить();
   };
   box.addEventListener('pointerdown', e=>{
-    тянем = true; старт = Date.now(); x0 = e.clientX; y0 = e.clientY; ушёл = false;
+    // Тянуть можно ТОЛЬКО за кружок. Раньше шторка ехала от касания в любом месте
+    // кадра: по фотографии нельзя было ни нажать, ни пролистать страницу, не сдвинув
+    // её случайно. Теперь остальная площадь кадра свободна под тап и прокрутку.
+    const наРучке = !!(e.target.closest && e.target.closest('.st-hand'));
+    старт = Date.now(); x0 = e.clientX; y0 = e.clientY; ушёл = false;
+    if(!наРучке) return;                       // не ручка — только запомнили касание
+    тянем = true;
     try{ box.setPointerCapture(e.pointerId); }catch(_){}
     кДоле(e);
   });
   box.addEventListener('pointermove', e=>{
-    if(!тянем) return;
     if(Math.abs(e.clientX-x0) > 6 || Math.abs(e.clientY-y0) > 6) ушёл = true;
+    if(!тянем) return;
     e.preventDefault(); кДоле(e);
   });
   // Короткое касание без ведения — это не перетаскивание, а тап: им открывается коллекция.
   // Различать надо обязательно, иначе кадр либо не тянется, либо не нажимается.
   const бросить = ()=>{
-    if(тянем && опц.onTap && !ушёл && Date.now()-старт < 400) опц.onTap();
-    тянем = false;
+    if(опц.onTap && !ушёл && старт && Date.now()-старт < 400) опц.onTap();
+    тянем = false; старт = 0;
   };
   box.addEventListener('pointerup', бросить);
-  box.addEventListener('pointercancel', ()=>{ тянем = false; });
+  box.addEventListener('pointercancel', ()=>{ тянем = false; старт = 0; });
   if(опц.onTap) box.style.cursor = 'pointer';
   return box;
 }
