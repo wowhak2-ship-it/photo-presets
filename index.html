@@ -367,6 +367,41 @@
     display:flex; align-items:center; justify-content:center; transition:transform .12s;}
   .shutter svg{width:46px; height:46px;}
   .shutter:active{transform:scale(.94);}
+  /* ══════ КАМЕРА: адаптация ══════
+     Экран собран как телефонный: видео во всю площадь, спуск и переключатель разведены
+     по краям. На мониторе 3440 это разваливалось — видоискатель растягивался на всю
+     ширину и резался по краям, а между спуском и переключателем оказывалось три метра.
+     Лечим тем же приёмом, что редактор: видоискатель и обе строки живут в колонке. */
+  @media (min-width:1100px){
+    .cam{--cam-w:min(72vw, 1080px); --cam-pad:calc((100vw - var(--cam-w))/2);}
+    /* Пропорция задана явно: пока поток не пришёл, у video нет своего размера, и без
+       неё видоискатель схлопывался в полоску (поймал на своём же стенде без камеры). */
+    .cam video{width:var(--cam-w); max-width:100%; aspect-ratio:4/3; height:auto;
+      max-height:min(76vh, 860px); margin:auto; border-radius:14px;
+      border:1px solid var(--line); flex:0 1 auto;}
+    .cam-top{padding-left:var(--cam-pad); padding-right:var(--cam-pad);}
+    .cam-bar{padding-left:var(--cam-pad); padding-right:var(--cam-pad);
+      max-width:none; justify-content:center; gap:clamp(60px, 12vw, 190px);}
+    /* Сетка третей и уголки кадра — подсказки для съёмки с рук: они рисуются по всему
+       экрану, а на компьютере видоискатель стал отдельным прямоугольником, и линии
+       выходили за его края. Внутрь коробки их чистым CSS не загнать (видео центрируется
+       флексом, его положение в стилях неизвестно), поэтому на компьютере не показываем:
+       веб-камера на столе в рамке третей не нуждается. */
+    .cam-grid, .vfm{display:none;}
+  }
+  @media (min-width:1800px){
+    .cam{--cam-w:min(62vw, 1240px);}
+  }
+  /* Телефон: спуск — главный элемент, до него дотягивается большой палец, а мелкие
+     кнопки видоискателя доведены до 44 px. */
+  @media (max-width:768px){
+    .cam-x{width:44px; height:44px;}
+    .cam-zoom button{min-height:44px; min-width:48px;}
+    .cam-zoom{padding:4px;}
+    .cam-bar{padding-left:26px; padding-right:26px;}
+    .shutter{width:76px; height:76px;}
+    .shutter svg{width:42px; height:42px;}
+  }
   .cam-err{color:#fff; text-align:center; padding:40px 24px; font-size:14px; line-height:1.5;}
   /* сообщение об отказе — поверх видоискателя, разметку камеры не трогает */
   .cam-fail{position:absolute; inset:0; z-index:2; display:flex; flex-direction:column;   /* ниже шапки — крестик должен остаться доступен */
@@ -472,6 +507,66 @@
     color:var(--text); font-size:13px; cursor:pointer;}
   .onb-primary:active,.onb-second:active{transform:scale(.97);}
   .onb-perm{color:var(--faint); font-size:10.5px; line-height:1.5; margin-top:16px; max-width:270px;}
+  /* Первый экран на компьютере. Он собран как телефонный: одна колонка, кнопки во всю
+     ширину. На мониторе 3440 «Открыть фото» растягивалось через весь экран полосой в
+     три метра — нажать по ней можно, но выглядит это как ошибка вёрстки. Колонку
+     ограничиваем, веер кадров даём крупнее: он тут главный и продаёт приложение. */
+  @media (min-width:700px){
+    .onb-btns, .onb-h1, .onb-sub, .onb-perm{max-width:440px; margin-left:auto; margin-right:auto;}
+    .onb-hero{max-width:min(70vw, 720px); margin-left:auto; margin-right:auto;}
+    .onb-h1{font-size:34px;}
+  }
+  /* ─── Первый экран на компьютере: две колонки ───
+     Раньше здесь стояла телефонная композиция — узкая колонка по центру. На широком
+     мониторе она выглядела маленькой, а вокруг оставалось пустое поле. Теперь веер
+     занимает левую половину и становится главным объектом, а брендинг, текст и кнопки
+     собраны справа. Разметку не трогаем: тот же плоский список элементов раскладывается
+     сеткой, поэтому все обработчики и порядок остаются на месте. */
+  @media (min-width:1100px){
+    /* Селектор с .open обязателен: правило .onb.open{display:flex} специфичнее простого
+       .onb и перебивало сетку — колонки не включались вовсе. */
+    .onb.open{--onb-w:min(88vw, 1440px);
+      display:grid; grid-template-columns:minmax(0, 1fr) minmax(340px, 460px);
+      grid-template-rows:repeat(6, auto);
+      column-gap:clamp(48px, 5vw, 110px);
+      align-content:center; justify-items:start; text-align:left;
+      padding-left:calc((100vw - var(--onb-w))/2);
+      padding-right:calc((100vw - var(--onb-w))/2);}
+    /* Веер — на всю левую колонку и по центру её высоты. */
+    .onb-hero{grid-column:1; grid-row:1 / -1; align-self:center; justify-self:stretch;
+      max-width:none; margin:0; padding:0; min-height:min(72vh, 780px);}
+    .onb-fan{max-width:min(100%, 640px); max-height:min(72vh, 780px);}
+    .onb-brand{grid-column:2; grid-row:1;}
+    .onb-tag{grid-column:2; grid-row:2;}
+    /* margin у заголовка обнуляем явно: в блоке от 700 px стоит margin:auto для
+       центрирования, и в ячейке сетки он сдвигал строку от левого края колонки. */
+    .onb-h1{grid-column:2; grid-row:3; font-size:clamp(32px, 2.6vw, 44px);
+      margin:22px 0 0; max-width:400px; text-align:left;}
+    .onb-sub{grid-column:2; grid-row:4; margin:12px 0 0; max-width:400px; text-align:left;}
+    .onb-btns{grid-column:2; grid-row:5; width:100%; max-width:400px; margin:26px 0 0;}
+    .onb-perm{grid-column:2; grid-row:6; margin:16px 0 0; max-width:400px; text-align:left;}
+  }
+  /* Шире 1920 колонку не растягиваем — она уже ограничена 1440 через min(). */
+  /* ─── Телефон: своя композиция, а не сжатый компьютер ───
+     Главная беда мобильной версии была вертикальная: веер занимал столько места, что
+     кнопки уезжали за экран и до «Открыть фото» надо было листать. Поэтому здесь всё
+     плотнее по высоте, а не мельче по ширине: кадр остаётся крупным. */
+  @media (max-width:768px){
+    .onb{padding-left:16px; padding-right:16px;}
+    .onb-hero{padding:8px 0 10px;}
+    .onb-fan{max-width:68%; max-height:250px;}
+    /* Отпечаток, а не картинка в вебе: тонкая рамка и мягкая тень под карточкой. */
+    .ofc{border-radius:10px; box-shadow:0 14px 30px rgba(0,0,0,.5);}
+    .ofc.b{border-width:1.5px; border-color:rgba(224,162,74,.75);
+      box-shadow:0 18px 38px rgba(0,0,0,.58);}
+    .onb-h1{font-size:26px; margin-top:12px;}
+    .onb-sub{font-size:13.5px; margin-top:10px;}
+    .onb-btns{margin-top:16px; gap:9px;}
+    /* Палец, а не курсор: у каждой кнопки своя высота не меньше 48 px. */
+    .onb-primary, .onb-second{min-height:50px; border-radius:10px; padding:14px 16px;}
+    .onb-third{min-height:44px;}
+    .onb-perm{margin-top:12px;}
+  }
 
   /* ── «открываю снимок» ── */
   /* Поверх всего, включая стартовый экран: распаковка идёт и с него, и из редактора. */
@@ -526,6 +621,25 @@
     background:#fff; transition:left .18s;}
   .tgl.on i{left:21px;}
 
+  /* ══════ НАСТРОЙКИ: адаптация ══════
+     Экран был одной колонкой во всю ширину: на 1440 строка «Размер по умолчанию» тянулась
+     от края до края, а значение «Оригинал» уезжало в противоположный конец — читать
+     приходилось по диагонали. Держим ту же колонку, что в редакторе, галерее и экспорте.
+     Ограничение задано через min(), поэтому и на 1920, и на 3440 колонка остаётся 1240. */
+  @media (min-width:1100px){
+    #settings{--set-w:min(84vw, 1240px);}
+    #settings .set-body{padding-left:calc((100vw - var(--set-w))/2);
+      padding-right:calc((100vw - var(--set-w))/2);}
+  }
+  /* Телефон: вертикальная лента остаётся как есть, поправлены только цели нажатия. */
+  @media (max-width:767px){
+    #settings .set-body{padding-left:16px; padding-right:16px;}
+    #settings .set-row{min-height:48px;}
+    #settings .myp-io{min-height:46px;}
+    /* Кнопка «Установить» в карточке PWA была около 34 px по высоте. */
+    #settings .pwa-go{min-height:44px; padding:9px 18px;}
+  }
+
   /* ── экспорт: показать результат и решить, каким его выпустить ── */
   .exp{position:fixed; inset:0; z-index:55; background:var(--bg-deep); display:none; flex-direction:column;}
   .exp.open{display:flex;}
@@ -548,6 +662,41 @@
   .exp-sizes button.active{background:var(--gold); border-color:transparent; color:var(--gold-ink); font-weight:600;}
   .exp-btns{display:flex; flex-direction:column; gap:9px;}
   .exp-btns .crop-btn{justify-content:center; padding:14px; border-radius:13px; font-size:13px;}
+
+  /* ══════ ЭКСПОРТ: адаптация ══════
+     Главный здесь — готовый кадр, всё остальное под ним. На мониторе 3440 и превью, и
+     кнопки растягивались во всю ширину: «Сохранить в галерею» превращалось в полосу
+     через весь экран. Держим то же правило, что в редакторе и галерее — колонка. */
+  @media (min-width:1100px){
+    .exp{--ex-w:min(72vw, 1120px);}
+    .exp-preview{padding-left:calc((100vw - var(--ex-w))/2); padding-right:calc((100vw - var(--ex-w))/2);}
+    .exp-preview canvas{max-height:min(74vh, 820px); border-radius:10px;}
+    /* Селектор с body: правило .ov-dock.exp-dock объявлено ниже по файлу и при равной
+       специфичности перебивало бы отступы (на этом уже попадался в галерее). */
+    body .ov-dock.exp-dock{padding-left:calc((100vw - var(--ex-w))/2);
+      padding-right:calc((100vw - var(--ex-w))/2);}
+    /* На компьютере действия идут в строку: стопка из четырёх кнопок во всю ширину
+       съедала высоту и отжимала превью вверх. */
+    .exp-btns{flex-direction:row; flex-wrap:wrap;}
+    .exp-btns .crop-btn{flex:1 1 220px;}
+    .exp-sizes{max-width:520px;}
+  }
+  @media (min-width:1800px){
+    .exp{--ex-w:min(62vw, 1280px);}
+  }
+  /* Телефон: кнопки выбора размера были около 40 px — палец промахивался. */
+  @media (max-width:767px){
+    /* Кадр прижат к панели, а не висит по центру пустой области: между ними было около
+       80 px воздуха, и композиция разваливалась на две несвязанные половины. Свободное
+       место собирается сверху, под шапкой, где оно и не мешает. Ни превью, ни панель
+       при этом не меняли размера. */
+    .exp-preview{padding-left:16px; padding-right:16px; padding-bottom:52px;
+      align-items:flex-end;}
+    .exp-sizes button{min-height:46px;}
+    /* .exp-batch — отдельный класс, под .crop-btn он не попадал и оставался 41 px. */
+    .exp-btns .crop-btn, .exp-btns .exp-batch{min-height:48px;}
+    .exp-preview canvas{border-radius:8px;}
+  }
 
   /* tabs: presets / adjustments */
   .tabs{position:relative; z-index:2; display:none; justify-content:center; gap:6px; padding:8px 16px 0;}
@@ -772,6 +921,43 @@
   .batch-sheet:active{transform:scale(.98);}
   .batch-sheet:disabled{opacity:.5;}
 
+  /* ══════ «Все съёмки»: адаптация ══════
+     Сетка была жёстко в три колонки на любой ширине: на телефоне кадры выходили по
+     110 px — разглядеть в них нечего, а на мониторе 3440 те же три колонки растягивали
+     каждый кадр на метр. Число колонок теперь зависит от ширины, а сам каталог живёт
+     в колонке — как на главной и в магазине. */
+  /* Граница здесь 767, а не 768: планшет 768×1024 должен получить три колонки, иначе
+     кадры выходят по 356 px — для экрана выбора это неоправданно крупно. */
+  @media (max-width:767px){
+    .batch-body{padding-left:16px; padding-right:16px;}
+    .batch-grid{grid-template-columns:repeat(2, 1fr); gap:10px;}
+    .bi{border-radius:12px;}
+    .bi .bs{font-size:9px; padding:4px 7px;}
+    /* Кнопки внизу — под палец. */
+    .batch-btns .crop-btn{min-height:48px;}
+    .batch-sheet{min-height:48px;}
+  }
+  /* Планшет: три колонки — кадр остаётся крупным, но экран не пустует. */
+  @media (min-width:768px) and (max-width:1099px){
+    .batch-grid{grid-template-columns:repeat(3, 1fr); gap:12px;}
+    .bi{border-radius:12px;}
+    .batch-btns .crop-btn{min-height:46px;}
+  }
+  /* Компьютер: четыре колонки в ограниченной колонке. Потолок здесь уже, чем у магазина
+     (1600 против 2100): на четырёх колонках шире кадры становятся неоправданно крупными
+     для служебного экрана выбора. */
+  @media (min-width:1100px){
+    .batch{--bt-w:min(80vw, 1600px);}
+    .batch-body{padding-left:calc((100vw - var(--bt-w))/2); padding-right:calc((100vw - var(--bt-w))/2);}
+    /* Селектор с body — правило .ov-dock.batch-dock объявлено НИЖЕ по файлу и при равной
+       специфичности выигрывало: кнопки растягивались от края до края (20..3420). */
+    body .ov-dock.batch-dock{padding-left:calc((100vw - var(--bt-w))/2);
+      padding-right:calc((100vw - var(--bt-w))/2);}
+    .batch-grid{grid-template-columns:repeat(4, 1fr); gap:16px;}
+    .bi{border-radius:12px;}
+    .bi .bs{font-size:9px; padding:4px 7px;}
+  }
+
   .set-input input{flex:0 1 150px; min-width:0; text-align:right; background:transparent; border:0;
     outline:none; color:var(--gold); font-family:inherit; font-size:14px; padding:0;}
   .set-input input::placeholder{color:var(--faint); font-size:13px;}
@@ -815,6 +1001,189 @@
     color:var(--gold); border:1px solid rgba(224,162,74,.4); border-radius:9px; padding:7px 11px;}
   .packs-empty{font-size:13px; line-height:1.5; color:var(--faint); padding:2px 2px 4px;}
   .packs-legal a{color:var(--dim); text-decoration:underline;}
+
+  /* ─── Магазин: витрина продаёт КАРТИНКОЙ ───
+     Текстовый список выше остался для служебных экранов, а витрину ведёт фотография:
+     карточка — это кадр во всю ширину, на нём живое «до/после», и только под ним имя,
+     цена и кнопки. Всё «после» считается настоящим движком пресетов прямо на устройстве,
+     поэтому в магазин не нужно класть ни одной отрендеренной заранее картинки. */
+  .st-body{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding:calc(74px + env(safe-area-inset-top)) 0 calc(28px + env(safe-area-inset-bottom));}
+  .st-head{padding:0 20px 2px;}
+  .st-h1{font-size:26px; font-weight:600; letter-spacing:-.01em; line-height:1.15;}
+  .st-sub{font-size:13.5px; line-height:1.5; color:var(--faint); margin-top:7px;}
+  /* Полоса категорий: прокрутка пальцем по горизонтали, край подсказан обрезкой.
+     scroll-padding — чтобы активная категория не прилипала к самому краю. */
+  .st-cats{display:flex; gap:8px; overflow-x:auto; scrollbar-width:none;
+    padding:15px 20px 3px; scroll-padding:0 20px; -webkit-overflow-scrolling:touch;}
+  .st-cats::-webkit-scrollbar{display:none;}
+  .st-cat{flex:0 0 auto; background:transparent; border:1px solid var(--line-2);
+    color:var(--dim); font-family:var(--mono); font-size:10.5px; letter-spacing:.13em;
+    text-transform:uppercase; padding:9px 14px; border-radius:20px; cursor:pointer;
+    white-space:nowrap; transition:color .18s, border-color .18s, background .18s;}
+  .st-cat.on{color:var(--gold-ink); background:var(--gold); border-color:transparent; font-weight:700;}
+  .st-cat:active{transform:scale(.97);}
+  .st-sect{padding:26px 20px 0;}
+  .st-sect-t{font-family:var(--mono); font-size:10px; letter-spacing:.2em; color:var(--dim);
+    text-transform:uppercase;}
+  .st-list{padding:16px 20px 0; display:flex; flex-direction:column; gap:22px;}
+  /* Карточка коллекции. Фотография — главный элемент, поэтому она во всю ширину карточки
+     и с фиксированной пропорцией: разнокалиберные кадры иначе рвут ритм ленты. */
+  .st-card{background:var(--panel); border:1px solid var(--line); border-radius:18px;
+    overflow:hidden;}
+  .st-card.feat{border-color:var(--line-2); box-shadow:0 10px 34px rgba(0,0,0,.45);}
+  .st-shot{position:relative; width:100%; aspect-ratio:4/5; background:#15110B; overflow:hidden;
+    touch-action:pan-y;}
+  .st-card.feat .st-shot{aspect-ratio:3/4;}
+  /* Кадрируем не по центру, а выше: почти все витринные снимки — портреты, и при обрезке
+     по центру у человека срезается лицо — на широкой карточке особенно грубо. */
+  .st-shot canvas, .st-shot img{position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; object-position:50% 28%; display:block;}
+  /* Правая половина — «после». Ширину задаём clip-path: он не заставляет браузер
+     пересобирать слой на каждый пиксель перетаскивания, в отличие от width. */
+  .st-after{will-change:clip-path;}
+  .st-hand{position:absolute; top:0; bottom:0; width:2px; background:rgba(255,255,255,.92);
+    box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 0 18px rgba(0,0,0,.5); pointer-events:none;
+    transform:translateX(-1px);}
+  .st-hand i{position:absolute; top:50%; left:50%; width:44px; height:44px; margin:-22px 0 0 -22px;
+    border-radius:50%; background:rgba(20,16,10,.55); border:1.5px solid rgba(255,255,255,.9);
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    display:flex; align-items:center; justify-content:center;}
+  .st-hand i::before{content:'‹ ›'; font-size:15px; color:#fff; letter-spacing:.08em;
+    line-height:44px; font-family:var(--mono);}
+  /* Подписи «до/после» живут ВНИЗУ кадра: наверху их перекрывали значки коллекции
+     («БЕСПЛАТНО» ложилось прямо на «ДО» — поймано на первом же прогоне). */
+  .st-tag{position:absolute; bottom:12px; font-family:var(--mono); font-size:9px; letter-spacing:.16em;
+    padding:5px 9px; border-radius:7px; background:rgba(10,9,8,.62); color:#fff;
+    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); pointer-events:none;}
+  .st-tag.l{left:12px;} .st-tag.r{right:12px;}
+  .st-badges{position:absolute; left:12px; top:12px; display:flex; gap:6px; z-index:2;}
+  .st-badge{font-family:var(--mono); font-size:9px; letter-spacing:.16em; padding:5px 9px;
+    border-radius:7px; background:var(--gold); color:var(--gold-ink); font-weight:700;}
+  .st-badge.pro{background:rgba(10,9,8,.62); color:var(--gold); border:1px solid rgba(224,162,74,.5);
+    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);}
+  .st-badge.free{background:rgba(127,191,106,.16); color:#8FCF7A; border:1px solid rgba(127,191,106,.45);}
+  .st-tx{padding:15px 15px 16px;}
+  .st-name{font-family:var(--mono); font-size:13px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--text); font-weight:600; line-height:1.3;}
+  .st-meta{font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--dim); margin-top:6px;}
+  .st-about{font-size:13px; line-height:1.5; color:var(--faint); margin-top:9px;}
+  .st-foot{display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;}
+  .st-price{font-family:var(--mono); font-size:15px; font-weight:600; color:var(--text);
+    font-variant-numeric:tabular-nums;}
+  .st-price.free{font-size:10px; letter-spacing:.16em; color:#8FCF7A;}
+  .st-acts{display:flex; gap:8px; margin-left:auto;}
+  .st-btn{border:0; cursor:pointer; font-size:13px; font-weight:700; letter-spacing:.02em;
+    padding:11px 16px; border-radius:12px; background:var(--gold); color:var(--gold-ink);
+    min-height:42px;}
+  .st-btn.ghost{background:transparent; color:var(--gold); border:1px solid rgba(224,162,74,.45);}
+  .st-btn.wide{width:100%; margin-left:0;}
+  .st-btn:active{transform:scale(.98);}
+  .st-btn:disabled{opacity:.5;}
+  .st-owned{font-family:var(--mono); font-size:10px; letter-spacing:.14em; color:#8FCF7A;
+    border:1px solid rgba(127,191,106,.45); border-radius:9px; padding:8px 11px;}
+  /* Блок PRO — заметный, но НЕ первый: сначала человек должен увидеть кадры. */
+  .st-pro{margin:30px 20px 0; padding:20px 18px; border-radius:18px;
+    background:linear-gradient(160deg, #241D13 0%, #16110A 100%);
+    border:1px solid var(--line-2);}
+  .st-pro-t{font-family:var(--mono); font-size:20px; letter-spacing:.22em; color:var(--gold); font-weight:700;}
+  .st-pro-s{font-size:13.5px; line-height:1.5; color:var(--faint); margin-top:8px;}
+  .st-pro-ul{list-style:none; margin:14px 0 0; padding:0;}
+  .st-pro-ul li{font-size:13px; color:var(--text); padding:6px 0 6px 22px; position:relative; line-height:1.4;}
+  .st-pro-ul li::before{content:'✓'; position:absolute; left:0; color:var(--gold); font-size:12px;}
+  .st-plans{display:flex; gap:9px; margin-top:16px;}
+  .st-plan{flex:1 1 0; background:rgba(10,9,8,.45); border:1px solid var(--line);
+    border-radius:13px; padding:12px 11px; cursor:pointer; text-align:left; color:var(--text);
+    position:relative;}
+  .st-plan.on{border-color:var(--gold); background:rgba(224,162,74,.10);}
+  .st-plan b{display:block; font-family:var(--mono); font-size:14px; font-variant-numeric:tabular-nums;}
+  .st-plan span{display:block; font-size:11px; color:var(--dim); margin-top:4px;}
+  .st-plan em{position:absolute; top:-9px; right:9px; font-style:normal; font-family:var(--mono);
+    font-size:8.5px; letter-spacing:.14em; background:var(--gold); color:var(--gold-ink);
+    padding:3px 7px; border-radius:6px; font-weight:700;}
+  /* Страница коллекции и экран покупки — те же полноэкранные слои, что и остальные окна */
+  .st-hero{margin:0 0 4px;}
+  .st-hero .st-shot{aspect-ratio:3/4; border-radius:0;}
+  .st-gal{display:flex; gap:12px; overflow-x:auto; scrollbar-width:none; padding:14px 20px 2px;
+    -webkit-overflow-scrolling:touch;}
+  .st-gal::-webkit-scrollbar{display:none;}
+  .st-gal .st-shot{flex:0 0 78%; max-width:320px; aspect-ratio:4/5; border-radius:14px;
+    border:1px solid var(--line);}
+  .st-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:10px;
+    padding:14px 20px 0;}
+  .st-tile{position:relative; aspect-ratio:1/1; border-radius:12px; overflow:hidden;
+    background:#15110B; border:1px solid var(--line); cursor:pointer; padding:0;}
+  .st-tile canvas{width:100%; height:100%; object-fit:cover; display:block;}
+  .st-tile span{position:absolute; left:0; right:0; bottom:0; padding:16px 7px 6px;
+    font-family:var(--mono); font-size:8.5px; letter-spacing:.1em; color:#fff; text-align:left;
+    background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.72) 100%);}
+  .st-tile:active{transform:scale(.97);}
+  .st-sticky{position:sticky; bottom:0; padding:14px 20px calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg, rgba(10,9,8,0) 0%, var(--bg-deep) 34%);}
+  /* Экран «понравился результат» после примерки: сначала кадр, потом цена. */
+  .st-sell{padding:0 20px; text-align:center;}
+  .st-sell h2{font-size:22px; font-weight:600; margin:20px 0 0;}
+  .st-sell p{font-size:13.5px; line-height:1.55; color:var(--faint); margin:9px 0 0;}
+  .st-sell .st-price{font-size:30px; display:block; margin:18px 0 0;}
+  .st-restore{background:none; border:0; color:var(--dim); font-size:12.5px; text-decoration:underline;
+    cursor:pointer; padding:14px 8px; width:100%;}
+  /* ─── Магазин на компьютере ───
+     Ширина каталога — доля окна с потолком, а не фиксированные пиксели: на 1280–1440 это
+     около 80 % полезной ширины, на ультрашироком мониторе 3440 — примерно две трети.
+     Раньше стоял жёсткий потолок 1500 px, и на широком экране магазин висел узкой лентой
+     посреди чёрного поля. Строки текста при этом ограничены отдельно: растянутое на
+     полтора метра описание не читается, сколько бы места ни было. */
+  @media (min-width:700px){
+    .st-body{--st-w:94vw; padding-left:0; padding-right:0;}
+    .st-head, .st-sect, .st-pro, .st-list, #stMine, .st-cats{
+      max-width:var(--st-w); margin-left:auto; margin-right:auto;}
+    /* Категории живут в той же колонке, что и карточки: раньше они начинались от левого
+       края окна и выглядели отдельной строкой, не связанной с каталогом. */
+    .st-cats{padding-left:20px; padding-right:20px;}
+    .st-sub{max-width:64ch;}
+    .st-about{max-width:70ch;}
+    .st-list{display:grid; grid-template-columns:repeat(auto-fill, minmax(430px, 1fr));
+      align-items:start; gap:22px;}
+    .st-shot{max-height:min(56vh, 560px);}
+    /* Главная карточка: фотография вертикальной колонкой слева, текст справа. В широкой
+       коробке портрет разрезался так, что слева было лицо, а справа пустая стена —
+       сравнивать нечего. Кадру возвращена его пропорция, разделитель идёт по лицу. */
+    /* По левому краю, а не по центру: центрированная главная карточка не совпадала с
+       колонками сетки под ней и читалась как съехавшая. */
+    .st-list .st-card.feat{grid-column:1 / -1; width:100%; margin:0;}
+    .st-card.feat{display:grid; grid-template-columns:minmax(300px, 40%) 1fr;
+      align-items:stretch;}
+    .st-card.feat .st-shot{aspect-ratio:4/5; height:auto; max-height:min(64vh, 660px);}
+    .st-card.feat .st-tx{display:flex; flex-direction:column; justify-content:center;
+      padding:30px 30px 30px 28px;}
+    .st-card.feat .st-name{font-size:16px;}
+    .st-card.feat .st-about{font-size:13.5px;}
+    /* Страница коллекции — это чтение, ей широкая колонка магазина не идёт. */
+    #stCollBody .st-head, #stCollBody .st-sect, #stCollBody .st-grid,
+    #stCollBody .st-sticky, #stCollBody .st-hero, #stCollBody .st-gal{
+      max-width:min(90vw, 1200px); margin-left:auto; margin-right:auto;}
+    #stCollBody .st-gal{padding-left:20px;}
+    .st-hero{display:flex; justify-content:center; padding:0 20px;}
+    .st-hero .st-shot{width:min(100%, 600px); aspect-ratio:4/5; max-height:min(68vh, 700px);
+      border-radius:18px; border:1px solid var(--line);}
+    /* Плитки стилей: без потолка ширины они расползались по монитору марками по 97 px. */
+    .st-grid{grid-template-columns:repeat(auto-fill, minmax(190px, 1fr));}
+    .st-gal{max-width:var(--st-w); margin-left:auto; margin-right:auto; padding-left:20px;}
+    .st-gal .st-shot{flex-basis:360px; max-height:min(48vh, 460px);}
+  }
+  /* На настоящем компьютере (не планшете) каталог занимает 80 % ширины с потолком 2100 px:
+     на 1280 это 1024, на 1440 — 1152, на 3440 — 2100. */
+  @media (min-width:1100px){
+    .st-body{--st-w:min(80vw, 2100px);}
+  }
+  /* Очень широкий экран: четыре карточки в ряд превращают каталог в мелкую плитку,
+     поэтому держим три — фотографии остаются крупными. */
+  @media (min-width:1800px){
+    .st-list{grid-template-columns:repeat(3, minmax(0, 1fr));}
+    /* Главная карточка шире всех, но не во всю колонку: на 2100 px её текстовая половина
+       пустовала — четыре строки описания на километр пространства. */
+    .st-list .st-card.feat{max-width:1400px;}
+  }
 
   .toast{position:fixed; left:50%; bottom:calc(28px + env(safe-area-inset-bottom)); transform:translate(-50%,10px);
     z-index:90; padding:10px 18px; border-radius:20px; background:var(--glass); border:1px solid var(--glass-line);
@@ -1185,6 +1554,165 @@
   .ht.buy{border-color:rgba(224,162,74,.34); background:rgba(224,162,74,.06);}
   @media (prefers-reduced-motion:reduce){ .ht:active{transform:none;} }
 
+  /* ─── Главный экран: витрина инструментов ───
+     Шесть самых заметных инструментов показаны КАДРОМ, а не значком: сетка одинаковых
+     прямоугольников не объясняет, что приложение умеет, а фотография объясняет сразу.
+     Остальные остаются компактными кнопками — их задача не продавать, а быстро
+     открываться. Премиальность здесь делают крупные кадры и воздух, а не число
+     элементов, поэтому карточек ровно шесть и ни одной больше. */
+  .home-sect{display:flex; align-items:baseline; gap:10px; padding:14px 0 10px;}
+  .home-sect b{font-size:15px; font-weight:600; letter-spacing:-.01em;}
+  .home-sect i{font-style:normal; font-family:var(--mono); font-size:9.5px; letter-spacing:.16em;
+    color:var(--faint); text-transform:uppercase;}
+  .home-hero{display:grid; grid-template-columns:1fr; gap:12px; margin-bottom:6px;}
+  /* Карточка-кадр. Составной селектор — иначе .ht ниже перебьёт раскладку и карточка
+     снова станет колонкой со значком. */
+  .ht.hti{position:relative; display:block; padding:0; overflow:hidden; border-radius:16px;
+    border:1px solid var(--line); background:#15110B;}
+  /* Номер кадра и перфорация — хорошая деталь на маленькой плитке, но поверх фотографии
+     они читаются как сор на кадре. На карточке-кадре их нет. */
+  .ht.hti[data-кадр]::before, .ht.hti[data-кадр]::after{display:none;}
+  .ht.hti:active{transform:scale(.985);}
+  .hti-ph{position:relative; display:block; width:100%; aspect-ratio:16/10; overflow:hidden;}
+  .hti-ph img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+    object-position:50% 42%; display:block;}
+  /* Правая половина — «после». Пока пары нет, её просто не существует, и карточка
+     показывает чистый кадр: рисовать разделитель по двум одинаковым половинам —
+     обещать сравнение, которого нет. */
+  .hti-ph img.after{clip-path:inset(0 0 0 50%);}
+  .hti-div{position:absolute; top:0; bottom:0; left:50%; width:1.5px;
+    background:rgba(255,255,255,.9); box-shadow:0 0 12px rgba(0,0,0,.5);}
+  .hti-div i{position:absolute; top:50%; left:50%; width:34px; height:34px; margin:-17px 0 0 -17px;
+    border-radius:50%; border:1.5px solid rgba(255,255,255,.9); background:rgba(20,16,10,.5);
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    font-family:var(--mono); font-size:11px; color:#fff; line-height:32px; text-align:center;}
+  .hti-sh{position:absolute; left:0; right:0; bottom:0; height:62%; pointer-events:none;
+    background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.78) 100%);}
+  .hti-tx{position:absolute; left:14px; right:14px; bottom:12px; display:flex;
+    align-items:center; gap:10px;}
+  .ht.hti svg{width:19px; height:19px; margin:0; flex:none; color:var(--gold);
+    filter:drop-shadow(0 1px 4px rgba(0,0,0,.8));}
+  .hti-tx .hti-lb{display:flex; flex-direction:column; gap:1px; min-width:0;}
+  .ht.hti b{font-size:15px; font-weight:600; line-height:1.2; text-shadow:0 1px 6px rgba(0,0,0,.75);}
+  .ht.hti i{font-size:11px; color:rgba(244,239,229,.72); text-shadow:0 1px 5px rgba(0,0,0,.75);}
+  /* Две карточки-перехода внизу: они ведут в другие экраны, а не запускают инструмент,
+     поэтому и выглядят иначе — строкой со стрелкой, а не плиткой. */
+  .home-nav{display:grid; grid-template-columns:1fr; gap:10px; margin:14px 0 4px;}
+  .ht.htn{flex-direction:row; align-items:center; gap:12px; padding:16px 16px 16px 14px;
+    border-radius:16px;}
+  .ht.htn svg{margin:0; width:22px; height:22px;}
+  .ht.htn b{font-size:14px;}
+  .ht.htn i{font-size:11px;}
+  /* Планшет: две карточки в ряд, третий ряд занимают компактные кнопки. */
+  @media (min-width:700px){
+    .home-hero{grid-template-columns:repeat(2, 1fr); gap:14px;}
+    .home-nav{grid-template-columns:repeat(2, 1fr);}
+    .ht.hti b{font-size:16px;}
+    .home-tools{grid-template-columns:repeat(4, 1fr); gap:10px;}
+  }
+  /* Компьютер: три в ряд и колонка той же ширины, что в магазине, — иначе на широком
+     мониторе главный экран расползался во всю ширину, а магазин оставался колонкой,
+     и два экрана выглядели из разных приложений. Ещё важнее, что карточка при этом
+     раздувалась до 1100 px: фотография во весь экран — не «крупно», а неудобно. */
+  @media (min-width:1100px){
+    #home{--home-w:min(80vw, 2100px);}
+    #home > *{width:100%; max-width:var(--home-w); margin-left:auto; margin-right:auto;}
+    .home-hero{grid-template-columns:repeat(3, 1fr); gap:16px;}
+    .home-tools{grid-template-columns:repeat(6, 1fr);}
+  }
+  /* Очень широкий экран: карточек в ряду больше, чтобы каждая не превращалась в афишу. */
+  @media (min-width:1800px){
+    .home-hero{grid-template-columns:repeat(3, 1fr);}
+    .ht.hti .hti-ph{aspect-ratio:3/2;}
+  }
+  /* ══════ РЕДАКТОР: адаптация ══════
+     Редактор собран как телефонный: шапка и нижняя панель во всю ширину. На мониторе
+     3440 это разваливалось — стрелка «назад» в одном конце экрана, «Сохранить» в другом
+     за три метра, разделы Плёнки/Свет/Цвет/Кривая растянуты по всей ширине, а лента
+     кадров сжата в левый угол с пустотой на две трети экрана. Лечим одним приёмом:
+     содержимое шапки и дока живёт в колонке той же ширины, что на главной и в магазине.
+     Сам кадр при этом не растягиваем — у него свой разумный потолок. */
+  @media (min-width:1100px){
+    body.editing{--ed-w:min(80vw, 1400px);}
+    header{padding-left:calc((100vw - var(--ed-w))/2); padding-right:calc((100vw - var(--ed-w))/2);}
+    .secs, .slider-row, .perf, .dock footer, .dock .adj-wrap, .tool-edge{
+      max-width:var(--ed-w); margin-left:auto; margin-right:auto;}
+    /* Разделы не растягиваются на всю колонку: четыре слова через весь экран читаются
+       как четыре отдельных элемента, а не как один переключатель. */
+    .secs{max-width:min(520px, var(--ed-w)); gap:6px;}
+    .secs button{flex:0 1 auto; min-width:110px;}
+    /* Кадр: потолок по высоте есть, но не жадный — вокруг снимка было слишком много
+       воздуха, а премиальность здесь делает сам кадр, а не пустота вокруг него. */
+    /* Потолок нужен, чтобы кадр не выдавливал панель, но жадничать нельзя: с прежними
+       72vh вокруг снимка оставалось слишком много воздуха, и он переставал быть главным. */
+    /* max-height умеет только уменьшать, а кадр и так показывался в свои 1400 px —
+       поэтому «воздух вокруг» им не лечился. Задаём высоту явно: снимок занимает всю
+       доступную полосу. Растяжение при этом небольшое (около 1.1×) и глазом не видно,
+       а вот кадр наконец становится главным. */
+    #stage{height:min(100%, 1150px); width:auto; max-width:100%;}
+    /* Панель ниже экрана терялась. Делаем её чуть выше и отбиваем сверху тонкой
+       золотистой волосяной линией — как край столешницы в проявочной. */
+    .dock{padding-top:12px; border-top:1px solid rgba(224,162,74,.16);
+      box-shadow:0 -0.5px 0 rgba(224,162,74,.10) inset, 0 -22px 60px rgba(0,0,0,.5);}
+    footer{padding-top:12px; padding-bottom:18px;}
+    /* Активный кадр на 3440 терялся: рамка в 2.5 px на ленте шириной в метр не видна.
+       Добавляем очень тихое золотое свечение — акцент, а не подсветка. */
+    .chip.active canvas{box-shadow:0 0 0 1px rgba(255,255,255,.07) inset,
+      0 0 0 3px rgba(224,162,74,.16), 0 0 16px rgba(224,162,74,.22);}
+  }
+  @media (min-width:1800px){
+    body.editing{--ed-w:min(70vw, 1600px);}
+  }
+  /* Телефон: кадр — главный элемент, панель под ним не должна его съедать. */
+  @media (max-width:768px){
+    .secs{padding:6px 6px 0;}
+    .secs button{font-size:12px; padding:12px 2px 13px; min-height:44px;}
+    .slider-row{padding-left:16px; padding-right:16px;}
+    .perf{padding-left:12px; padding-right:12px; gap:18px;}
+    /* Ряды правок на телефоне были 38 px — палец промахивался по ползунку. */
+    .adj-row{height:46px; flex:0 0 46px;}
+    header{padding-left:12px; padding-right:12px;}
+    /* «Назад» и «Сохранить» — самые частые действия в редакторе, а были 38 и 30 px:
+       мимо них палец промахивается. Расширяем зону нажатия, не увеличивая рисунок. */
+    #backBtn{width:46px; height:46px;}
+    .ed-save{min-height:46px; padding:8px 10px;}
+    /* Порядок на телефоне тот же: шапка, кадр, «до/после», разделы, лента. Лента —
+       единственное место, где разрешена горизонтальная прокрутка, и кадры в ней
+       крупнее: на телефоне по 62 px в них не разглядеть, ради чего их и листают. */
+    footer{gap:10px; padding-left:12px; padding-right:12px;}
+    .chip{width:74px;}
+    .chip .cn{font-size:9px;}
+    .chip span{font-size:8.5px;}
+    /* Активный кадр и на телефоне заметнее — тем же тихим золотом, что на компьютере. */
+    .chip.active canvas{box-shadow:0 0 0 1px rgba(255,255,255,.07) inset,
+      0 0 0 2.5px rgba(224,162,74,.18), 0 0 12px rgba(224,162,74,.2);}
+  }
+
+  /* ─── Телефон: инструменты ───
+     Сетка из трёх мелких плиток на телефоне не объясняет, что приложение умеет.
+     Главные шесть идут по одному в ряд крупной карточкой, остальные — компактной
+     парой: их задача не продавать, а быстро открываться. Высоту карточки задаём
+     явно, а не пропорцией: на узком экране пропорция 16:10 давала 220 px и до
+     второй карточки приходилось листать. */
+  @media (max-width:768px){
+    #home{padding-left:16px; padding-right:16px;}
+    .home-hero{grid-template-columns:1fr; gap:11px;}
+    .ht.hti .hti-ph{aspect-ratio:auto; height:180px;}
+    .ht.hti b{font-size:15px;}
+    .home-tools{grid-template-columns:repeat(2, 1fr); gap:9px;}
+    /* 84 px — это и «компактно», и палец попадает: меньше 44 px тут не бывает ничего. */
+    .home-tools .ht{min-height:84px; padding:12px 12px 11px; border-radius:12px;}
+    .home-tools .ht b{font-size:12.5px;}
+    .home-tools .ht i{font-size:10px;}
+    .home-nav{grid-template-columns:1fr;}
+    .ht.htn{min-height:64px;}
+    .home-sect{padding:12px 0 8px;}
+    /* Палец не попадает по цели меньше 44 px — правило одно для всех кнопок экрана,
+       поэтому доводим и шестерёнку, и пару «выбрать фото / снять». */
+    #home .icon-btn{width:44px; height:44px;}
+    .home-actions .ghost-btn, .home-actions .solid-btn{min-height:46px;}
+  }
+
   .home-actions{display:flex; gap:10px; align-items:center; padding:4px 0 12px;}
   /* Перестановка карточек долгим нажатием — как значки на телефоне. Нужна, чтобы
      фотограф вывел в первый ряд то, чем пользуется каждый день. */
@@ -1301,6 +1829,12 @@
        под фото, фотограф их просто не находил: чтобы добраться до ретуши, надо
        было сперва догадаться открыть кадр. Пять карточек с подписями — видно
        сразу, что приложение умеет, и каждая ведёт прямо в дело. -->
+  <!-- Шесть главных инструментов переезжают сюда из общего списка: сами кнопки те же
+       (обработчик висит на [data-go]), меняется только подача — кадром, а не значком. -->
+  <div class="home-sect"><b>Выберите инструмент</b><i>шесть главных</i></div>
+  <div class="home-hero" id="homeHero"></div>
+  <div class="home-sect"><b>Ещё инструменты</b></div>
+
   <div class="home-tools" id="homeTools">
     <button class="ht" data-go="retouch">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="13" r="6.4"/><path d="M17.6 4.4v3.2M16 6h3.2"/><circle cx="11" cy="13" r="2.2" fill="currentColor" stroke="none"/></svg>
@@ -1393,6 +1927,10 @@
       <b>Наборы</b><i>стили авторов</i>
     </button>
   </div>
+
+  <!-- Сюда переезжают «Наборы» и «Вся съёмка»: это переходы в другие экраны, а не
+       инструменты над кадром, и в общей плитке они читались как ещё две кнопки. -->
+  <div class="home-nav" id="homeNav"></div>
 
 </section>
 
@@ -1774,17 +2312,44 @@
   </div>
 </div>
 
-<!-- Витрина наборов. Список приходит из ./packs.json на сайте, а не зашит в код:
-     новый набор появляется у всех без обновления приложения. -->
+<!-- ─── МАГАЗИН ПРЕСЕТОВ ───
+     Список коллекций приходит из ./packs.json на сайте, а не зашит в код: новая коллекция
+     появляется у всех без обновления приложения. Витрину ведёт фотография: у каждой
+     коллекции живое «до/после», посчитанное настоящим движком прямо на устройстве. -->
 <div class="settings" id="packs">
   <div class="cam-top">
     <button class="cam-x" id="packsClose">✕</button>
-    <span class="cam-title">НАБОРЫ</span>
+    <span class="cam-title">МАГАЗИН</span>
     <span style="width:40px"></span>
   </div>
-  <div class="set-body">
-    <div class="packs-lead">Набор — это готовый вид от фотографа: кривая, цвета и все правки одним касанием. Ставится в ленту рядом с вашими пресетами и работает офлайн.</div>
-    <div id="packsList"></div>
+  <div class="st-body">
+    <div class="st-head">
+      <div class="st-h1">Магазин пресетов</div>
+      <div class="st-sub">Преобразите свои фотографии одним нажатием</div>
+    </div>
+    <div class="st-cats" id="stCats"></div>
+    <div class="st-list" id="stList"></div>
+    <!-- PRO стоит НИЖЕ коллекций намеренно: сначала человек видит кадры, а не прайс. -->
+    <div class="st-pro" id="stPro" style="display:none">
+      <div class="st-pro-t">PRO</div>
+      <div class="st-pro-s">Доступ ко всем премиальным возможностям</div>
+      <ul class="st-pro-ul">
+        <li>Все премиальные пресеты</li>
+        <li>Новые коллекции сразу после выхода</li>
+        <li>Пакетная обработка фотографий</li>
+        <li>Премиальные инструменты ретуши</li>
+        <li>Дополнительные возможности редактора</li>
+      </ul>
+      <div class="st-plans">
+        <button class="st-plan on" id="stPlanM"><b>499 ₽</b><span>в месяц</span></button>
+        <button class="st-plan" id="stPlanY"><em>ВЫГОДНЕЕ</em><b>3 990 ₽</b><span>в год</span></button>
+      </div>
+      <button class="st-btn wide" id="stProGo" style="margin-top:14px">Подключить PRO</button>
+    </div>
+    <div class="st-sect" id="stMineSect" style="display:none"><div class="st-sect-t">Мои пресеты</div></div>
+    <div id="stMine" style="padding:0 20px; display:none"></div>
+    <div class="st-sect"><div class="st-sect-t">Свои наборы</div></div>
+    <div style="padding:0 20px">
     <div class="myp-acts">
       <button class="myp-io" id="packsImport">Загрузить купленный файл</button>
       <button class="myp-io" id="packsMake">Собрать свой набор</button>
@@ -1795,7 +2360,30 @@
          не даёт нажать и говорит первый шаг. -->
     <div class="set-note" id="packsMakeNote"></div>
     <div class="set-note packs-legal">Покупка наборов — по <a href="./offer.html" target="_blank" rel="noopener">условиям продажи</a>. Данные обрабатываются согласно <a href="./privacy.html" target="_blank" rel="noopener">политике конфиденциальности</a>.</div>
+    </div>
   </div>
+</div>
+
+<!-- Страница одной коллекции: большое «до/после», ещё несколько кадров разного типа,
+     плитка стилей и примерка на своём снимке. Открывается поверх магазина, закрывается
+     назад в него — поэтому это отдельный слой, а не подмена содержимого. -->
+<div class="settings" id="stColl" style="z-index:57">
+  <div class="cam-top">
+    <button class="cam-x" id="stCollClose">‹</button>
+    <span class="cam-title" id="stCollTitle">КОЛЛЕКЦИЯ</span>
+    <span style="width:40px"></span>
+  </div>
+  <div class="st-body" id="stCollBody"></div>
+</div>
+
+<!-- Экран после примерки: сначала результат, потом цена. -->
+<div class="settings" id="stSell" style="z-index:58">
+  <div class="cam-top">
+    <button class="cam-x" id="stSellClose">✕</button>
+    <span class="cam-title">КОЛЛЕКЦИЯ</span>
+    <span style="width:40px"></span>
+  </div>
+  <div class="st-body" id="stSellBody"></div>
 </div>
 
 <div class="exp" id="export">
@@ -2866,7 +3454,15 @@ function setSource(img){
 function paintOnbFan(){
   const cards = document.querySelectorAll('.onb-fan .ofc canvas');
   if(!cards.length || !sourceCanvas) return;
-  const w = 172, h = 228, far = w/h, ar = sourceCanvas.width/sourceCanvas.height;
+  // Разрешение отпечатка считаем от ЕГО РЕАЛЬНОГО размера на экране, а не жёстко 172 px.
+  // На телефоне карточка такой и была, а на компьютере веер вырос до 588 px — прежний
+  // холст растягивался втрое, и Артур сразу увидел мыло. Плотность пикселей учитываем
+  // с потолком 2: выше разницы не видно, а считать пришлось бы вчетверо больше.
+  const бокс = document.querySelector('.onb-fan .ofc');
+  const пл = Math.min(2, devicePixelRatio || 1);
+  const w = Math.min(900, Math.max(172, Math.round((бокс ? бокс.clientWidth : 172) * пл)));
+  const h = Math.round(w * 228/172);
+  const far = w/h, ar = sourceCanvas.width/sourceCanvas.height;
   let sw = sourceCanvas.width, sh = sourceCanvas.height, sx = 0, sy = 0;
   if(ar > far){ sw = Math.round(sh*far); sx = (sourceCanvas.width-sw)>>1; }
   else { sh = Math.round(sw/far); sy = (sourceCanvas.height-sh)>>1; }
@@ -2887,6 +3483,17 @@ function paintOnbFan(){
 // бы пользователя на контактном листе с демо-кадром.
 const onbEl = document.getElementById('onb');
 function closeOnb(){ onbEl.classList.remove('open'); }
+// Веер меняет размер вместе с окном (на компьютере он вчетверо крупнее телефонного),
+// поэтому перерисовываем его после изменения ширины — иначе холст остаётся от прошлой
+// раскладки и картинка снова становится мягкой.
+{
+  let ждём = 0;
+  addEventListener('resize', ()=>{
+    if(!onbEl.classList.contains('open')) return;
+    clearTimeout(ждём);
+    ждём = setTimeout(()=>{ try{ paintOnbFan(); }catch(_){} }, 200);
+  });
+}
 document.getElementById('onbPick').onclick = ()=> document.getElementById('homePick').click();
 document.getElementById('onbCam').onclick  = ()=> document.getElementById('homeCam').click();
 document.getElementById('onbCollage').onclick = ()=>{ closeOnb(); openCollage(); };
@@ -3140,7 +3747,10 @@ function buildChips(){
   // снимке: катер у левого берега в миниатюру не попадал вовсе.
   const ar = sourceCanvas.width/sourceCanvas.height;
   const far = ar > 1.15 ? 4/3 : 3/4;          // горизонтальный — лежачий кадр, иначе стоячий
-  const cssW = 62, cssH = Math.round(cssW/far);
+  // Ширина кадра ленты живёт ЗДЕСЬ, а не в стилях: размер холста ставится в пикселях,
+  // и правило из CSS его не перебивает. На телефоне кадры крупнее — по 62 px в них не
+  // разглядеть, ради чего ленту и листают.
+  const cssW = innerWidth <= 768 ? 74 : 62, cssH = Math.round(cssW/far);
   const tw = Math.round(cssW * THUMB_DPR), th = Math.round(cssH * THUMB_DPR);
   const t = document.createElement('canvas'); t.width = tw; t.height = th;
   const tctx = t.getContext('2d');
@@ -3252,6 +3862,9 @@ async function takePhotoFile(f){
   }
   if(wait) wait.classList.remove('on');
   if(!loadIsCurrent(my)) return;              // пока распаковывали, выбрали другой кадр
+  // Примерка из магазина: кадр нужен только чтобы показать результат, редактор при этом
+  // не трогаем — человек мерил коллекцию, а не начинал новую работу.
+  if(stЖдёмФото){ await stПримерить(img); return; }
   setSource(img); closeOnb(); applyPendingTool();
   // Данные съёмки нужны только при сохранении, а читаются полным файлом. На критическом
   // пути им делать нечего: из-за них кадр ждал, пока с телефона вычитаются мегабайты.
@@ -3374,6 +3987,71 @@ function runTool(tool){
 // Долгое нажатие берёт карточку, дальше её ведут пальцем и бросают на новое место —
 // так же, как переставляют значки на телефоне. Порядок запоминается: у каждого своя
 // работа, и первый ряд должен занимать то, чем пользуются каждый день.
+// ─── Витрина инструментов на главной ───
+// Шесть кнопок ПЕРЕЕЗЖАЮТ из общего списка в верхнюю сетку и получают кадр. Сами кнопки
+// те же самые — обработчик висит на [data-go], поэтому переносим узлы, а не создаём
+// новые: иначе пришлось бы дублировать привязки и порядок карточек разошёлся бы с кодом.
+// Кадр к инструменту лежит файлом; пока своего файла нет, берётся один из витринных,
+// чтобы экран не выглядел пустым. Пары «до/после» тоже отдельный файл: когда он
+// появится, карточка сама покажет разделитель.
+const ГЛАВНЫЕ = [
+  { go:'ai',      файл:'ai',    зап:'portret' },
+  { go:'skin',    файл:'skin',  зап:'portret' },
+  { go:'shadows', файл:'bags',  зап:'portret' },
+  { go:'dust',    файл:'dust',  зап:'kafe'    },
+  { go:'hal',     файл:'halo',  зап:'zakat'   },
+  { go:'bokeh',   файл:'bokeh', зап:'gorod'   }
+];
+function собратьГлавные(){
+  const герои = document.getElementById('homeHero');
+  const низ = document.getElementById('homeNav');
+  if(!герои || !низ) return;
+  ГЛАВНЫЕ.forEach(о=>{
+    const б = document.querySelector('#homeTools [data-go="' + о.go + '"]');
+    if(!б) return;
+    б.classList.add('hti');
+    const значок = б.querySelector('svg'), имя = б.querySelector('b'), опис = б.querySelector('i');
+    const ph = document.createElement('span'); ph.className = 'hti-ph';
+    const до = document.createElement('img');
+    до.loading = 'lazy'; до.decoding = 'async'; до.alt = '';
+    // Свой кадр инструмента, а если его ещё нет — витринный. Ошибку глушим здесь же:
+    // на главном экране битая картинка заметнее любого другого дефекта.
+    до.onerror = ()=>{ if(до.dataset.зап) { до.src = './store/' + до.dataset.зап + '.webp'; delete до.dataset.зап; } };
+    до.dataset.зап = о.зап;
+    до.src = './tools/tool-' + о.файл + '.webp';
+    ph.appendChild(до);
+    // «После» подключается, только если файл правда есть: разделитель по двум
+    // одинаковым половинам обещал бы сравнение, которого нет.
+    const после = new Image();
+    после.onload = ()=>{
+      const п = document.createElement('img');
+      п.className = 'after'; п.src = после.src; п.alt = ''; п.decoding = 'async';
+      ph.appendChild(п);
+      const д = document.createElement('span'); д.className = 'hti-div';
+      д.appendChild(document.createElement('i'));
+      ph.appendChild(д);
+    };
+    после.src = './tools/tool-' + о.файл + '-after.webp';
+    const тень = document.createElement('span'); тень.className = 'hti-sh';
+    ph.appendChild(тень);
+    const тx = document.createElement('span'); тx.className = 'hti-tx';
+    const лб = document.createElement('span'); лб.className = 'hti-lb';
+    if(имя) лб.appendChild(имя);
+    if(опис) лб.appendChild(опис);
+    if(значок) тx.appendChild(значок);
+    тx.appendChild(лб);
+    б.textContent = '';
+    б.append(ph, тx);
+    ph.appendChild(тx);
+    герои.appendChild(б);
+  });
+  // Переходы вниз, отдельной парой
+  ['homePacks', '[data-go="batch"]'].forEach(сел=>{
+    const б = сел[0] === '[' ? document.querySelector('#homeTools ' + сел)
+                             : document.getElementById(сел);
+    if(б){ б.classList.add('htn'); низ.appendChild(б); }
+  });
+}
 const ПОРЯДОК = 'toolOrder';
 const ключКарточки = б => б.dataset.go || б.id || '';
 function применитьПорядок(){
@@ -4407,97 +5085,244 @@ const PACKS = {
     }catch(_){ return this.cached(); }
   }
 };
-function packCard(p){
-  // Виды набора удаляются поштучно, поэтому «есть» и «нет» — не всё состояние: чаще
-  // всего в ленте остаётся ЧАСТЬ. Раньше карточка в этом случае говорила «ВАШ» и
-  // прятала кнопку — вернуть выброшенные виды было нечем, пока не удалишь и остальные.
-  // Поэтому считаем, сколько видов набора правда лежит в ленте, и ставить даём всегда.
-  const отмечен = PACKS.owned().includes(p.id);
-  const вЛенте = MYP.all().filter(x=> x.pack === p.id).length;
-  const owned = отмечен && вЛенте > 0;
-  const el = document.createElement('div'); el.className = 'pack';
-  if(p.cover){
-    const img = document.createElement('img'); img.className = 'pack-cover';
-    img.src = p.cover; img.alt = ''; img.loading = 'lazy';
-    img.onerror = ()=> img.remove();
-    el.appendChild(img);
-  }
-  const tx = document.createElement('div'); tx.className = 'pack-tx';
-  const b = document.createElement('b'); b.textContent = p.name || 'Набор';
-  tx.appendChild(b);
-  if(p.author){ const by = document.createElement('div'); by.className = 'pack-by';
-                by.textContent = p.author; tx.appendChild(by); }
-  if(p.about){ const ab = document.createElement('div'); ab.className = 'pack-ab';
-               ab.textContent = p.about; tx.appendChild(ab); }
-  const foot = document.createElement('div'); foot.className = 'pack-foot';
-  const pr = document.createElement('span');
-  // «Бесплатно» набранное как цена читается как цена — то есть проходит мимо глаз.
-  // У даровых наборов это метка, и она видна раньше, чем название.
-  const free = !owned && !!p.file;
-  pr.className = 'pack-price' + (free ? ' free' : '');
-  // Число берём из ленты, а не из описания набора: после чистки «4 в ленте» при одном
-  // оставшемся виде — просто неправда, а человек по этой строке и решает, всё ли на месте.
-  pr.textContent = owned ? (вЛенте + ' в ленте')
-                         : (free ? 'БЕСПЛАТНО' : (p.price || ''));
-  foot.appendChild(pr);
-  if(owned){
-    const ok = document.createElement('span'); ok.className = 'pack-owned'; ok.textContent = 'ВАШ';
-    foot.appendChild(ok);
-  }
-  if(p.file){
-    // Бесплатный набор незачем гонять через оплату — ставим прямо отсюда, одним касанием.
-    // Кнопка есть и у уже стоящего набора: это единственный способ вернуть удалённый вид.
-    // Повторная установка не плодит копии — importFrom обновляет свои виды на месте.
-    const целиком = owned && вЛенте >= (p.count || вЛенте);
-    // Кнопки живут в своей группе: у «Обновить» был отступ auto, и на узком экране
-    // он съедал всю строку — «Удалить» переносилось вниз и уезжало к левому краю.
-    const acts = document.createElement('div'); acts.className = 'pack-acts';
-    const go = document.createElement('button'); go.className = 'pack-buy';
-    go.textContent = !owned ? 'Установить' : (целиком ? 'Обновить' : 'Вернуть');
-    go.onclick = async ()=>{
-      go.disabled = true; const было = go.textContent; go.textContent = 'Ставлю…';
-      try{
-        const txt = await (await fetch('./' + p.file + '?v=' + Date.now(), { cache:'no-store' })).text();
-        const res = MYP.importFrom(txt);
-        if(res.error) throw new Error(res.error);
-        PACKS.own((res.pack && res.pack.id) || p.id);
-        renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
-        toast(res.added ? ('Видов в ленте: +' + res.added) : 'Набор обновлён');
-        renderPacks();
-      }catch(e){
-        go.disabled = false; go.textContent = было;
-        toast('Не удалось поставить набор');
-      }
+// ══════════════════════════════════════════════════════════════════════════════
+// МАГАЗИН ПРЕСЕТОВ
+// Витрину ведёт фотография, а не список. Главное решение: «после» НИГДЕ не лежит
+// картинкой — каждый кадр считается настоящим движком пресетов прямо на устройстве.
+// Поэтому магазин не тянет ни одного лишнего мегабайта, показывает честный результат,
+// а новая коллекция появляется добавлением строки в packs.json.
+// Вторая система пресетов не заводится: коллекция — это тот же файл .presety.json,
+// который ставится тем же MYP.importFrom.
+// ══════════════════════════════════════════════════════════════════════════════
+const ST_CATS = ['Все','Плёнка','Кинематограф','Портрет','Путешествия','Свадьба','Винтаж','Образ жизни'];
+let stCat = 'Все';
+// Образцы кадров для витрины. Заменяются на свои простой заменой файлов в ./store/;
+// пока файла нет, берётся демонстрационный снимок приложения — витрина не ломается.
+const ST_ОБРАЗЕЦ = './demo.jpg';
+const stКадры = new Map();
+function stКадр(путь){
+  const key = путь || ST_ОБРАЗЕЦ;
+  if(stКадры.has(key)) return stКадры.get(key);
+  const p = new Promise(ok=>{
+    const i = new Image();
+    i.onload = ()=> ok(i);
+    i.onerror = ()=>{                       // нет своего файла — показываем демонстрационный
+      if(key === ST_ОБРАЗЕЦ) return ok(null);
+      stКадр(ST_ОБРАЗЕЦ).then(ok);
     };
-    acts.appendChild(go);
-    if(owned){
-      // Раньше набор снимался только по одному виду за раз — на семи видах это семь
-      // подтверждений. Здесь он уходит целиком, вместе с отметкой «ваш».
-      const del = document.createElement('button');
-      del.className = 'pack-del'; del.textContent = 'Удалить';
-      del.onclick = async ()=>{
-        if(!await askConfirm('Убрать набор «' + (p.name || 'Набор') + '» из ленты? Видов: ' + вЛенте + '.', 'Удалить')) return;
-        const снято = MYP.removePack(p.id);
-        PACKS.disown(p.id);
-        renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
-        toast(снято ? ('Убрано видов: ' + снято) : 'Набор убран');
-        renderPacks();
-      };
-      acts.appendChild(del);
-    }
-    foot.appendChild(acts);
-  } else if(p.buy){
-    const go = document.createElement('button'); go.className = 'pack-buy'; go.textContent = 'Купить';
-    go.onclick = ()=> window.open(p.buy, '_blank', 'noopener');
-    foot.appendChild(go);
+    i.src = key;
+  });
+  stКадры.set(key, p);
+  return p;
+}
+// Пресеты коллекции лежат в её файле. Тянем их ТОЛЬКО когда они понадобились для
+// картинки, и запоминаем: иначе открытие магазина качало бы все файлы сразу.
+const stФайлы = new Map();
+function stПресеты(p){
+  if(!p.file) return Promise.resolve([]);
+  if(stФайлы.has(p.file)) return stФайлы.get(p.file);
+  const пр = fetch('./' + p.file, { cache:'force-cache' })
+    .then(r=> r.ok ? r.json() : null)
+    .then(j=> (j && Array.isArray(j.presets)) ? j.presets.map(sanitizePreset).filter(Boolean) : [])
+    .catch(()=> []);
+  stФайлы.set(p.file, пр);
+  return пр;
+}
+// Один пресет на готовый холст — тем же путём, что и в редакторе: плёнка, её цвета и
+// кривая, потом ручные правки пресета. Глобальное состояние не трогаем: магазин
+// считает свои картинки, пока человек редактирует свой снимок.
+function stПрименить(cv, img, preset){
+  const x = cv.getContext('2d', { willReadFrequently:true });
+  const s = Math.max(cv.width/img.width, cv.height/img.height);
+  const w = img.width*s, h = img.height*s;
+  x.drawImage(img, (cv.width-w)/2, (cv.height-h)/2, w, h);
+  if(!preset) return;
+  const look = LOOKS[myBase(preset)] || LOOKS[0];
+  const mix = (preset.intensity == null ? 100 : preset.intensity)/100;
+  const id = x.getImageData(0, 0, cv.width, cv.height);
+  const orig = { data:new Uint8ClampedArray(id.data) };
+  applyLook(id, look, mix, orig);
+  const L = lookLayers(look, mix);
+  const св = preset.curve ? curveSetToLuts(preset.curve) : null;
+  const сh = hslSetTouched(preset.hsl) ? hslSetToTables(preset.hsl, 1) : null;
+  applyHsl(id, composeHsl(L.hsl, сh));
+  applyCurve(id, composeLuts(L.curve, св));
+  applyAdjust(id, preset.adjust || ZERO_ADJ);
+  x.putImageData(id, 0, 0);
+  const bl = bloomAmount(look, mix, preset.adjust);
+  if(bl) applyBloom(cv, bl, bloomIsWarm(look, preset.adjust));
+}
+// ─── Компонент «ДО / ПОСЛЕ» ───
+// Один и тот же на витрине, на странице коллекции и после примерки. Тянется и пальцем,
+// и мышью; вертикальная прокрутка страницы при этом не ломается — за это отвечает
+// touch-action:pan-y на самом кадре плюс захват указателя при горизонтальном ведении.
+// Ширину «после» режем через clip-path: браузеру не приходится пересобирать слой на
+// каждый пиксель, поэтому перетаскивание плавное и на слабом телефоне.
+function stСравнение(опц){
+  const box = document.createElement('div');
+  box.className = 'st-shot';
+  const до = document.createElement('canvas'), после = document.createElement('canvas');
+  после.className = 'st-after';
+  const рука = document.createElement('div'); рука.className = 'st-hand';
+  рука.appendChild(document.createElement('i'));
+  const мДо = document.createElement('span'); мДо.className = 'st-tag l'; мДо.textContent = 'ДО';
+  const мПосле = document.createElement('span'); мПосле.className = 'st-tag r'; мПосле.textContent = 'ПОСЛЕ';
+  box.append(до, после, рука, мДо, мПосле);
+  let доля = опц.start == null ? 0.5 : опц.start;
+  const поставить = ()=>{
+    после.style.clipPath = 'inset(0 0 0 ' + (доля*100).toFixed(2) + '%)';
+    рука.style.left = (доля*100).toFixed(2) + '%';
+  };
+  поставить();
+  // Рисуем только когда кадр показался на экране: открытие магазина не должно считать
+  // десяток картинок разом.
+  let готово = false;
+  const рисовать = async ()=>{
+    if(готово) return; готово = true;
+    // Готовый снимок (примерка на своём кадре) важнее образца: раньше ленивая дорисовка
+    // затирала его демонстрационной фотографией — человек мерил коллекцию и видел чужое фото.
+    const img = опц.image || await stКадр(опц.photo);
+    if(!img) return;
+    const ш = Math.min(560, Math.round((box.clientWidth || 360) * Math.min(2, devicePixelRatio || 1)));
+    const в = Math.round(ш * (опц.ratio || 1.25));
+    [до, после].forEach(c=>{ c.width = ш; c.height = в; });
+    stПрименить(до, img, null);
+    let p = опц.preset;
+    if(!p && опц.pack){ const л = await stПресеты(опц.pack); p = л[опц.index || 0] || null; }
+    stПрименить(после, img, p);
+  };
+  if('IntersectionObserver' in window){
+    const ob = new IntersectionObserver(es=>{ if(es.some(e=> e.isIntersecting)){ ob.disconnect(); рисовать(); } },
+      { rootMargin:'240px' });
+    ob.observe(box);
+  } else рисовать();
+  // ─── перетаскивание ───
+  let тянем = false, старт = 0, x0 = 0, y0 = 0, ушёл = false;
+  const кДоле = e=>{
+    const r = box.getBoundingClientRect();
+    доля = Math.max(0, Math.min(1, (e.clientX - r.left)/Math.max(1, r.width)));
+    поставить();
+  };
+  box.addEventListener('pointerdown', e=>{
+    тянем = true; старт = Date.now(); x0 = e.clientX; y0 = e.clientY; ушёл = false;
+    try{ box.setPointerCapture(e.pointerId); }catch(_){}
+    кДоле(e);
+  });
+  box.addEventListener('pointermove', e=>{
+    if(!тянем) return;
+    if(Math.abs(e.clientX-x0) > 6 || Math.abs(e.clientY-y0) > 6) ушёл = true;
+    e.preventDefault(); кДоле(e);
+  });
+  // Короткое касание без ведения — это не перетаскивание, а тап: им открывается коллекция.
+  // Различать надо обязательно, иначе кадр либо не тянется, либо не нажимается.
+  const бросить = ()=>{
+    if(тянем && опц.onTap && !ушёл && Date.now()-старт < 400) опц.onTap();
+    тянем = false;
+  };
+  box.addEventListener('pointerup', бросить);
+  box.addEventListener('pointercancel', ()=>{ тянем = false; });
+  if(опц.onTap) box.style.cursor = 'pointer';
+  return box;
+}
+// ─── Витрина ───
+// Платной коллекцию делает ФЛАГ, а не наличие ссылки: иначе платную нельзя показать в
+// витрине, пока не заведена оплата, — а показывать её надо раньше, чем принимать деньги.
+function stБесплатна(p){ return !p.paid; }
+function stКуплена(p){ return stБесплатна(p) || PACKS.owned().includes(p.id); }
+function stВЛенте(p){ return MYP.all().filter(x=> x.pack === p.id).length; }
+function stЦена(p){ return stБесплатна(p) ? 'БЕСПЛАТНО' : (p.price || ''); }
+// Установка коллекции в ленту — тем же путём, что и раньше: файл → MYP.importFrom.
+async function stПоставить(p, кнопка){
+  const было = кнопка ? кнопка.textContent : '';
+  if(кнопка){ кнопка.disabled = true; кнопка.textContent = 'Ставлю…'; }
+  try{
+    const txt = await (await fetch('./' + p.file + '?v=' + Date.now(), { cache:'no-store' })).text();
+    const res = MYP.importFrom(txt);
+    if(res.error) throw new Error(res.error);
+    PACKS.own((res.pack && res.pack.id) || p.id);
+    renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
+    toast(res.added ? ('Видов в ленте: +' + res.added) : 'Коллекция обновлена');
+    renderPacks();
+    return true;
+  }catch(e){
+    if(кнопка){ кнопка.disabled = false; кнопка.textContent = было; }
+    toast('Не удалось поставить коллекцию');
+    return false;
   }
+}
+function stКарточка(p, главная){
+  const el = document.createElement('div');
+  el.className = 'st-card' + (главная ? ' feat' : '');
+  const кадр = stСравнение({ photo:(p.samples && p.samples[0]) || p.cover, pack:p,
+                             ratio: главная ? 1.34 : 1.25,
+                             onTap: ()=> stОткрытьКоллекцию(p) });
+  // Значки поверх кадра: новинка и премиальность видны раньше названия.
+  const зн = document.createElement('div'); зн.className = 'st-badges';
+  if(p.new){ const b = document.createElement('span'); b.className = 'st-badge'; b.textContent = 'НОВИНКА'; зн.appendChild(b); }
+  if(!stБесплатна(p)){ const b = document.createElement('span'); b.className = 'st-badge pro'; b.textContent = 'ПРЕМИУМ'; зн.appendChild(b); }
+  else { const b = document.createElement('span'); b.className = 'st-badge free'; b.textContent = 'БЕСПЛАТНО'; зн.appendChild(b); }
+  if(зн.children.length) кадр.appendChild(зн);
+  el.appendChild(кадр);
+  const tx = document.createElement('div'); tx.className = 'st-tx';
+  const nm = document.createElement('div'); nm.className = 'st-name'; nm.textContent = p.name || 'Коллекция';
+  const mt = document.createElement('div'); mt.className = 'st-meta';
+  const n = p.count || 0;
+  mt.textContent = n + ' ' + (n%10===1 && n%100!==11 ? 'пресет' : (n%10>=2 && n%10<=4 && (n%100<10||n%100>=20)) ? 'пресета' : 'пресетов');
+  tx.append(nm, mt);
+  if(p.about){ const ab = document.createElement('div'); ab.className = 'st-about'; ab.textContent = p.about; tx.appendChild(ab); }
+  const foot = document.createElement('div'); foot.className = 'st-foot';
+  const вЛенте = stВЛенте(p), куплена = stКуплена(p);
+  if(куплена && вЛенте){
+    const ok = document.createElement('span'); ok.className = 'st-owned'; ok.textContent = '✓ КУПЛЕНО';
+    foot.appendChild(ok);
+  } else {
+    const pr = document.createElement('span');
+    pr.className = 'st-price' + (stБесплатна(p) ? ' free' : '');
+    pr.textContent = stЦена(p);
+    foot.appendChild(pr);
+  }
+  const acts = document.createElement('div'); acts.className = 'st-acts';
+  const смотреть = document.createElement('button');
+  смотреть.className = 'st-btn ghost';
+  // «Попробовать» ведёт СРАЗУ к примерке на своём кадре — это главный ход магазина:
+  // сначала человек видит результат на своей фотографии, потом разговор о деньгах.
+  // На страницу коллекции ведёт сам кадр: по нему можно просто тапнуть.
+  смотреть.textContent = главная ? 'Посмотреть коллекцию' : 'Попробовать';
+  смотреть.onclick = ()=> главная ? stОткрытьКоллекцию(p) : stПримерка(p);
+  acts.appendChild(смотреть);
+  if(!(куплена && вЛенте)){
+    const купить = document.createElement('button'); купить.className = 'st-btn';
+    купить.textContent = stБесплатна(p) ? 'Установить' : ('Купить за ' + (p.price || ''));
+    купить.onclick = ()=> stБесплатна(p) ? stПоставить(p, купить) : stКупить(p);
+    acts.appendChild(купить);
+  }
+  foot.appendChild(acts);
   tx.appendChild(foot);
   el.appendChild(tx);
   return el;
 }
+function stКупить(p){
+  if(p.buy) window.open(p.buy, '_blank', 'noopener');
+  else toast('Оплата этой коллекции ещё не открыта');
+}
+// Купленный набор приходит файлом — тем же путём, что и раньше. «Восстановить покупки»
+// это и есть: человек кладёт свой файл, а не ищет кнопку в чужом магазине.
+function stВосстановить(){ document.getElementById('mypFile').click(); }
+function stКатегории(){
+  const host = document.getElementById('stCats');
+  host.innerHTML = '';
+  ST_CATS.forEach(c=>{
+    const b = document.createElement('button');
+    b.className = 'st-cat' + (c === stCat ? ' on' : '');
+    b.textContent = c;
+    b.onclick = ()=>{ stCat = c; renderPacks(); };
+    host.appendChild(b);
+  });
+}
 async function renderPacks(){
-  const host = document.getElementById('packsList');
+  const host = document.getElementById('stList');
   if(!host) return;
+  stКатегории();
   host.innerHTML = '';
   const wait = document.createElement('div'); wait.className = 'packs-empty';
   wait.textContent = 'Загружаю…';
@@ -4506,12 +5331,229 @@ async function renderPacks(){
   host.innerHTML = '';
   if(!list || !list.length){
     const e = document.createElement('div'); e.className = 'packs-empty';
-    e.textContent = list ? 'Пока ни одного набора. Скоро появятся.'
-                         : 'Список не загрузился — нужен интернет. Купленный набор можно поставить из файла кнопкой ниже.';
+    e.textContent = list ? 'Пока ни одной коллекции. Скоро появятся.'
+                         : 'Список не загрузился — нужен интернет. Купленную коллекцию можно поставить из файла кнопкой ниже.';
     host.appendChild(e); return;
   }
-  list.forEach(p=> host.appendChild(packCard(p)));
+  const свои = stCat === 'Все' ? list : list.filter(p=> (p.cat || '') === stCat);
+  if(!свои.length){
+    const e = document.createElement('div'); e.className = 'packs-empty';
+    e.textContent = 'В этой категории пока пусто.';
+    host.appendChild(e);
+  }
+  // Рекомендуемая коллекция — самой заметной карточкой наверху.
+  const главная = свои.find(p=> p.featured);
+  if(главная) host.appendChild(stКарточка(главная, true));
+  свои.filter(p=> p !== главная).forEach(p=> host.appendChild(stКарточка(p, false)));
+  document.getElementById('stPro').style.display = '';
+  stМои(list);
 }
+// «Мои пресеты»: человек должен сразу видеть, что ему доступно. Показываем только то,
+// что и правда лежит в ленте, — отметка «куплено» без единого вида врала бы.
+function stМои(list){
+  const host = document.getElementById('stMine');
+  const sect = document.getElementById('stMineSect');
+  if(!host) return;
+  host.innerHTML = '';
+  const мои = (list || []).filter(p=> stКуплена(p) && stВЛенте(p));
+  sect.style.display = мои.length ? '' : 'none';
+  host.style.display = мои.length ? '' : 'none';
+  мои.forEach(p=>{
+    const r = document.createElement('div');
+    r.style.cssText = 'display:flex; align-items:center; gap:10px; padding:13px 0; border-bottom:1px solid var(--line);';
+    const g = document.createElement('span');
+    g.style.cssText = 'color:#8FCF7A; font-size:14px;'; g.textContent = '✓';
+    const n = document.createElement('span');
+    n.style.cssText = 'flex:1 1 0; min-width:0; font-size:14px; color:var(--text);';
+    n.textContent = p.name || 'Коллекция';
+    const c = document.createElement('span');
+    c.style.cssText = 'font-family:var(--mono); font-size:10px; letter-spacing:.14em; color:var(--dim);';
+    c.textContent = 'КУПЛЕНО';
+    r.append(g, n, c);
+    r.onclick = ()=> stОткрытьКоллекцию(p);
+    host.appendChild(r);
+  });
+}
+// ─── Страница коллекции ───
+const stCollEl = document.getElementById('stColl');
+let stТекущая = null;
+async function stОткрытьКоллекцию(p){
+  stТекущая = p;
+  document.getElementById('stCollTitle').textContent = (p.name || 'КОЛЛЕКЦИЯ').toUpperCase();
+  const body = document.getElementById('stCollBody');
+  body.innerHTML = '';
+  stCollEl.classList.add('open'); ensureTrap();
+  body.scrollTop = 0;
+
+  const герой = document.createElement('div'); герой.className = 'st-hero';
+  герой.appendChild(stСравнение({ photo:(p.samples && p.samples[0]) || p.cover, pack:p, ratio:1.3 }));
+  body.appendChild(герой);
+
+  const head = document.createElement('div'); head.className = 'st-head'; head.style.paddingTop = '18px';
+  const h = document.createElement('div'); h.className = 'st-h1'; h.textContent = p.name || 'Коллекция';
+  const s = document.createElement('div'); s.className = 'st-sub';
+  s.textContent = p.about || ((p.count || 0) + ' пресетов');
+  head.append(h, s); body.appendChild(head);
+
+  // Несколько РАЗНЫХ кадров: человек должен увидеть, что вид работает не на одной фотографии.
+  const образцы = (p.samples && p.samples.length > 1) ? p.samples.slice(1, 6) : [];
+  if(образцы.length){
+    const t = document.createElement('div'); t.className = 'st-sect';
+    t.innerHTML = '<div class="st-sect-t">На разных кадрах</div>';
+    body.appendChild(t);
+    const gal = document.createElement('div'); gal.className = 'st-gal';
+    образцы.forEach((ф, i)=> gal.appendChild(stСравнение({ photo:ф, pack:p, index:i+1, ratio:1.25 })));
+    body.appendChild(gal);
+  }
+
+  // Плитка стилей
+  const пресеты = await stПресеты(p);
+  if(пресеты.length){
+    const t = document.createElement('div'); t.className = 'st-sect';
+    t.innerHTML = '<div class="st-sect-t">' + пресеты.length + ' стилей</div>';
+    body.appendChild(t);
+    const grid = document.createElement('div'); grid.className = 'st-grid';
+    пресеты.forEach((пр, i)=>{
+      const b = document.createElement('button'); b.className = 'st-tile';
+      const c = document.createElement('canvas');
+      const nm = document.createElement('span'); nm.textContent = пр.name || ('СТИЛЬ ' + (i+1));
+      b.append(c, nm);
+      // Плитки идут по РАЗНЫМ кадрам коллекции по кругу: на одном и том же снимке семь
+      // видов выглядят вариациями одного, а человеку надо увидеть, что вид работает и на
+      // портрете, и на городе, и на закате.
+      const кадры = (p.samples && p.samples.length) ? p.samples : [p.cover];
+      // превью плитки маленькое — на карточку 96 px незачем считать большой кадр
+      const ob = new IntersectionObserver(async es=>{
+        if(!es.some(e=> e.isIntersecting)) return;
+        ob.disconnect();
+        const img = await stКадр(кадры[i % кадры.length]);
+        if(!img) return;
+        c.width = c.height = 168;
+        stПрименить(c, img, пр);
+      }, { rootMargin:'200px' });
+      ob.observe(b);
+      b.onclick = ()=> stПоказатьСтиль(p, пр, кадры[i % кадры.length]);
+      grid.appendChild(b);
+    });
+    body.appendChild(grid);
+  }
+
+  // Примерка и покупка — липкой полосой у нижнего края
+  const низ = document.createElement('div'); низ.className = 'st-sticky';
+  const примерить = document.createElement('button');
+  примерить.className = 'st-btn wide'; примерить.textContent = 'Попробовать на своей фотографии';
+  примерить.onclick = ()=> stПримерка(p);
+  низ.appendChild(примерить);
+  const вЛенте = stВЛенте(p);
+  if(!(stКуплена(p) && вЛенте)){
+    const b = document.createElement('button');
+    b.className = 'st-btn ghost wide'; b.style.marginTop = '9px';
+    b.textContent = stБесплатна(p) ? 'Установить коллекцию' : ('Купить за ' + (p.price || ''));
+    b.onclick = ()=> stБесплатна(p) ? stПоставить(p, b) : stКупить(p);
+    низ.appendChild(b);
+  } else {
+    // Коллекция стоит — но виды из неё можно выбрасывать поштучно, поэтому «вернуть»
+    // нужно всегда. И «убрать целиком»: раньше это делалось по одному виду за раз.
+    const целиком = вЛенте >= (p.count || вЛенте);
+    const upd = document.createElement('button');
+    upd.className = 'st-btn ghost wide'; upd.style.marginTop = '9px';
+    upd.textContent = целиком ? 'Обновить коллекцию' : ('Вернуть недостающие · в ленте ' + вЛенте);
+    upd.onclick = ()=> stПоставить(p, upd).then(()=> stОткрытьКоллекцию(p));
+    низ.appendChild(upd);
+    const del = document.createElement('button');
+    del.className = 'st-restore'; del.textContent = 'Убрать коллекцию из ленты';
+    del.onclick = async ()=>{
+      if(!await askConfirm('Убрать коллекцию «' + (p.name || '') + '» из ленты? Видов: ' + вЛенте + '.', 'Убрать')) return;
+      const снято = MYP.removePack(p.id);
+      PACKS.disown(p.id);
+      renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
+      toast(снято ? ('Убрано видов: ' + снято) : 'Коллекция убрана');
+      renderPacks(); stОткрытьКоллекцию(p);
+    };
+    низ.appendChild(del);
+  }
+  body.appendChild(низ);
+}
+// Один стиль крупно — тем же сравнением, только во весь экран страницы коллекции.
+function stПоказатьСтиль(p, пр, кадр){
+  const body = document.getElementById('stCollBody');
+  const слой = document.createElement('div');
+  слой.style.cssText = 'position:fixed; inset:0; z-index:60; background:var(--bg-deep); display:flex; flex-direction:column;';
+  const шапка = document.createElement('div'); шапка.className = 'cam-top';
+  const x = document.createElement('button'); x.className = 'cam-x'; x.textContent = '✕';
+  const t = document.createElement('span'); t.className = 'cam-title'; t.textContent = (пр.name || 'СТИЛЬ').toUpperCase();
+  const пусто = document.createElement('span'); пусто.style.width = '40px';
+  шапка.append(x, t, пусто);
+  const тело = document.createElement('div'); тело.className = 'st-body';
+  // Крупно открывается ТОТ ЖЕ кадр, что был на плитке, — иначе человек нажимает на закат,
+  // а получает портрет.
+  тело.appendChild(stСравнение({ photo:кадр || (p.samples && p.samples[0]) || p.cover,
+                                 preset:пр, ratio:1.3 }));
+  слой.append(шапка, тело);
+  x.onclick = ()=> слой.remove();
+  document.body.appendChild(слой);
+}
+// ─── Примерка на своей фотографии ───
+// Сначала показываем человеку результат на ЕГО кадре, и только потом говорим про деньги.
+let stЖдёмФото = null;
+function stПримерка(p){
+  stЖдёмФото = p;
+  document.getElementById('file').click();
+}
+// Вызывается из общего обработчика выбора файла, когда ждём кадр для примерки.
+async function stПримерить(img){
+  const p = stЖдёмФото; stЖдёмФото = null;
+  if(!p) return false;
+  const пресеты = await stПресеты(p);
+  const пр = пресеты[0] || null;
+  const body = document.getElementById('stSellBody');
+  body.innerHTML = '';
+  document.getElementById('stSell').classList.add('open'); ensureTrap();
+  body.appendChild(stСравнение({ ratio:1.25, preset:пр, image:img }));
+
+  const sell = document.createElement('div'); sell.className = 'st-sell';
+  const h = document.createElement('h2'); h.textContent = 'Понравился результат?';
+  const s = document.createElement('p');
+  s.textContent = 'Откройте всю коллекцию «' + (p.name || '') + '» — ' + (p.count || 0) + ' пресетов на любой ваш кадр.';
+  sell.append(h, s);
+  if(!stБесплатна(p)){
+    const pr = document.createElement('span'); pr.className = 'st-price'; pr.textContent = p.price || '';
+    sell.appendChild(pr);
+  }
+  body.appendChild(sell);
+  const низ = document.createElement('div'); низ.className = 'st-sticky';
+  const go = document.createElement('button'); go.className = 'st-btn wide';
+  go.textContent = stБесплатна(p) ? 'Установить коллекцию' : ('Разблокировать коллекцию — ' + (p.price || ''));
+  go.onclick = async ()=>{
+    if(stБесплатна(p)){ if(await stПоставить(p, go)) document.getElementById('stSell').classList.remove('open'); }
+    else stКупить(p);
+  };
+  низ.appendChild(go);
+  const rest = document.createElement('button'); rest.className = 'st-restore';
+  rest.textContent = 'Восстановить покупки';
+  rest.onclick = stВосстановить;
+  низ.appendChild(rest);
+  body.appendChild(низ);
+  return true;
+}
+document.getElementById('stCollClose').onclick = ()=> stCollEl.classList.remove('open');
+document.getElementById('stSellClose').onclick = ()=> document.getElementById('stSell').classList.remove('open');
+// PRO. Подписки в приложении пока нет: кнопка ведёт на ту же внешнюю оплату, что и
+// коллекции, а какой план выбран — запоминаем, чтобы ссылка вела на нужный.
+let stПлан = 'месяц';
+function stПланВыбрать(k){
+  stПлан = k;
+  document.getElementById('stPlanM').classList.toggle('on', k === 'месяц');
+  document.getElementById('stPlanY').classList.toggle('on', k === 'год');
+}
+document.getElementById('stPlanM').onclick = ()=> stПланВыбрать('месяц');
+document.getElementById('stPlanY').onclick = ()=> stПланВыбрать('год');
+document.getElementById('stProGo').onclick = async ()=>{
+  const list = (await PACKS.load()) || [];
+  const pro = list.find(p=> p.pro && p.buy);
+  if(pro && pro.buy) window.open(pro.buy, '_blank', 'noopener');
+  else toast('Подписка PRO пока не подключена');
+};
 const packsEl = document.getElementById('packs');
 function openPacks(){
   packsEl.classList.add('open');
@@ -10474,6 +11516,9 @@ document.getElementById('rtApply').onclick = ()=>{
 
 // Порядок карточек ставим В КОНЦЕ: хранилище настроек объявлено ниже по файлу, и вызов
 // раньше него роняет весь остаток кода (наступил на это сразу).
+// Сначала переносим шесть главных карточек наверх, и только потом раскладываем порядок:
+// иначе сохранённый порядок пытался бы расставить кнопки, которых в списке уже нет.
+собратьГлавные();
 применитьПорядок();
 включитьПеретаскивание();
 
