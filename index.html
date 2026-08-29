@@ -1070,7 +1070,11 @@
     -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); pointer-events:none;}
   .st-tag.l{left:12px;} .st-tag.r{right:12px;}
   .st-badges{position:absolute; left:12px; top:12px; display:flex; gap:6px; z-index:2;}
-  .st-badge{font-family:var(--mono); font-size:9px; letter-spacing:.16em; padding:5px 9px;
+  /* Значок раньше стоял криво: разрядка .16em добавляет пустоту ПОСЛЕ последней буквы,
+     и слово уезжало влево, а высоту строки задавал сам шрифт — текст сидел не по центру.
+     Лечим лишним отступом слева и явной высотой строки. */
+  .st-badge{font-family:var(--mono); font-size:9px; letter-spacing:.16em;
+    padding:0 8px 0 9px; height:22px; line-height:22px; display:inline-block;
     border-radius:7px; background:var(--gold); color:var(--gold-ink); font-weight:700;}
   .st-badge.pro{background:rgba(10,9,8,.62); color:var(--gold); border:1px solid rgba(224,162,74,.5);
     -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);}
@@ -5272,6 +5276,28 @@ async function stПоставить(p, кнопка){
     return false;
   }
 }
+// «НОВИНКА» не должна висеть вечно. Срок считаем от того дня, когда коллекция впервые
+// попалась на глаза ЭТОМУ человеку, а не от даты выкладки: тот, кто поставил приложение
+// сегодня, тоже вправе увидеть, что для него ново. Через двое суток значок гаснет сам.
+// Если в packs.json у коллекции написана дата (new:"2026-08-28"), считаем от неё — так
+// можно погасить значок у всех разом, не трогая код.
+const СРОК_НОВИНКИ = 2*24*3600*1000;
+function stНовинка(p){
+  if(!p || !p.new) return false;
+  if(typeof p.new === 'string'){
+    const д = Date.parse(p.new);
+    return isFinite(д) ? (Date.now() - д < СРОК_НОВИНКИ) : true;
+  }
+  let карта = {};
+  try{ карта = JSON.parse(localStorage.getItem('packsFirstSeen') || '{}') || {}; }catch(_){}
+  const было = карта[p.id];
+  if(!было){
+    карта[p.id] = Date.now();
+    try{ localStorage.setItem('packsFirstSeen', JSON.stringify(карта)); }catch(_){}
+    return true;
+  }
+  return Date.now() - было < СРОК_НОВИНКИ;
+}
 function stКарточка(p, главная){
   const el = document.createElement('div');
   el.className = 'st-card' + (главная ? ' feat' : '');
@@ -5280,7 +5306,7 @@ function stКарточка(p, главная){
                              onTap: ()=> stОткрытьКоллекцию(p) });
   // Значки поверх кадра: новинка и премиальность видны раньше названия.
   const зн = document.createElement('div'); зн.className = 'st-badges';
-  if(p.new){ const b = document.createElement('span'); b.className = 'st-badge'; b.textContent = 'НОВИНКА'; зн.appendChild(b); }
+  if(stНовинка(p)){ const b = document.createElement('span'); b.className = 'st-badge'; b.textContent = 'НОВИНКА'; зн.appendChild(b); }
   if(!stБесплатна(p)){ const b = document.createElement('span'); b.className = 'st-badge pro'; b.textContent = 'ПРЕМИУМ'; зн.appendChild(b); }
   else { const b = document.createElement('span'); b.className = 'st-badge free'; b.textContent = 'БЕСПЛАТНО'; зн.appendChild(b); }
   if(зн.children.length) кадр.appendChild(зн);
@@ -5306,11 +5332,12 @@ function stКарточка(p, главная){
   const acts = document.createElement('div'); acts.className = 'st-acts';
   const смотреть = document.createElement('button');
   смотреть.className = 'st-btn ghost';
-  // «Попробовать» ведёт СРАЗУ к примерке на своём кадре — это главный ход магазина:
-  // сначала человек видит результат на своей фотографии, потом разговор о деньгах.
-  // На страницу коллекции ведёт сам кадр: по нему можно просто тапнуть.
-  смотреть.textContent = главная ? 'Посмотреть коллекцию' : 'Попробовать';
-  смотреть.onclick = ()=> главная ? stОткрытьКоллекцию(p) : stПримерка(p);
+  // Кнопка одна и та же у всех карточек — «Посмотреть коллекцию». Раньше у неглавных
+  // здесь стояло «Попробовать» с прямым ходом в примерку, и рядом с «Установить» это
+  // читалось как два разных обещания. Примерка никуда не делась: она первой кнопкой
+  // на самой странице коллекции, куда эта кнопка и ведёт.
+  смотреть.textContent = 'Посмотреть коллекцию';
+  смотреть.onclick = ()=> stОткрытьКоллекцию(p);
   acts.appendChild(смотреть);
   if(!(куплена && вЛенте)){
     const купить = document.createElement('button'); купить.className = 'st-btn';
