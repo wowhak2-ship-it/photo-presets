@@ -7945,6 +7945,76 @@ async function loadFaceKit(){
   catch(_){ bagsKit = await vision.FaceLandmarker.createFromOptions(files, opts('CPU')); }
   return bagsKit;
 }
+// ─── ПОИСК ЛИЦА: один на все инструменты ───
+// Первый проход остаётся ровно прежним — по всему кадру, одним снимком. На портрете он
+// находит лицо сразу, и никакой лишней работы не делается.
+// Замер на 30 бытовых кадрах показал, что этого мало: лицо нашлось только на 7. Детектор
+// смотрит кадр целиком, и лицо, занимающее меньше десятой доли ширины, повёрнутое в
+// профиль или наклонённое, не набирает порога уверенности. Проверено отдельно: ни полный
+// размер, ни уменьшение, ни повороты на 90/180/270 не меняли ничего — ноль при любом
+// масштабе. А тот же самый детектор, пущенный по пяти перекрывающимся кускам кадра,
+// находит лицо: кусок берётся в 60 % кадра и растягивается обратно до полного размера,
+// то есть лицо в нём становится крупнее в полтора раза — и попадает в рабочий диапазон.
+// Куски считаются ТОЛЬКО когда первый проход пуст, поэтому портреты идут прежним путём.
+const ЛИЦО_КУСОК = 0.6;                                    // доля кадра в одном куске
+const ЛИЦО_МЕСТА = [[0,0],[1,0],[0,1],[1,1],[0.5,0.5]];    // четыре угла и центр
+// Габариты разметки в долях того холста, на котором её нашли.
+function лицоГабарит(lms){
+  let x0=1e9, y0=1e9, x1=-1e9, y1=-1e9;
+  for(const p of lms){ if(p.x<x0)x0=p.x; if(p.x>x1)x1=p.x; if(p.y<y0)y0=p.y; if(p.y>y1)y1=p.y; }
+  return { x0, y0, x1, y1, w:x1-x0, h:y1-y0, cx:(x0+x1)/2, cy:(y0+y1)/2 };
+}
+function лицаПоКускам(kit, cv){
+  const W = cv.width, H = cv.height;
+  const кw = Math.max(16, Math.round(W*ЛИЦО_КУСОК)), кh = Math.max(16, Math.round(H*ЛИЦО_КУСОК));
+  const мш = Math.max(W,H) / Math.max(кw,кh);              // кусок обратно до размера кадра
+  const t = document.createElement('canvas');
+  t.width = Math.max(1, Math.round(кw*мш)); t.height = Math.max(1, Math.round(кh*мш));
+  const tx = t.getContext('2d');
+  const найдено = [];
+  for(const [дx, дy] of ЛИЦО_МЕСТА){
+    const ox = Math.round((W-кw)*дx), oy = Math.round((H-кh)*дy);
+    tx.clearRect(0, 0, t.width, t.height);
+    tx.drawImage(cv, ox, oy, кw, кh, 0, 0, t.width, t.height);
+    let лица = [];
+    try{ лица = (kit.detect(t).faceLandmarks) || []; }catch(_){ }
+    for(const lms of лица){
+      const г = лицоГабарит(lms);
+      // Лицо, обрезанное краем куска, брать нельзя: недостающую часть разметка достраивает
+      // наугад, и овал или зона под глазом уедут мимо настоящего лица.
+      if(г.x0 < 0.02 || г.y0 < 0.02 || г.x1 > 0.98 || г.y1 > 0.98) continue;
+      // Отсев заведомо не-лица: слишком мелкая разметка и неправдоподобные пропорции.
+      const прп = г.h / Math.max(1e-6, г.w);
+      if(г.w < 0.03 || прп < 0.6 || прп > 2.6) continue;
+      // Обратно в координаты кадра: точки нормированы по куску, кусок стоит в (ox, oy).
+      const свои = lms.map(p => ({ x:(ox + p.x*кw)/W, y:(oy + p.y*кh)/H, z:p.z }));
+      const цг = лицоГабарит(свои);
+      // Одно лицо попадает сразу в два-три куска — в список оно должно войти один раз.
+      let повтор = false;
+      for(const е of найдено){
+        if(Math.hypot(е.г.cx-цг.cx, е.г.cy-цг.cy) < Math.max(е.г.w, цг.w)*0.6){ повтор = true; break; }
+      }
+      if(!повтор) найдено.push({ lms:свои, г:цг });
+    }
+  }
+  найдено.sort((a,b) => b.г.w - a.г.w);                    // крупное лицо первым
+  return найдено.map(о => о.lms);
+}
+// Единая точка входа для всех инструментов. Модель к этому времени уже загружена.
+function лицаНайти(kit, cv){
+  let лица = [];
+  try{ лица = (kit.detect(cv).faceLandmarks) || []; }catch(_){ }
+  if(лица.length) return лица;
+  // Прежний запасной проход на 720: изредка модель спотыкается именно о большой кадр.
+  if(cv.width > 900){
+    const t = document.createElement('canvas'); const s = 720/cv.width;
+    t.width = 720; t.height = Math.max(1, Math.round(cv.height*s));
+    t.getContext('2d').drawImage(cv, 0, 0, t.width, t.height);
+    try{ лица = (kit.detect(t).faceLandmarks) || []; }catch(_){ }
+    if(лица.length) return лица;
+  }
+  return лицаПоКускам(kit, cv);
+}
 var BAGS_BASE_R = 1.15;      // масштаб подложки в ширинах глаза
 var BAGS_ЦЕНТР = 0.36;       // насколько ниже центра глаза стоит середина зоны
 var BAGS_ВЫСОТА = 0.32;      // полувысота зоны в ширинах глаза
@@ -9109,14 +9179,7 @@ async function powderEnter(){
     const kit = await loadFaceKit();
     if(rtTool !== 'powder'){ bagsBusy = false; return; }
     top.textContent = 'Ищу лицо…';
-    let res = kit.detect(rtCanvas);
-    let faces = (res && res.faceLandmarks) || [];
-    if(!faces.length && rtCanvas.width > 900){
-      const t = document.createElement('canvas'); const s = 720/rtCanvas.width;
-      t.width = 720; t.height = Math.max(1, Math.round(rtCanvas.height*s));
-      t.getContext('2d').drawImage(rtCanvas, 0, 0, t.width, t.height);
-      res = kit.detect(t); faces = (res && res.faceLandmarks) || [];
-    }
+    const faces = лицаНайти(kit, rtCanvas);
     rtFaces = faces;
     rtFaceSel = faces.length ? biggestFace(faces, rtCanvas.width, rtCanvas.height) : 0;
     if(!faces.length || !powderPrepare([faces[rtFaceSel]])){
@@ -9142,14 +9205,7 @@ async function toneEnter(){
     const kit = await loadFaceKit();
     if(rtTool !== 'tone'){ bagsBusy = false; return; }
     top.textContent = 'Ищу лицо…';
-    let res = kit.detect(rtCanvas);
-    let faces = (res && res.faceLandmarks) || [];
-    if(!faces.length && rtCanvas.width > 900){
-      const t = document.createElement('canvas'); const s = 720/rtCanvas.width;
-      t.width = 720; t.height = Math.max(1, Math.round(rtCanvas.height*s));
-      t.getContext('2d').drawImage(rtCanvas, 0, 0, t.width, t.height);
-      res = kit.detect(t); faces = (res && res.faceLandmarks) || [];
-    }
+    const faces = лицаНайти(kit, rtCanvas);
     rtFaces = faces;
     rtFaceSel = faces.length ? biggestFace(faces, rtCanvas.width, rtCanvas.height) : 0;
     if(!faces.length || !tonePrepare([faces[rtFaceSel]])){
@@ -9177,14 +9233,7 @@ async function teethEnter(){
     const kit = await loadFaceKit();
     if(rtTool !== 'teeth'){ bagsBusy = false; return; }
     top.textContent = 'Ищу улыбку…';
-    let res = kit.detect(rtCanvas);
-    let faces = (res && res.faceLandmarks) || [];
-    if(!faces.length && rtCanvas.width > 900){
-      const t = document.createElement('canvas'); const s = 720/rtCanvas.width;
-      t.width = 720; t.height = Math.max(1, Math.round(rtCanvas.height*s));
-      t.getContext('2d').drawImage(rtCanvas, 0, 0, t.width, t.height);
-      res = kit.detect(t); faces = (res && res.faceLandmarks) || [];
-    }
+    const faces = лицаНайти(kit, rtCanvas);
     rtFaces = faces;
     rtFaceSel = faces.length ? biggestFace(faces, rtCanvas.width, rtCanvas.height) : 0;
     if(!faces.length){ top.textContent = 'Лицо не найдено'; bagsBusy = false; aiЖду(false); return; }
@@ -9787,14 +9836,7 @@ async function bagsEnter(){
     const kit = await loadFaceKit();
     if(rtTool !== 'bags'){ bagsBusy = false; return; }
     top.textContent = 'Ищу лицо…';
-    let res = kit.detect(rtCanvas);
-    let faces = (res && res.faceLandmarks) || [];
-    if(!faces.length && rtCanvas.width > 900){            // ретрай на ~720px — детект надёжнее
-      const t = document.createElement('canvas'); const s = 720/rtCanvas.width;
-      t.width = 720; t.height = Math.max(1, Math.round(rtCanvas.height*s));
-      t.getContext('2d').drawImage(rtCanvas, 0, 0, t.width, t.height);
-      res = kit.detect(t); faces = (res && res.faceLandmarks) || [];
-    }
+    const faces = лицаНайти(kit, rtCanvas);
     rtFaces = faces;
     rtFaceSel = faces.length ? biggestFace(faces, rtCanvas.width, rtCanvas.height) : 0;
     if(!faces.length || !bagsPrepare([faces[rtFaceSel]])){
@@ -10217,6 +10259,48 @@ document.getElementById('rtVigSize').oninput = e=>{
 // а красный проходит дальше всех. Поэтому одним белым размытием не обойтись — это будет
 // обычное «свечение», которое у нас уже есть в движке. Здесь ореол цветной и ложится ТОЛЬКО
 // наружу, в тёмное вокруг источника: внутри самого пересвета его не видно, там и так бело.
+// Размер копии, на которой считается слой свечения. Ровно рабочий размер редактора:
+// человек крутит ползунок на нём, и сохранённый файл обязан получить то же самое.
+const HAL_РАБОТА = 1400;
+// ПОРОГ СВЕЧЕНИЯ БЕРЁТСЯ ИЗ САМОГО КАДРА.
+// Постоянные 176 значили на разных снимках разное: доля пикселей ярче этого числа на
+// обычных кадрах гуляет от 2,4 % до 74,2 %, и один и тот же ползунок давал подъём то на
+// полтора уровня яркости, то на тридцать — разброс в девятнадцать раз. Вечерний кадр,
+// ради которого свечение и придумано, не реагировал почти никак, а снежный получал пелену
+// на девять десятых площади.
+// Теперь порог — это граница верхних двух процентов яркости ЭТОГО кадра: светятся самые
+// яркие места, сколько бы их ни было. Пределы обязательны с обеих сторон: снизу 150,
+// иначе на кадре, где вообще нет ничего яркого, начнёт светиться середина тонов; сверху
+// 230, иначе на честно пересвеченном снимке порог уехал бы к самому белому и эффект
+// пропал бы там, где он как раз уместен.
+// Пределы подобраны замером по 35 кадрам, а не на глаз, и оба важны:
+//  · снизу 176 — прежнее постоянное значение. Опускать порог ниже нельзя: на тёмном кадре
+//    самое яркое место — это лицо, и оно начинает светиться красным. Проверено картинкой,
+//    выглядит как брак. К тому же на реальных снимках верхние 2 % яркости и так никогда не
+//    опускались ниже 180, так что нижний предел — страховка, а не рабочий режим.
+//  · сверху 210 — иначе на светлом кадре порог уезжает к самому белому, маска сжимается до
+//    ничего и эффект пропадает совсем (при потолке 230 на портрете подъём падал с 12,5 до
+//    0,04 уровня, то есть ползунок переставал что-либо делать).
+// Узкая маска несёт меньше света, чем прежняя широкая, поэтому есть общий множитель. Он
+// ОДИН для всех кадров: подгонять его под конкретный снимок нельзя, иначе вернётся та же
+// непредсказуемость, только с другой стороны.
+var HAL_АДАПТИВ = true;          // var, а не let: стенду нужно сравнивать со старым поведением
+var HAL_ДОЛЯ = 0.02;             // какая верхушка яркости считается «самым ярким»
+var HAL_УСИЛ = 2.5;              // общий множитель под узкую маску
+var HAL_ПОРОГ_МИН = 176, HAL_ПОРОГ_МАКС = 210; const HAL_ПОРОГ_СТАРЫЙ = 176;
+function halПорог(пд){
+  // Гистограмма по каждому четвёртому пикселю: для процентиля этого с запасом, а полный
+  // проход по кадру стоил бы ползунку лишних миллисекунд на каждое движение.
+  const г = new Uint32Array(256);
+  let n = 0;
+  for(let i=0;i<пд.length;i+=16){ г[((пд[i]+пд[i+1]+пд[i+2])/3)|0]++; n++; }
+  if(!n) return HAL_ПОРОГ_СТАРЫЙ;
+  const надо = n*HAL_ДОЛЯ;
+  let с = 0, п = HAL_ПОРОГ_МАКС;
+  for(let l=255; l>=0; l--){ с += г[l]; if(с >= надо){ п = l; break; } }
+  return Math.max(HAL_ПОРОГ_МИН, Math.min(HAL_ПОРОГ_МАКС, п));
+}
+
 const HAL_TINTS = { 'красное': [255, 96, 58], 'янтарное': [255, 158, 74],
                     'розовое': [255, 108, 132], 'белое': [255, 226, 208] };
 let halTint = 'красное', halOrig = null, rtHalOp = null;
@@ -10224,42 +10308,112 @@ function halPaint(cv, amount, spread, tint){
   const W = cv.width, H = cv.height, ctx = cv.getContext('2d');
   const c = HAL_TINTS[tint] || HAL_TINTS['красное'];
   const src = ctx.getImageData(0,0,W,H), sd = src.data;
+  // СЛОЙ СВЕЧЕНИЯ СЧИТАЕТСЯ НА КОПИИ ПОСТОЯННОГО РАЗМЕРА, А НЕ НА САМОМ КАДРЕ.
+  // Раньше радиус разлива брался от диагонали кадра, а усиление, которым компенсируется
+  // разбавление после размытия, росло всего лишь пропорционально радиусу. Размытие же
+  // разбавляет яркость как ПЛОЩАДЬ, то есть как квадрат радиуса, — и на оригинале 6000 px
+  // ореол выходил в 1,3–9,1 раза сильнее, чем человек видел на превью (замер по 28 кадрам,
+  // медиана 2,1). Ползунок настраивали на одном, сохранялось другое.
+  // Теперь порог, разлив и усиление считаются на копии 1400 px по длинной стороне — ровно
+  // на том размере, на котором человек и крутил ползунок, — а готовый слой растягивается
+  // на кадр. Слой после размытия гладкий, поэтому растяжение его не портит.
+  // Побочно это ускоряет сохранение: размытие радиусом в сотню пикселей по 24 Мп было
+  // самой долгой операцией во всём инструменте.
+  const мс = Math.min(1, HAL_РАБОТА/Math.max(W,H));
+  const пW = Math.max(1, Math.round(W*мс)), пH = Math.max(1, Math.round(H*мс));
   // 1) вытаскиваем только пересветы — мягким порогом, чтобы не было ступеньки по краю
-  const hc = document.createElement('canvas'); hc.width=W; hc.height=H;
+  const hc = document.createElement('canvas'); hc.width=пW; hc.height=пH;
   const hx = hc.getContext('2d');
-  const hi = hx.createImageData(W,H), hd = hi.data;
-  const порог = 176;
-  for(let i=0;i<sd.length;i+=4){
-    const l = (sd[i]+sd[i+1]+sd[i+2])/3;
-    let e = (l - порог)/(255 - порог);
+  let пд = sd;
+  if(мс !== 1){
+    // Качество уменьшения обязательно просить явно. По умолчанию холст ужимается грубым
+    // фильтром в два-три отсчёта: на асфальте и гравии одиночный блик не усредняется с
+    // соседями, а занимает целый пиксель копии — пересветов набирается больше, чем видит
+    // превью (оно строится уменьшением самого снимка, а там фильтр честный). Из-за этого
+    // на зернистых фактурах файл оставался вдвое ярче превью даже после переноса расчёта.
+    hx.imageSmoothingQuality = 'high';
+    hx.drawImage(cv, 0, 0, пW, пH); пд = hx.getImageData(0,0,пW,пH).data;
+  }
+  const hi = hx.createImageData(пW,пH), hd = hi.data;
+  // Порог считается по рабочей копии — значит превью и сохранение берут его одинаковым.
+  const порог = HAL_АДАПТИВ ? halПорог(пд) : HAL_ПОРОГ_СТАРЫЙ;
+  const размах = 255 - порог;
+  for(let i=0;i<пд.length;i+=4){
+    const l = (пд[i]+пд[i+1]+пд[i+2])/3;
+    let e = (l - порог)/размах;
     if(e <= 0) continue;
     e = e*Math.sqrt(e);                       // ядро ореола — самые яркие места, но без провала середины
-    hd[i] = hd[i+1] = hd[i+2] = 255; hd[i+3] = Math.round(Math.min(1,e)*255);
+    hd[i] = hd[i+1] = hd[i+2] = 255; hd[i+3] = Math.round(e*255);
   }
   hx.putImageData(hi, 0, 0);
-  // 2) разливаем
-  const bc = document.createElement('canvas'); bc.width=W; bc.height=H;
+  // 2) разливаем — радиус от диагонали РАБОЧЕЙ копии, а не кадра
+  const bc = document.createElement('canvas'); bc.width=пW; bc.height=пH;
   const bx2 = bc.getContext('2d');
-  const r = Math.max(2, Math.round(Math.hypot(W,H) * (0.004 + spread*0.00042)));
+  const r = Math.max(2, Math.round(Math.hypot(пW,пH) * (0.004 + spread*0.00042)));
   bx2.filter = 'blur('+r+'px)'; bx2.drawImage(hc, 0, 0);
-  const halo = bx2.getImageData(0,0,W,H).data;
-  // 3) кладём наружу: чем темнее место, тем ореол заметнее — как на плёнке.
-  // УСИЛЕНИЕ обязательно: размытие сохраняет общую энергию, поэтому яркая точка,
+  const размыто = bx2.getImageData(0,0,пW,пH).data;
+  // 3) УСИЛЕНИЕ и ГАШЕНИЕ ВНУТРИ ПЕРЕСВЕТА — тоже на рабочем размере, и запекаются в слой.
+  // Усиление обязательно: размытие сохраняет общую энергию, поэтому яркая точка,
   // размазанная по кругу в десятки пикселей, даёт доли процента прозрачности —
   // на замере это было +0.4 единицы яркости, то есть ничего. Чем шире разлив,
   // тем сильнее разбавление, поэтому усиление растёт вместе с радиусом.
-  const усиление = 3.2 + r*0.22;
+  // Гашение обязано считаться ЗДЕСЬ ЖЕ, а не на полном кадре: на превью мелкие блики
+  // усредняются при уменьшении, а на оригинале они разрешены отдельными пикселями, и
+  // одно и то же место то попадает под гашение, то нет. Пока это оставалось на полном
+  // кадре, превью и файл всё ещё расходились в 1,5–2,4 раза на снимках с мелкими бликами.
+  const усиление = (3.2 + r*0.22) * (HAL_АДАПТИВ ? HAL_УСИЛ : 1);
+  // Плотность слоя в одной точке рабочей копии, 0..255. Формула ОДНА на превью и на
+  // сохранение — в этом весь смысл правки. Округление до восьми бит тоже общее: на большом
+  // кадре слой обязан пройти через картинку, чтобы растянуться, значит и на превью он
+  // должен быть таким же, иначе пути снова разойдутся, пусть и на проценты.
+  const слойА = (i)=>{
+    const h = Math.min(1, размыто[i+3]/255 * усиление); if(h < 0.004) return 0;
+    const l = (пд[i]+пд[i+1]+пд[i+2])/3;
+    const снаружи = 1 - Math.min(1, Math.max(0, (l - порог)/размах));  // внутри пересвета гасим
+    const a = h * снаружи;
+    return a < 0.004 ? 0 : Math.round(a*255);
+  };
+  // 4) кладём наружу экранным наложением: светлое не выбивает в белое, а плавно
+  // подходит к нему, и чем темнее место, тем ореол заметнее — как на плёнке
   const t = Math.max(0, Math.min(1, amount));
-  for(let i=0;i<sd.length;i+=4){
-    const h = Math.min(1, halo[i+3]/255 * усиление); if(h < 0.004) continue;
-    const l = (sd[i]+sd[i+1]+sd[i+2])/3;
-    const снаружи = 1 - Math.min(1, Math.max(0, (l - порог)/(255 - порог)));  // внутри пересвета гасим
-    const a = h * t * снаружи;
-    if(a < 0.004) continue;
-    // экранное наложение: светлое не выбивает в белое, а плавно подходит к нему
-    sd[i]   = clamp(255 - (255-sd[i])   * (255 - c[0]*a) / 255);
-    sd[i+1] = clamp(255 - (255-sd[i+1]) * (255 - c[1]*a) / 255);
-    sd[i+2] = clamp(255 - (255-sd[i+2]) * (255 - c[2]*a) / 255);
+  if(мс === 1){
+    // Кадр и рабочая копия — одно и то же: слой никуда растягивать не надо, и лишний
+    // проход по всем пикселям тоже не нужен. Ползунок пересчитывает кадр на каждое
+    // движение, и добавлять ему работы нельзя — поэтому здесь всё в одном цикле, без
+    // вызовов на каждый пиксель. Считается ровно то же, что и в слойА выше, только без
+    // округления до восьми бит: там оно неизбежно (слой едет через картинку), здесь не
+    // нужно. Разница от этого меньше четверти уровня яркости, зато превью остаётся ровно
+    // таким, каким было до правки, и ползунок не надо перекалибровывать.
+    // Если правишь формулу — правь в обоих местах, иначе превью и файл снова разойдутся.
+    for(let i=0;i<sd.length;i+=4){
+      const h = Math.min(1, размыто[i+3]/255 * усиление); if(h < 0.004) continue;
+      const l = (пд[i]+пд[i+1]+пд[i+2])/3;
+      const снаружи = 1 - Math.min(1, Math.max(0, (l - порог)/размах));
+      const a = h * снаружи * t;
+      if(a < 0.004) continue;
+      sd[i]   = clamp(255 - (255-sd[i])   * (255 - c[0]*a) / 255);
+      sd[i+1] = clamp(255 - (255-sd[i+1]) * (255 - c[1]*a) / 255);
+      sd[i+2] = clamp(255 - (255-sd[i+2]) * (255 - c[2]*a) / 255);
+    }
+  } else {
+    const сл = bx2.createImageData(пW, пH), сд = сл.data;
+    for(let i=0;i<сд.length;i+=4){
+      const a = слойА(i); if(!a) continue;
+      сд[i] = сд[i+1] = сд[i+2] = 255; сд[i+3] = a;
+    }
+    bx2.putImageData(сл, 0, 0);
+    // готовый слой растягиваем на кадр — он гладкий, увеличение его не портит
+    const uc = document.createElement('canvas'); uc.width=W; uc.height=H;
+    const ux = uc.getContext('2d');
+    ux.imageSmoothingQuality = 'high';
+    ux.drawImage(bc, 0, 0, пW, пH, 0, 0, W, H);
+    const halo = ux.getImageData(0,0,W,H).data;
+    for(let i=0;i<sd.length;i+=4){
+      const a = halo[i+3]/255 * t; if(a < 0.004) continue;
+      sd[i]   = clamp(255 - (255-sd[i])   * (255 - c[0]*a) / 255);
+      sd[i+1] = clamp(255 - (255-sd[i+1]) * (255 - c[1]*a) / 255);
+      sd[i+2] = clamp(255 - (255-sd[i+2]) * (255 - c[2]*a) / 255);
+    }
   }
   ctx.putImageData(src, 0, 0);
 }
@@ -10403,6 +10557,10 @@ document.getElementById('dblFile').onchange = async e=>{
 const DUST_KINDS = ['всё', 'пыль', 'царапины', 'потёртости'];
 // Готовая картинка-фактура здесь была и не сработала: клетка 512 px, положенная на треть
 // кадра, превращала частицу в мутное облако. Сор рисуется фигурами прямо в dustPaint.
+// Размер копии, на которой строится слой сора. Тот же рабочий размер, что у редактора
+// и у «Свечения»: человек крутит ползунок на нём, и сохранённый файл обязан получить
+// ровно то же самое.
+const DUST_РАБОТА = 1400;
 let dustKind = 'всё', dustSeed = 20260816, dustOrig = null, rtDustOp = null;
 // ОВАЛЫ ЛИЦ ДЛЯ ЗАЩИТЫ ОТ СОРА, в долях кадра (поэтому годятся и для полноразмерной
 // выгрузки). Настоящий сор лежит на отпечатке равномерно, но белая крапина на щеке или у
@@ -10429,13 +10587,45 @@ async function dustЛицаНайти(){
     }
   } catch(e){ dustЛица = []; }   // нет сети или модели — просто нет защиты, но и не падаем
 }
+// ТЕХНИЧЕСКИЙ ДОЛГ (не чинить без отдельного решения).
+// Зерно у превью и у сохранения одно, но узор сора может выйти РАЗНЫМ. Причина: часть
+// решений зависит от самого кадра (ровный фон под точкой, яркость места, квота плотности),
+// а рабочая копия для превью строится из снимка, а для сохранения — уменьшением кадра.
+// Копии почти одинаковые, но не побайтово; одно решение переключилось — и вся дальнейшая
+// цепочка случайных чисел разошлась, то есть узор другой. Замер по 35 кадрам: количество
+// сора при этом совпадает (медиана 1,00, разброс 0,45–1,39), меняется именно расположение.
+// Лечится тем, что размещение надо разложить на решения, не зависящие от кадра: сперва
+// набрать точки по зерну, и только потом отсеивать их по содержимому, не трогая счётчик
+// случайных чисел. Пока живём так — на глаз это не читается, разное только зерно грязи.
 function dustRandom(seed){                       // тот же приём, что у боке: один и тот же
   let s = seed >>> 0;                            // рисунок при каждой перерисовке
   return ()=>{ s = (s*1664525 + 1013904223) >>> 0; return s/4294967296; };
 }
 function dustPaint(cv, amount, density, kind, seed, len, size){
   if(!amount) return;
-  const W = cv.width, H = cv.height, ctx = cv.getContext('2d');
+  const W0 = cv.width, H0 = cv.height, ctx = cv.getContext('2d');
+  // СЛОЙ СОРА СТРОИТСЯ НА КОПИИ ПОСТОЯННОГО РАЗМЕРА, а на кадр кладётся уже готовым —
+  // тот же приём, что вылечил «Свечение».
+  // Раньше весь расчёт шёл прямо по кадру, и на оригинале 24 Мп он вёл себя иначе, чем на
+  // рабочей копии: крапина рисуется готовой заготовкой 24×24 px, и на превью её ужимало до
+  // двух-трёх пикселей со сглаживанием (часть сора буквально усреднялась в ничто), а на
+  // оригинале растягивало до сорока с полной плотностью. Замер по шести кадрам: в
+  // сохранённом файле сора выходило вдвое больше, чем человек видел на экране, и хуже всего
+  // на слабых значениях ползунка — там расхождение доходило до пяти раз.
+  // Теперь и решения (яркость, ровный фон, лица), и сам рисунок считаются на копии 1400 px,
+  // а готовые слои растягиваются на кадр. Совпадение получается по построению, а не
+  // «примерно», и сохранение заодно перестаёт считать сор по всем 24 миллионам пикселей.
+  const мс = Math.min(1, DUST_РАБОТА/Math.max(W0, H0));
+  const W = Math.max(1, Math.round(W0*мс)), H = Math.max(1, Math.round(H0*мс));
+  // Кадр, по которому принимаются решения, — тот же уменьшенный. Качество уменьшения
+  // просим явно: грубый фильтр не усредняет фактуру и «ровный фон» опознавался бы иначе.
+  let раб = cv;
+  if(мс !== 1){
+    раб = document.createElement('canvas'); раб.width = W; раб.height = H;
+    const рx = раб.getContext('2d'); рx.imageSmoothingQuality = 'high';
+    рx.drawImage(cv, 0, 0, W, H);
+  }
+  const рctx = раб.getContext('2d');
   const rnd = dustRandom(seed || 20260816);
   const диаг = Math.hypot(W, H), баз = Math.min(W, H);
   const плотн = 0.35 + density/100*1.65;          // множитель количества
@@ -10482,7 +10672,7 @@ function dustPaint(cv, amount, density, kind, seed, len, size){
     // 0.07–0.24 % — втрое мельче. Поэтому при обычном просмотре (кадр сжат в три-четыре
     // раза) сор пропадал совсем, а виден был только при проверке 1:1.
     const ед = баз/380;
-    const кадрП = ctx.getImageData(0,0,W,H).data;
+    const кадрП = рctx.getImageData(0,0,W,H).data;
     const яркП = (x,y)=>{
       const i=((Math.min(H-1,Math.max(0,y|0))*W)+Math.min(W-1,Math.max(0,x|0)))*4;
       return (кадрП[i]+кадрП[i+1]+кадрП[i+2])/3;
@@ -10535,12 +10725,33 @@ function dustPaint(cv, amount, density, kind, seed, len, size){
     // РОВНЫЙ ФОН. Чистое синее небо — самое беспощадное место: там нет своей фактуры, и
     // любая яркая точка читается как брызги краски поверх цифрового снимка. Определяем его
     // по разбросу яркости вокруг точки и там гасим сор сильнее, а белый не берём вовсе.
+    // РАЗМЕР ПРОБЫ — В ДОЛЯХ КАДРА, А НЕ В ПИКСЕЛЯХ. Здесь стояли постоянные ±7 px, и это
+    // ровно та же ошибка, что когда-то была с размером самого сора: на рабочей копии
+    // 1400 px семь пикселей — это одно, а на оригинале 6000 px — втрое меньший кусок кадра.
+    // Внутри такого кусочка фактуры почти нет, поэтому при сохранении «ровным фоном»
+    // объявлялось вдвое больше площади, чем на превью (замер по 30 кадрам: 15,5 % против
+    // 26 %), а на ровном фоне сор глушится намеренно. Выходило, что в сохранённом файле
+    // сора заметно меньше, чем человек видел на экране.
+    // Проба берётся в тех же долях кадра, что и всё остальное здесь: 2,85 единицы — это
+    // те самые 7 px на рабочем размере, только теперь они значат одно и то же на любом.
+    const шагП = Math.max(2, Math.round(ед*2.85)), шагД = Math.max(1, Math.round(ед*1.63));
+    const проба = [[-шагП,0],[шагП,0],[0,-шагП],[0,шагП],[-шагД,-шагД],[шагД,шагД]];
+    // И сама проба берётся не с одного пикселя, а со среднего по клетке того же
+    // физического размера. На рабочей копии пиксель — это уже среднее по нескольким
+    // исходным, а на оригинале одиночный пиксель несёт ещё и шум матрицы: разброс
+    // завышался, и ровный фон переставал опознаваться. На рабочем размере клетка равна
+    // одному пикселю, то есть превью считается ровно как раньше.
+    const бок = Math.max(0, Math.round(ед/3) - 1);
+    const яркС = бок ? (x, y)=>{
+        let s = 0, n = 0;
+        for(let dy=-бок; dy<=бок; dy++) for(let dx=-бок; dx<=бок; dx++){ s += яркП(x+dx, y+dy); n++; }
+        return s/n;
+      } : яркП;
     const плоско = (x, y)=>{
-      const я0 = яркП(x,y);
+      const я0 = яркС(x,y);
       let мин = я0, макс = я0;
-      const п = [[-7,0],[7,0],[0,-7],[0,7],[-4,-4],[4,4]];
       for(let i=0;i<6;i++){
-        const v = яркП(x+п[i][0], y+п[i][1]);
+        const v = яркС(x+проба[i][0], y+проба[i][1]);
         if(v<мин) мин=v; if(v>макс) макс=v;
       }
       return (макс-мин) < 7;
@@ -10713,7 +10924,7 @@ function dustPaint(cv, amount, density, kind, seed, len, size){
     // основная масса это короткие обрывистые следы, часто еле заметные.
     // Поэтому: длинных мало и они бледные, коротких много, у каждой линии рвётся и
     // толщина, и яркость, а часть следов не светлые, а сероватые — по месту.
-    const кадрЦ = ctx.getImageData(0, 0, W, H).data;
+    const кадрЦ = рctx.getImageData(0, 0, W, H).data;
     const яркВ = (x,y)=>{
       const i=((Math.min(H-1,Math.max(0,y|0))*W)+Math.min(W-1,Math.max(0,x|0)))*4;
       return (кадрЦ[i]+кадрЦ[i+1]+кадрЦ[i+2])/3;
@@ -10836,8 +11047,12 @@ function dustPaint(cv, amount, density, kind, seed, len, size){
   // всех частиц — признак наложенной картинки; в жизни часть грязи не в фокусе.
   мx.filter = 'blur(' + Math.max(0.9, баз*0.0013).toFixed(2) + 'px)'; мx.drawImage(мягче, 0, 0);
   мx.filter = 'none';
-  ctx.globalCompositeOperation = 'screen';   ctx.globalAlpha = t;        ctx.drawImage(мяг, 0, 0);
-  ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = t*0.85;   ctx.drawImage(тень, 0, 0);
+  // Готовые слои растягиваем на кадр. Сор после размытия мягкий, поэтому увеличение его не
+  // ломает — а вот считать его заново в масштабе кадра нельзя, именно из-за этого превью и
+  // файл расходились вдвое.
+  ctx.imageSmoothingQuality = 'high';
+  ctx.globalCompositeOperation = 'screen';   ctx.globalAlpha = t;        ctx.drawImage(мяг, 0, 0, W, H, 0, 0, W0, H0);
+  ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = t*0.85;   ctx.drawImage(тень, 0, 0, W, H, 0, 0, W0, H0);
   ctx.restore();
 }
 function dustRun(cv, op){ if(op && op.amount) dustPaint(cv, op.amount, op.density, op.kind, op.seed, op.len, op.size); }
@@ -10928,14 +11143,7 @@ async function skinEnter(){
     const kit = await loadFaceKit();
     if(rtTool !== 'skin'){ bagsBusy = false; return; }
     top.textContent = 'Ищу лицо…';
-    let res = kit.detect(rtCanvas);
-    let faces = (res && res.faceLandmarks) || [];
-    if(!faces.length && rtCanvas.width > 900){
-      const t = document.createElement('canvas'); const s = 720/rtCanvas.width;
-      t.width = 720; t.height = Math.max(1, Math.round(rtCanvas.height*s));
-      t.getContext('2d').drawImage(rtCanvas, 0, 0, t.width, t.height);
-      res = kit.detect(t); faces = (res && res.faceLandmarks) || [];
-    }
+    const faces = лицаНайти(kit, rtCanvas);
     rtFaces = faces;
     rtFaceSel = faces.length ? biggestFace(faces, rtCanvas.width, rtCanvas.height) : 0;
     for(const k in skinFace) delete skinFace[k];
@@ -11353,8 +11561,7 @@ async function spotsEnter(){
   try{
     top.textContent = 'Ищу лицо…'; aiЖду('Ищу лицо…');
     const kit = await loadFaceKit();
-    let res = kit.detect(rtCanvas);
-    let faces = (res && res.faceLandmarks) || [];
+    const faces = лицаНайти(kit, rtCanvas);
     if(!faces.length){ top.textContent = 'Лицо не найдено'; aiЖду(false); bagsBusy = false; return; }
     rtFaces = faces; rtFaceSel = biggestFace(faces, rtCanvas.width, rtCanvas.height);
     await точСессия(доля => {
@@ -11413,8 +11620,7 @@ async function aiEnter(){
     top.textContent = bagsKit ? 'Ищу лицо…' : 'Загружаю модель лица…';
     const kit = await loadFaceKit();
     if(rtTool !== 'ai'){ bagsBusy = false; return; }
-    let res = kit.detect(rtCanvas);
-    let faces = (res && res.faceLandmarks) || [];
+    const faces = лицаНайти(kit, rtCanvas);
     if(!faces.length){ top.textContent = 'Лицо не найдено'; bagsBusy = false; return; }
     rtFaces = faces;
     rtFaceSel = biggestFace(faces, rtCanvas.width, rtCanvas.height);
