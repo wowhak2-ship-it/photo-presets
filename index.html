@@ -5544,10 +5544,113 @@ if(ТЕСТОВАЯ_СБОРКА){
     return 'TEST_PRO: ' + (тестовыйPRO() ? 'ВКЛ' : 'ВЫКЛ') + ' — перезагрузите экран магазина';
   };
 }
-// Единственная точка правды. Настоящих источников права пока нет — оплата, подписка и
-// лицензии делаются отдельно; сегодня PRO даёт только тестовая сборка.
+// ─── ЛИЦЕНЗИЯ ───
+// Право на PRO и на платные наборы приезжает лицензией: одной строкой, которую человек
+// получает после оплаты. Подделать её нельзя — она подписана ключом магазина, а в
+// приложении лежит только ПУБЛИЧНЫЙ ключ проверки. Публичный ключ на то и публичный:
+// зашивать его в приложение безопасно, подписывать им нельзя.
+//   PRESETY1.<payload base64url>.<подпись base64url>
+// Хранится строка ЦЕЛИКОМ, как пришла, а не разобранные поля: подпись перепроверяется при
+// каждом запуске. Разобранные поля в хранилище можно было бы поправить в консоли и
+// получить PRO вообще без подписи.
+const LIC_КЛЮЧ = 'presetyLic';
+const LIC_ПРЕФИКС = 'PRESETY1';
+const LIC_ВЕРСИЯ = 1;                 // максимальная версия формата, которую понимаем
+// Настоящий ключ появится вместе с первой продажей. Пока пусто — и это правильно:
+// проверка подписи ни с чем не сойдётся, ни одна лицензия не станет годной, а PRO
+// остаётся доступен только тестовой сборке. Отказ по умолчанию, а не доступ по умолчанию.
+const LIC_ПУБКЛЮЧ = '';
+let лицензия = null;                  // разобранная и ПРОВЕРЕННАЯ лицензия либо null
+let licГотова = false;                // проверка на старте закончилась
+
+function licИзB64(s){
+  const b64 = String(s).replace(/-/g,'+').replace(/_/g,'/');
+  const bin = atob(b64 + '==='.slice((b64.length + 3) % 4));
+  const u = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+function licДата(v){
+  if(v == null) return null;
+  const t = Date.parse(String(v));
+  return isFinite(t) ? t : NaN;
+}
+// Разбор и проверка ПОЛЕЙ. Подпись проверяется отдельно (она асинхронная).
+// Возвращает объект лицензии либо null. Порядок проверок — как в спецификации.
+function licРазобрать(строка){
+  const s = String(строка || '').trim();
+  if(!s || s.indexOf(LIC_ПРЕФИКС + '.') !== 0) return null;
+  const ч = s.split('.');
+  if(ч.length !== 3 || !ч[1] || !ч[2]) return null;
+  let d;
+  try{ d = JSON.parse(new TextDecoder().decode(licИзB64(ч[1]))); }catch(_){ return null; }
+  if(!d || typeof d !== 'object') return null;
+  if(typeof d.v !== 'number' || !isFinite(d.v) || d.v > LIC_ВЕРСИЯ) return null;
+  if(d.kind !== 'pack' && d.kind !== 'pro') return null;
+  if(typeof d.id !== 'string' || !d.id.trim()) return null;
+  const iat = licДата(d.iat);
+  if(iat == null || !isFinite(iat)) return null;
+  let exp = null;
+  if(d.kind === 'pro'){
+    exp = licДата(d.exp);
+    if(exp == null || !isFinite(exp)) return null;   // у подписки срок обязателен
+  }else{
+    if(d.exp != null) return null;                   // разовая покупка бессрочна
+  }
+  if(!d.keys || typeof d.keys !== 'object' || Array.isArray(d.keys)) return null;
+  const наборы = Object.keys(d.keys);
+  if(!наборы.length) return null;
+  if(d.kind === 'pack' && наборы.length !== 1) return null;   // одна покупка — один набор
+  return { kind:d.kind, id:d.id.trim().slice(0,64), iat, exp,
+           keys:d.keys, наборы,
+           // «to» информационное: на годность не влияет, показывается человеку
+           to: (typeof d.to === 'string' ? d.to.slice(0,120) : null),
+           байты: licИзB64(ч[1]), подпись: licИзB64(ч[2]) };
+}
+// Проверка подписи. Ключ передаётся параметром, а не берётся из константы: так стенд может
+// прогнать проверку своим тестовым ключом, не заводя в приложении глобальную переменную,
+// которую можно подменить из консоли.
+async function licПодпись(лиц, пубключ){
+  if(!лиц || !пубключ) return false;
+  try{
+    const k = await crypto.subtle.importKey('raw', licИзB64(пубключ), { name:'Ed25519' }, false, ['verify']);
+    return await crypto.subtle.verify({ name:'Ed25519' }, k, лиц.подпись, лиц.байты);
+  }catch(_){ return false; }
+}
+// Полная проверка: поля + подпись.
+async function licПроверить(строка, пубключ){
+  const л = licРазобрать(строка);
+  if(!л) return null;
+  return (await licПодпись(л, пубключ === undefined ? LIC_ПУБКЛЮЧ : пубключ)) ? л : null;
+}
+function licИстекла(л){
+  return !!(л && л.kind === 'pro' && л.exp != null && Date.now() > л.exp);
+}
+// Загрузка сохранённой лицензии при запуске. До конца проверки естьPRO() отвечает «нет» —
+// закрыто по умолчанию.
+async function licПрочитать(){
+  let s = null;
+  try{ s = localStorage.getItem(LIC_КЛЮЧ); }catch(_){}
+  лицензия = s ? await licПроверить(s) : null;
+  licГотова = true;
+  return лицензия;
+}
+// Установка лицензии человеком. Негодную не сохраняем: незачем держать мусор, который
+// всё равно не работает. Годную сохраняем целиком, строкой.
+async function licУстановить(строка){
+  const л = await licПроверить(строка);
+  if(!л) return { error:'Лицензия не читается или подпись не сходится' };
+  try{ localStorage.setItem(LIC_КЛЮЧ, String(строка).trim()); }catch(_){}
+  лицензия = л; licГотова = true;
+  return { kind:л.kind, id:л.id, exp:л.exp, наборы:л.наборы, to:л.to,
+           истекла: licИстекла(л) };
+}
+licПрочитать();
+
+// Единственная точка правды.
 function естьPRO(){
-  return тестовыйPRO();
+  if(тестовыйPRO()) return true;
+  return !!(лицензия && лицензия.kind === 'pro' && !licИстекла(лицензия));
 }
 // Право на ПРИМЕНЕНИЕ пресета — не то же самое, что право на выгрузку. Пользоваться можно
 // и тем, что отдавать наружу нельзя.
