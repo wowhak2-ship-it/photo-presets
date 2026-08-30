@@ -5497,19 +5497,74 @@ function stСравнение(опц){
 // ─── Витрина ───
 // Платной коллекцию делает ФЛАГ, а не наличие ссылки: иначе платную нельзя показать в
 // витрине, пока не заведена оплата, — а показывать её надо раньше, чем принимать деньги.
+// ══════════════════════════════════════════════════════════════════════════════
+// PRO — ЕДИНСТВЕННЫЙ ИСТОЧНИК ИСТИНЫ
+// Проверять право можно только через естьPRO(). Ни одного «а тут посмотрим флажок» —
+// иначе повторится история с экспортом пресетов, где фильтр пришлось потом ставить в
+// четыре разных места.
+//
+// ТЕСТОВЫЙ ДОСТУП. Обычного флага в хранилище (localStorage.isPro = true) быть не должно:
+// он работал бы и на живом сайте, то есть PRO раздавался бы одной строкой в консоли.
+// Поэтому тестовый режим привязан к АДРЕСУ, а не к данным: он физически не может
+// включиться там, где живёт приложение.
+// Сборка считается тестовой ТОЛЬКО при явных признаках разработки: файл с диска,
+// localhost, адрес в домашней сети (Артур гоняет приложение с телефона по Wi-Fi) или
+// имя .local. Всё остальное — production. Правило написано «от разрешённого»: если завтра
+// появится свой домен, он по умолчанию окажется production, а не тестом.
+const ТЕСТОВАЯ_СБОРКА = (function(){
+  try{
+    if(location.protocol === 'file:') return true;
+    const h = String(location.hostname || '').toLowerCase();
+    if(h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1') return true;
+    if(/\.local$/.test(h)) return true;
+    if(/^192\.168\.\d{1,3}\.\d{1,3}$/.test(h)) return true;         // телефон по локальной сети
+    if(/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+    return false;
+  }catch(_){ return false; }
+})();
+// Внутри тестовой сборки режим ещё и переключается: тестировщику нужно проверять и
+// поведение БЕЗ PRO. Выключено по умолчанию — «открыл localhost и всё открылось» это
+// плохой тест.
+function тестовыйPRO(){
+  if(!ТЕСТОВАЯ_СБОРКА) return false;
+  try{ return localStorage.getItem('TEST_PRO') === '1'; }catch(_){ return false; }
+}
+// Переключатель есть только в тестовой сборке. В production функции просто не существует.
+if(ТЕСТОВАЯ_СБОРКА){
+  window.TEST_PRO = function(вкл){
+    try{
+      if(вкл === false) localStorage.removeItem('TEST_PRO');
+      else localStorage.setItem('TEST_PRO', '1');
+    }catch(_){}
+    return 'TEST_PRO: ' + (тестовыйPRO() ? 'ВКЛ' : 'ВЫКЛ') + ' — перезагрузите экран магазина';
+  };
+}
+// Единственная точка правды. Настоящих источников права пока нет — оплата, подписка и
+// лицензии делаются отдельно; сегодня PRO даёт только тестовая сборка.
+function естьPRO(){
+  return тестовыйPRO();
+}
+// ══════════════════════════════════════════════════════════════════════════════
 function stБесплатна(p){ return !p.paid; }
-function stКуплена(p){ return stБесплатна(p) || PACKS.owned().includes(p.id); }
+// Доступ к набору: бесплатный, купленный отдельно или открытый подпиской. Разовая покупка
+// и PRO независимы — купивший набор пользуется им без подписки, подписчик получает все
+// PRO-наборы, не покупая каждый.
+function stКуплена(p){ return stБесплатна(p) || PACKS.owned().includes(p.id) || естьPRO(); }
 function stВЛенте(p){ return MYP.all().filter(x=> x.pack === p.id).length; }
 function stЦена(p){ return stБесплатна(p) ? 'БЕСПЛАТНО' : (p.price || ''); }
 // Установка коллекции в ленту — тем же путём, что и раньше: файл → MYP.importFrom.
 async function stПоставить(p, кнопка){
+  // Право от ПОДПИСКИ покупкой не считается. Иначе установка по PRO записала бы набор в
+  // packsOwned, и после окончания подписки он остался бы открытым навсегда — то есть
+  // одного месяца PRO хватило бы, чтобы забрать всю библиотеку насовсем.
+  const своёНавсегда = stБесплатна(p) || PACKS.owned().includes(p.id);
   const было = кнопка ? кнопка.textContent : '';
   if(кнопка){ кнопка.disabled = true; кнопка.textContent = 'Ставлю…'; }
   try{
     const txt = await (await fetch('./' + p.file + '?v=' + Date.now(), { cache:'no-store' })).text();
     const res = MYP.importFrom(txt);
     if(res.error) throw new Error(res.error);
-    PACKS.own((res.pack && res.pack.id) || p.id);
+    if(своёНавсегда) PACKS.own((res.pack && res.pack.id) || p.id);
     renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
     toast(res.added ? ('Видов в ленте: +' + res.added) : 'Коллекция обновлена');
     renderPacks();
@@ -5585,8 +5640,14 @@ function stКарточка(p, главная){
   acts.appendChild(смотреть);
   if(!(куплена && вЛенте)){
     const купить = document.createElement('button'); купить.className = 'st-btn';
-    купить.textContent = stБесплатна(p) ? 'Установить' : ('Купить за ' + (p.price || ''));
-    купить.onclick = ()=> stБесплатна(p) ? stПоставить(p, купить) : stКупить(p);
+    // Право уже есть (бесплатный, куплен отдельно или открыт подпиской) — ставим,
+    // а не отправляем платить второй раз.
+    const доступен = stКуплена(p);
+    // «Купить за …» уместно, только когда есть куда вести. У коллекции, которая пока
+    // открывается лишь подпиской, отдельной цены нет — и кнопка про неё и говорит.
+    купить.textContent = доступен ? 'Установить'
+                       : (p.buy ? ('Купить за ' + (p.price || '')) : 'Доступно в PRO');
+    купить.onclick = ()=> доступен ? stПоставить(p, купить) : stКупить(p);
     acts.appendChild(купить);
   }
   foot.appendChild(acts);
@@ -5741,8 +5802,10 @@ async function stОткрытьКоллекцию(p){
   if(!(stКуплена(p) && вЛенте)){
     const b = document.createElement('button');
     b.className = 'st-btn ghost wide'; b.style.marginTop = '9px';
-    b.textContent = stБесплатна(p) ? 'Установить коллекцию' : ('Купить за ' + (p.price || ''));
-    b.onclick = ()=> stБесплатна(p) ? stПоставить(p, b) : stКупить(p);
+    const доступна = stКуплена(p);
+    b.textContent = доступна ? 'Установить коллекцию'
+                  : (p.buy ? ('Купить за ' + (p.price || '')) : 'Доступно в PRO');
+    b.onclick = ()=> доступна ? stПоставить(p, b) : stКупить(p);
     низ.appendChild(b);
   } else {
     // Коллекция стоит — но виды из неё можно выбрасывать поштучно, поэтому «вернуть»
@@ -6464,7 +6527,12 @@ addEventListener('resize', ()=>{ if(secNow === 'curve') cvDraw(); });
 // по 24 мегапикселя одновременно телефон не переживёт.
 // Съёмка — это сотни кадров, а не десяток: у выписки или крестин их бывает под двести.
 // Потолок поднят до сотни; миниатюры при этом мельче, иначе сотня превью съест память.
-const BATCH_LIMIT = 100;
+// Потолок съёмки зависит от права. Сегодня оба значения равны сотне: бесплатный лимит
+// НЕ трогаем, чтобы никому ничего не урезать — готова только развилка, чтобы позже
+// поменять одно число, а не искать по коду.
+const BATCH_LIMIT_FREE = 100;
+const BATCH_LIMIT_PRO  = 100;
+function batchLimit(){ return естьPRO() ? BATCH_LIMIT_PRO : BATCH_LIMIT_FREE; }
 let batchItems = [], batchBusy = false;
 const batchEl = document.getElementById('batch');
 const batchStatus = t => { document.getElementById('batchStatus').textContent = t; };
@@ -7118,7 +7186,7 @@ document.getElementById('batchFile').onchange = async e=>{
   for(const f of picked){
     const key = f.name + '|' + f.size + '|' + f.lastModified;
     if(seen.has(key)) continue;               // тот же снимок дважды не берём
-    if(batchItems.length + fresh.length >= BATCH_LIMIT) break;
+    if(batchItems.length + fresh.length >= batchLimit()) break;
     seen.add(key); fresh.push({ file:f, blob:null, failed:false });
   }
   if(!fresh.length){ renderBatch(); return toast('Эти снимки уже выбраны'); }
@@ -11991,6 +12059,11 @@ async function aiEnter(){
   const sl = document.getElementById('rtAi'), top = document.getElementById('rtTop');
   sl.value = 0; document.getElementById('rtAiV').textContent = '0'; sl.disabled = true;
   aiСброс();
+  // Право проверяем ДО загрузки модели: она весит 51 МБ, и тянуть её тому, кто всё равно
+  // не сможет пользоваться, нечестно. Новых элементов не заводим — говорим той же
+  // строкой заголовка, что уже сообщает «Ищу лицо…» и «Лицо не найдено»,
+  // и оставляем ползунок выключенным, каким он и пришёл сюда.
+  if(!естьPRO()){ top.textContent = 'ИИ-ретушь — в PRO'; return; }
   if(bagsBusy) return; bagsBusy = true;
   try{
     top.textContent = bagsKit ? 'Ищу лицо…' : 'Загружаю модель лица…';
