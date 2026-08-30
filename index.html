@@ -4896,8 +4896,18 @@ async function sharePresetLink(p){
 // файл прежнего вида читается как читался.
 // ВАЖНО: выгрузка ничего не РАЗРЕШАЕТ. Она переносит права как есть; решение, кому что
 // можно, принимает импорт — и он верит файлу только в строгую сторону.
+// ПОСЛЕДНИЙ РУБЕЖ. Вызывающие уже фильтруют (exportable/sellable), но фильтр у вызывающего
+// легко забыть в новом пути — а здесь наружу выходит сам файл. Поэтому происхождение
+// проверяется ещё раз, прямо перед сериализацией: купленное и неподтверждённое в JSON не
+// попадает физически, сколько бы путей сюда ни вело.
+// Предикат тот же (можноОтдать), что у «Сохранить все» и у «Поделиться»: одно правило на
+// всё приложение проще держать верным, чем три похожих.
+// Отдавать нечего — возвращаем null, а не пустой файл: пустой .presety.json выглядит как
+// удачное сохранение и обнаруживается уже после переустановки.
 function presetBlob(list, pack){
-  const body = { app:'presety', v:2, presets: list.map(p=>{
+  const можно = (list || []).filter(можноОтдать);
+  if(!можно.length) return null;
+  const body = { app:'presety', v:2, presets: можно.map(p=>{
     const o = { name:p.name, base:p.base, intensity:p.intensity, adjust:p.adjust };
     if(p.curve) o.curve = p.curve;
     if(hslSetTouched(p.hsl)) o.hsl = p.hsl;
@@ -4923,6 +4933,9 @@ function fileSlug(s){
 }
 async function sharePresets(list, slug, pack){
   const blob = presetBlob(list, pack);
+  // Заслон внутри presetBlob сказал «нечего отдавать» — файла не будет. Молча выйти нельзя:
+  // человек нажал кнопку и ждёт результата.
+  if(!blob){ toast('Эти пресеты нельзя выгрузить: они купленные или с неподтверждённым источником'); return; }
   const file = new File([blob], slug + '.presety.json', { type:'application/json' });
   if(navigator.canShare && navigator.canShare({ files:[file] })){
     try{ await navigator.share({ files:[file] }); return; }catch(e){ if(e && e.name === 'AbortError') return; }
