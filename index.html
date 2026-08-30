@@ -5662,6 +5662,43 @@ function естьPRO(){
   if(тестовыйPRO()) return true;
   return !!(лицензия && лицензия.kind === 'pro' && !licИстекла(лицензия));
 }
+// ─── Зашифрованный набор: контейнер PRESETY2 ───
+// PRESETY2 | версия | длина заголовка | заголовок JSON | IV(12) | шифротекст+тег
+// Заголовок открытый (по нему видно, чей это файл), но подписан тегом: подменишь в нём
+// хоть символ — расшифровка не пройдёт. Шифротекст лежит на сайте публично и без ключа
+// бесполезен; ключ приходит только с лицензией.
+const ENC_МАГИЯ = 'PRESETY2';
+function encЭто(буфер){
+  const u = new Uint8Array(буфер);
+  if(u.length < 24) return false;
+  for(let i=0;i<8;i++) if(u[i] !== ENC_МАГИЯ.charCodeAt(i)) return false;
+  return true;
+}
+async function encРасшифровать(буфер, ключB64, ждёмPack){
+  const u = new Uint8Array(буфер);
+  if(!encЭто(u)) throw new Error('Файл набора повреждён');
+  if(u[8] !== 1) throw new Error('Набор новее приложения — обновите приложение');
+  const jl = (u[9] << 8) | u[10];
+  if(u.length < 11 + jl + 12 + 16) throw new Error('Файл набора повреждён');
+  const голова = u.slice(0, 11 + jl);
+  let шапка;
+  try{ шапка = JSON.parse(new TextDecoder().decode(u.slice(11, 11 + jl))); }
+  catch(_){ throw new Error('Файл набора повреждён'); }
+  // Заголовок сверяем ДО расшифровки: подсунутый файл другого набора отсеиваем сразу,
+  // не тратя время и не пытаясь применить к нему чужой ключ.
+  if(ждёмPack && шапка.pack !== ждёмPack) throw new Error('Файл относится к другому набору');
+  const iv = u.slice(11 + jl, 11 + jl + 12);
+  const ct = u.slice(11 + jl + 12);
+  let ключ;
+  try{
+    ключ = await crypto.subtle.importKey('raw', licИзB64(ключB64), { name:'AES-GCM' }, false, ['decrypt']);
+  }catch(_){ throw new Error('Ключ набора не читается'); }
+  let pt;
+  try{
+    pt = await crypto.subtle.decrypt({ name:'AES-GCM', iv, additionalData:голова, tagLength:128 }, ключ, ct);
+  }catch(_){ throw new Error('Не удалось расшифровать набор — ключ не подходит'); }
+  return new TextDecoder().decode(pt);
+}
 // Ключ набора из действующей лицензии. У просроченной подписки ключей нет.
 function licКлючНабора(id){
   if(!лицензия || !id) return null;
@@ -5719,7 +5756,20 @@ async function stПоставить(p, кнопка){
   const было = кнопка ? кнопка.textContent : '';
   if(кнопка){ кнопка.disabled = true; кнопка.textContent = 'Ставлю…'; }
   try{
-    const txt = await (await fetch('./' + p.file + '?v=' + Date.now(), { cache:'no-store' })).text();
+    const о = await fetch('./' + p.file + '?v=' + Date.now(), { cache:'no-store' });
+    if(!о.ok) throw new Error('Коллекция не загрузилась');
+    const буф = await о.arrayBuffer();
+    let txt;
+    if(encЭто(буф)){
+      // Платный набор лежит на сайте зашифрованным. Ключ есть только в лицензии: одного
+      // права видеть карточку мало, нужен именно ключ этого набора. Поэтому TEST_PRO сам
+      // по себе набор не откроет — он открывает кнопку, а расшифровывает лицензия.
+      const ключ = licКлючНабора(p.id);
+      if(!ключ) throw new Error('Нет ключа для этой коллекции — активируйте лицензию');
+      txt = await encРасшифровать(буф, ключ, p.id);
+    }else{
+      txt = new TextDecoder().decode(буф);
+    }
     const res = MYP.importFrom(txt);
     if(res.error) throw new Error(res.error);
     if(своёНавсегда) PACKS.own((res.pack && res.pack.id) || p.id);
@@ -5729,7 +5779,9 @@ async function stПоставить(p, кнопка){
     return true;
   }catch(e){
     if(кнопка){ кнопка.disabled = false; кнопка.textContent = было; }
-    toast('Не удалось поставить коллекцию');
+    // Причину показываем: «не удалось» без объяснения оставляет человека гадать, что
+    // сломалось — сеть, право или файл.
+    toast(String((e && e.message) || 'Не удалось поставить коллекцию'));
     return false;
   }
 }
@@ -5847,7 +5899,11 @@ async function renderPacks(){
                          : 'Список не загрузился — нужен интернет. Купленную коллекцию можно поставить из файла кнопкой ниже.';
     host.appendChild(e); return;
   }
-  const свои = stCat === 'Все' ? list : list.filter(p=> (p.cat || '') === stCat);
+  // retired — набор снят с витрины, но остаётся в каталоге платным. Так его прежний
+  // открытый файл, который уже разошёлся по сети, не поставится в обход прав: убери id из
+  // каталога совсем — и importFrom сочтёт набор «неизвестным» и пропустит.
+  const живые = list.filter(p=> !p.retired);
+  const свои = stCat === 'Все' ? живые : живые.filter(p=> (p.cat || '') === stCat);
   if(!свои.length){
     const e = document.createElement('div'); e.className = 'packs-empty';
     e.textContent = 'В этой категории пока пусто.';

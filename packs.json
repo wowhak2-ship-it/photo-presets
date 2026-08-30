@@ -22,7 +22,7 @@
       ]
     },
     {
-      "id": "simmetriya-7",
+      "id": "simmetriya-pro-7",
       "name": "Симметрия",
       "cat": "Кинематограф",
       "author": "Пресеты",
@@ -30,7 +30,7 @@
       "count": 7,
       "price": "В PRO",
       "paid": true,
-      "file": "simmetriya.presety.json",
+      "file": "store/packs/simmetriya-pro-7.enc",
       "samples": [
         "./store/kafe.webp",
         "./store/gorod.webp",
@@ -39,7 +39,7 @@
       ]
     },
     {
-      "id": "osen-11",
+      "id": "osen-pro-11",
       "name": "Осень",
       "cat": "Путешествия",
       "author": "Пресеты",
@@ -47,13 +47,26 @@
       "count": 11,
       "price": "В PRO",
       "paid": true,
-      "file": "osen.presety.json",
+      "file": "store/packs/osen-pro-11.enc",
       "samples": [
         "./store/park.webp",
         "./store/portret.webp",
         "./store/gorod.webp",
         "./store/zakat.webp"
       ]
+    },
+    {
+      "_": "СНЯТЫЕ С ВИТРИНЫ. Прежние открытые файлы этих наборов остаются на сайте и в истории git, поэтому их id должны и дальше числиться платными: иначе старый JSON поставится в обход прав как «неизвестный набор». Карточки не показываются (retired), купить их нельзя, но importFrom по этим id отказывает.",
+      "id": "simmetriya-7",
+      "name": "Симметрия (прежняя раздача)",
+      "paid": true,
+      "retired": true
+    },
+    {
+      "id": "osen-11",
+      "name": "Осень (прежняя раздача)",
+      "paid": true,
+      "retired": true
     }
   ]
 }
