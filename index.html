@@ -4469,7 +4469,10 @@ const MYP = {
       adjust: Object.assign({}, adjust),
       curve: curveTouched() ? JSON.parse(JSON.stringify(curve)) : null,
       hsl: hslTouched() ? JSON.parse(JSON.stringify(hsl)) : null,
-      date: Date.now()
+      date: Date.now(),
+      // Своя работа. Наследование прав от применённого чужого пресета — следующий этап;
+      // пока метка ставится по тому же правилу, что и в миграции: нет набора — своё.
+      src: SRC_OWN, by: null, from: null
     }));
   },
   remove(id){ return this.write(this.all().filter(p=> p.id !== id)); },
@@ -4662,6 +4665,12 @@ MYP.importFrom = function(text){
   if(!arr || !arr.length) return { error:'В файле нет пресетов' };
   const list = this.all();
   const packId = (data && data.pack && data.pack.id) ? String(data.pack.id).slice(0,64) : null;
+  // Права и автор — один раз на весь файл. Каталог важнее заявки файла; если о наборе не
+  // знает ни каталог, ни сам файл, считаем свободным: платный набор свою платность
+  // объявляет (pack.paid), а старые файлы платными не бывают.
+  const заявка = (data && data.pack && typeof data.pack.paid === 'boolean') ? data.pack.paid : undefined;
+  const срс = packId ? (srcПоНабору(packId, заявка) || SRC_FREE) : SRC_OWN;
+  const авт = packId ? byПоНабору(packId, data.pack && data.pack.author) : null;
   const taken = new Set(list.map(p=> p.name.toLowerCase()));
   let added = 0, updated = 0;
   for(const raw of arr){
@@ -4675,6 +4684,8 @@ MYP.importFrom = function(text){
     if(свой){
       свой.base = p.base; свой.intensity = p.intensity; свой.adjust = p.adjust;
       свой.curve = p.curve || null; свой.hsl = p.hsl || null; свой.pack = packId;
+      свой.src = срс; свой.by = авт;              // набор мог сменить статус — метки обновляем
+      if(свой.from === undefined) свой.from = null;
       updated++;
       continue;
     }
@@ -4687,7 +4698,8 @@ MYP.importFrom = function(text){
                 curve:p.curve || null, hsl:p.hsl || null, date:Date.now(),
                 // помним, из какого набора пришёл вид: по этому витрина понимает,
                 // остался ли набор в ленте или человек его вычистил
-                pack: packId });
+                pack: packId,
+                src: срс, by: авт, from: null });
     added++;
   }
   if(!added && !updated) return { error:'В файле нет подходящих пресетов' };
@@ -4940,7 +4952,10 @@ document.getElementById('pdlgOk').onclick = ()=>{
     while(taken.has(nm.toLowerCase())) nm = name + ' ' + (n++);
     const list = MYP.write(MYP.all().concat({
       id:'p'+Date.now(), name:nm, base:p.base, intensity:p.intensity, adjust:p.adjust,
-      curve:p.curve || null, hsl:p.hsl || null, date:Date.now() }));
+      curve:p.curve || null, hsl:p.hsl || null, date:Date.now(),
+      // Пресет по ссылке набора не несёт, поэтому по правилу миграции — 'own'.
+      // Отдельный вопрос на следующий этап: считать ли присланное чужой работой.
+      src:SRC_OWN, by:null, from:null }));
     myActive = list[list.length-1].id;
     if(sourceCanvas) applyMyPreset(list[list.length-1]);
     closeSavePreset();
@@ -5101,10 +5116,69 @@ const PACKS = {
       const j = await r.json();
       if(!j || !Array.isArray(j.packs)) throw 0;
       try{ localStorage.setItem('packsCache', JSON.stringify({ packs:j.packs })); }catch(_){}
+      // Каталог только что приехал — досталим метки тем пресетам, про которые раньше
+      // ответить было нечем. Отдельного запроса ради этого никто не делает.
+      мигрироватьПресеты();
       return j.packs;
     }catch(_){ return this.cached(); }
   }
 };
+
+// ─── Происхождение пресета: src / by / from ───
+// Раньше про пресет было известно только «из какого набора пришёл» (pack). Этого мало:
+// один и тот же набор бывает бесплатным и платным, а права нужно знать в момент выгрузки,
+// когда каталога под рукой может и не быть. Поэтому права пишем в САМ пресет.
+//   src  — 'own' свой, 'free' из свободного набора, 'paid' из купленного,
+//          'system' встроенный (значение про запас: встроенные плёнки живут в LOOKS
+//          и в myPresets не попадают);
+//   by   — автор набора, чтобы авторство не терялось при переносе;
+//   from — id пресета, из которого этот выведен. Пока всегда null: наследование прав
+//          при «Сохранить как пресет» — отдельный этап.
+// Метки НИЧЕГО НЕ ЗАПРЕЩАЮТ. Ни экспорт, ни «Поделиться», ни сборка набора их пока не
+// читают — поведение приложения этим этапом не меняется. Это только фундамент.
+const SRC_OWN = 'own', SRC_FREE = 'free', SRC_PAID = 'paid';
+// Платность спрашиваем у КАТАЛОГА, а не у файла: файл — чужой ввод, его правит блокнот.
+// Сети ради этого не поднимаем — берём уже сохранённый packsCache.
+function packInfo(id){
+  if(!id) return null;
+  const л = PACKS.cached();
+  if(!Array.isArray(л)) return null;
+  return л.find(x=> x && x.id === id) || null;
+}
+// Каталога нет и файл ничего не заявил — честно отвечаем «не знаю» (null). Тогда пресет
+// остаётся без метки до следующего запуска: лучше не знать, чем угадать неверно и
+// запомнить ошибку навсегда.
+function srcПоНабору(id, файлПлатный){
+  if(!id) return SRC_OWN;                       // не из набора — своё
+  const p = packInfo(id);
+  if(p) return p.paid ? SRC_PAID : SRC_FREE;    // каталог важнее файла
+  if(файлПлатный === true) return SRC_PAID;
+  if(файлПлатный === false) return SRC_FREE;
+  return null;
+}
+function byПоНабору(id, изФайла){
+  const p = packInfo(id);
+  const a = (p && p.author) || изФайла || null;
+  return a ? String(a).slice(0, 48) : null;
+}
+// Разовая простановка меток на данных прежних версий. ИДЕМПОТЕНТНА: пресет с уже
+// проставленным src не трогается вообще. Рецепт (base, intensity, adjust, curve, hsl),
+// имя, id, дата и pack не меняются — дописываются только три новых поля.
+function мигрироватьПресеты(){
+  let list;
+  try{ list = MYP.all(); }catch(_){ return 0; }   // до объявления хранилища — просто нечего мигрировать
+  let тронуто = 0;
+  for(const p of list){
+    if(p.src) continue;
+    if(!p.pack){ p.src = SRC_OWN; p.by = null; p.from = null; тронуто++; continue; }
+    const s = srcПоНабору(p.pack);
+    if(!s) continue;                              // каталог молчит — вернёмся к этому позже
+    p.src = s; p.by = byПоНабору(p.pack); p.from = null; тронуто++;
+  }
+  if(тронуто) MYP.write(list);
+  return тронуто;
+}
+мигрироватьПресеты();
 // ══════════════════════════════════════════════════════════════════════════════
 // МАГАЗИН ПРЕСЕТОВ
 // Витрину ведёт фотография, а не список. Главное решение: «после» НИГДЕ не лежит
