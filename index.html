@@ -7435,7 +7435,7 @@ function openRetouch(){
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtHalOp = null; halOrig = null; rtDblOp = null; dblOrig = null; dblImg = null; rtDustOp = null; dustOrig = null; dustЛица = []; bokehЛица = []; rtFaces = null; skinData = null; powderData = null; toneData = null; teethData = null; rtTeethOp = null; aiСброс(); точData = null; rtSpotsOp = null; bagsСброситьКисть();
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtHalOp = null; halOrig = null; halСлойКэш = null; halСлойКлюч = -1; rtDblOp = null; dblOrig = null; dblImg = null; rtDustOp = null; dustOrig = null; dustЛица = []; bokehЛица = []; rtFaces = null; skinData = null; powderData = null; toneData = null; teethData = null; rtTeethOp = null; aiСброс(); точData = null; rtSpotsOp = null; bagsСброситьКисть();
   for(const k in skinFace) delete skinFace[k];   // новый снимок — настройки лиц с нуля
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
@@ -10397,38 +10397,35 @@ function halПорог(пд){
 const HAL_TINTS = { 'красное': [255, 96, 58], 'янтарное': [255, 158, 74],
                     'розовое': [255, 108, 132], 'белое': [255, 226, 208] };
 let halTint = 'красное', halOrig = null, rtHalOp = null;
-function halPaint(cv, amount, spread, tint){
-  const W = cv.width, H = cv.height, ctx = cv.getContext('2d');
-  const c = HAL_TINTS[tint] || HAL_TINTS['красное'];
-  const src = ctx.getImageData(0,0,W,H), sd = src.data;
-  // СЛОЙ СВЕЧЕНИЯ СЧИТАЕТСЯ НА КОПИИ ПОСТОЯННОГО РАЗМЕРА, А НЕ НА САМОМ КАДРЕ.
-  // Раньше радиус разлива брался от диагонали кадра, а усиление, которым компенсируется
-  // разбавление после размытия, росло всего лишь пропорционально радиусу. Размытие же
-  // разбавляет яркость как ПЛОЩАДЬ, то есть как квадрат радиуса, — и на оригинале 6000 px
-  // ореол выходил в 1,3–9,1 раза сильнее, чем человек видел на превью (замер по 28 кадрам,
-  // медиана 2,1). Ползунок настраивали на одном, сохранялось другое.
-  // Теперь порог, разлив и усиление считаются на копии 1400 px по длинной стороне — ровно
-  // на том размере, на котором человек и крутил ползунок, — а готовый слой растягивается
-  // на кадр. Слой после размытия гладкий, поэтому растяжение его не портит.
-  // Побочно это ускоряет сохранение: размытие радиусом в сотню пикселей по 24 Мп было
-  // самой долгой операцией во всём инструменте.
+let halСлойКэш = null, halСлойКлюч = -1;   // готовый слой и разлив, на котором он построен
+// СЛОЙ СВЕЧЕНИЯ СТРОИТСЯ ОДИН РАЗ — НА ПРЕВЬЮ — И УЕЗЖАЕТ В ОПЕРАЦИЮ.
+// Пересчитывать его при сохранении нельзя. Размытый ореол хранится в 8-битном альфа-канале,
+// и на очень светлых кадрах он весь помещается в ОДИН МЛАДШИЙ БИТ: замер по восьми кадрам
+// дал максимум альфы 1 из 255 на q175 и q133 против 32…247 на обычных снимках. Копия 1400,
+// построенная из оригинала 6000 фильтром 'high', отличается от копии, которую человек видел
+// на экране (её строит setSource фильтром по умолчанию), на один-два уровня — обычно это
+// ничто, но когда весь эффект живёт на одном бите, этого хватает, чтобы округление ушло в
+// другую сторону. На q175 сохранённый файл получал РОВНО НОЛЬ свечения при живом превью,
+// на q133 — 0,62 от превью. Порог и маска тут ни при чём: они совпадали до цифры, и
+// принудительно общий порог ничего не менял (проверено замером).
+// Теперь порог, маска, размытие и округление считаются ровно один раз, и сохранение только
+// растягивает готовый слой — расходиться нечему.
+function halСлой(cv, spread){
+  const W = cv.width, H = cv.height;
   const мс = Math.min(1, HAL_РАБОТА/Math.max(W,H));
   const пW = Math.max(1, Math.round(W*мс)), пH = Math.max(1, Math.round(H*мс));
-  // 1) вытаскиваем только пересветы — мягким порогом, чтобы не было ступеньки по краю
   const hc = document.createElement('canvas'); hc.width=пW; hc.height=пH;
   const hx = hc.getContext('2d');
-  let пд = sd;
+  let пд;
   if(мс !== 1){
     // Качество уменьшения обязательно просить явно. По умолчанию холст ужимается грубым
     // фильтром в два-три отсчёта: на асфальте и гравии одиночный блик не усредняется с
-    // соседями, а занимает целый пиксель копии — пересветов набирается больше, чем видит
-    // превью (оно строится уменьшением самого снимка, а там фильтр честный). Из-за этого
-    // на зернистых фактурах файл оставался вдвое ярче превью даже после переноса расчёта.
+    // соседями, а занимает целый пиксель копии — пересветов набирается больше, чем нужно.
     hx.imageSmoothingQuality = 'high';
     hx.drawImage(cv, 0, 0, пW, пH); пд = hx.getImageData(0,0,пW,пH).data;
-  }
+  } else пд = cv.getContext('2d').getImageData(0,0,W,H).data;
+  // 1) вытаскиваем только пересветы — мягким порогом, чтобы не было ступеньки по краю
   const hi = hx.createImageData(пW,пH), hd = hi.data;
-  // Порог считается по рабочей копии — значит превью и сохранение берут его одинаковым.
   const порог = HAL_АДАПТИВ ? halПорог(пд) : HAL_ПОРОГ_СТАРЫЙ;
   const размах = 255 - порог;
   for(let i=0;i<пд.length;i+=4){
@@ -10450,74 +10447,64 @@ function halPaint(cv, amount, spread, tint){
   // размазанная по кругу в десятки пикселей, даёт доли процента прозрачности —
   // на замере это было +0.4 единицы яркости, то есть ничего. Чем шире разлив,
   // тем сильнее разбавление, поэтому усиление растёт вместе с радиусом.
-  // Гашение обязано считаться ЗДЕСЬ ЖЕ, а не на полном кадре: на превью мелкие блики
-  // усредняются при уменьшении, а на оригинале они разрешены отдельными пикселями, и
-  // одно и то же место то попадает под гашение, то нет. Пока это оставалось на полном
-  // кадре, превью и файл всё ещё расходились в 1,5–2,4 раза на снимках с мелкими бликами.
   const усиление = (3.2 + r*0.22) * (HAL_АДАПТИВ ? HAL_УСИЛ : 1);
-  // Плотность слоя в одной точке рабочей копии, 0..255. Формула ОДНА на превью и на
-  // сохранение — в этом весь смысл правки. Округление до восьми бит тоже общее: на большом
-  // кадре слой обязан пройти через картинку, чтобы растянуться, значит и на превью он
-  // должен быть таким же, иначе пути снова разойдутся, пусть и на проценты.
-  const слойА = (i)=>{
-    const h = Math.min(1, размыто[i+3]/255 * усиление); if(h < 0.004) return 0;
+  const сл = bx2.createImageData(пW, пH), сд = сл.data;
+  for(let i=0;i<сд.length;i+=4){
+    const h = Math.min(1, размыто[i+3]/255 * усиление); if(h < 0.004) continue;
     const l = (пд[i]+пд[i+1]+пд[i+2])/3;
     const снаружи = 1 - Math.min(1, Math.max(0, (l - порог)/размах));  // внутри пересвета гасим
     const a = h * снаружи;
-    return a < 0.004 ? 0 : Math.round(a*255);
-  };
+    if(a < 0.004) continue;
+    сд[i] = сд[i+1] = сд[i+2] = 255; сд[i+3] = Math.round(a*255);
+  }
+  bx2.filter = 'none';                        // дальше в этот холст только кладут готовые точки
+  bx2.putImageData(сл, 0, 0);
+  return bc;
+}
+// Наложение готового слоя. Ползунок работает ТОЛЬКО здесь — сам слой от силы не зависит,
+// поэтому одна и та же операция даёт одинаковую картинку на превью и в файле при любой силе.
+// `слой` не передан (старая сохранённая операция) — считаем по-старому, на месте.
+function halPaint(cv, amount, spread, tint, слой){
+  const W = cv.width, H = cv.height, ctx = cv.getContext('2d');
+  const c = HAL_TINTS[tint] || HAL_TINTS['красное'];
+  const bc = слой || halСлой(cv, spread);
+  const src = ctx.getImageData(0,0,W,H), sd = src.data;
   // 4) кладём наружу экранным наложением: светлое не выбивает в белое, а плавно
   // подходит к нему, и чем темнее место, тем ореол заметнее — как на плёнке
   const t = Math.max(0, Math.min(1, amount));
-  if(мс === 1){
-    // Кадр и рабочая копия — одно и то же: слой никуда растягивать не надо, и лишний
-    // проход по всем пикселям тоже не нужен. Ползунок пересчитывает кадр на каждое
-    // движение, и добавлять ему работы нельзя — поэтому здесь всё в одном цикле, без
-    // вызовов на каждый пиксель. Считается ровно то же, что и в слойА выше, только без
-    // округления до восьми бит: там оно неизбежно (слой едет через картинку), здесь не
-    // нужно. Разница от этого меньше четверти уровня яркости, зато превью остаётся ровно
-    // таким, каким было до правки, и ползунок не надо перекалибровывать.
-    // Если правишь формулу — правь в обоих местах, иначе превью и файл снова разойдутся.
-    for(let i=0;i<sd.length;i+=4){
-      const h = Math.min(1, размыто[i+3]/255 * усиление); if(h < 0.004) continue;
-      const l = (пд[i]+пд[i+1]+пд[i+2])/3;
-      const снаружи = 1 - Math.min(1, Math.max(0, (l - порог)/размах));
-      const a = h * снаружи * t;
-      if(a < 0.004) continue;
-      sd[i]   = clamp(255 - (255-sd[i])   * (255 - c[0]*a) / 255);
-      sd[i+1] = clamp(255 - (255-sd[i+1]) * (255 - c[1]*a) / 255);
-      sd[i+2] = clamp(255 - (255-sd[i+2]) * (255 - c[2]*a) / 255);
-    }
+  let halo;
+  if(bc.width === W && bc.height === H){
+    halo = bc.getContext('2d').getImageData(0,0,W,H).data;
   } else {
-    const сл = bx2.createImageData(пW, пH), сд = сл.data;
-    for(let i=0;i<сд.length;i+=4){
-      const a = слойА(i); if(!a) continue;
-      сд[i] = сд[i+1] = сд[i+2] = 255; сд[i+3] = a;
-    }
-    bx2.putImageData(сл, 0, 0);
     // готовый слой растягиваем на кадр — он гладкий, увеличение его не портит
     const uc = document.createElement('canvas'); uc.width=W; uc.height=H;
     const ux = uc.getContext('2d');
     ux.imageSmoothingQuality = 'high';
-    ux.drawImage(bc, 0, 0, пW, пH, 0, 0, W, H);
-    const halo = ux.getImageData(0,0,W,H).data;
-    for(let i=0;i<sd.length;i+=4){
-      const a = halo[i+3]/255 * t; if(a < 0.004) continue;
-      sd[i]   = clamp(255 - (255-sd[i])   * (255 - c[0]*a) / 255);
-      sd[i+1] = clamp(255 - (255-sd[i+1]) * (255 - c[1]*a) / 255);
-      sd[i+2] = clamp(255 - (255-sd[i+2]) * (255 - c[2]*a) / 255);
-    }
+    ux.drawImage(bc, 0, 0, bc.width, bc.height, 0, 0, W, H);
+    halo = ux.getImageData(0,0,W,H).data;
+  }
+  for(let i=0;i<sd.length;i+=4){
+    const a = halo[i+3]/255 * t; if(a < 0.004) continue;
+    sd[i]   = clamp(255 - (255-sd[i])   * (255 - c[0]*a) / 255);
+    sd[i+1] = clamp(255 - (255-sd[i+1]) * (255 - c[1]*a) / 255);
+    sd[i+2] = clamp(255 - (255-sd[i+2]) * (255 - c[2]*a) / 255);
   }
   ctx.putImageData(src, 0, 0);
 }
-function halRun(cv, op){ if(op && op.amount) halPaint(cv, op.amount, op.spread, op.tint); }
+// Слой берём из операции. Его там нет только у снимка, сохранённого прежней версией —
+// тогда halPaint посчитает его на месте, как раньше.
+function halRun(cv, op){ if(op && op.amount) halPaint(cv, op.amount, op.spread, op.tint, op.слой); }
 function halDraw(){
   const ctx = rtCanvas.getContext('2d');
   const v = +document.getElementById('rtHal').value;
   const s = +document.getElementById('rtHalSpread').value;
   if(halOrig) ctx.putImageData(halOrig, 0, 0);
-  if(v) halPaint(rtCanvas, v/100, s, halTint);
-  rtHalOp = v ? { t:'hal', amount:v/100, spread:s, tint:halTint } : null;
+  // Слой зависит только от кадра и разлива, но не от силы и не от оттенка — пока человек
+  // возит основной ползунок, пересчитывать его незачем. Это же и держит ползунок отзывчивым:
+  // порог, маска и размытие — самая дорогая часть инструмента.
+  if(v && (!halСлойКэш || halСлойКлюч !== s)){ halСлойКэш = halСлой(rtCanvas, s); halСлойКлюч = s; }
+  if(v) halPaint(rtCanvas, v/100, s, halTint, halСлойКэш);
+  rtHalOp = v ? { t:'hal', amount:v/100, spread:s, tint:halTint, слой:halСлойКэш } : null;
 }
 function halChips(){
   const host = document.getElementById('rtHalTints');
@@ -10536,6 +10523,8 @@ function halEnter(){
   v.value = 0; document.getElementById('rtHalV').textContent = '0';
   s.value = 45; document.getElementById('rtHalSpreadV').textContent = '45';
   halOrig = rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height);
+  // Кадр под инструментом мог измениться соседним инструментом — старый слой больше не про него
+  halСлойКэш = null; halСлойКлюч = -1;
   rtHalOp = null; halChips();
   document.getElementById('rtTop').textContent = 'Свечение';
 }
