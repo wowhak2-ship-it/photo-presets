@@ -7435,7 +7435,7 @@ function openRetouch(){
   rtOrig = document.createElement('canvas'); rtOrig.width = sourceCanvas.width; rtOrig.height = sourceCanvas.height;
   rtOrig.getContext('2d').drawImage(sourceCanvas, 0, 0);     // pristine original for before/after
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
-  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtHalOp = null; halOrig = null; rtDblOp = null; dblOrig = null; dblImg = null; rtDustOp = null; dustOrig = null; dustЛица = []; rtFaces = null; skinData = null; powderData = null; toneData = null; teethData = null; rtTeethOp = null; aiСброс(); точData = null; rtSpotsOp = null; bagsСброситьКисть();
+  rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtHalOp = null; halOrig = null; rtDblOp = null; dblOrig = null; dblImg = null; rtDustOp = null; dustOrig = null; dustЛица = []; bokehЛица = []; rtFaces = null; skinData = null; powderData = null; toneData = null; teethData = null; rtTeethOp = null; aiСброс(); точData = null; rtSpotsOp = null; bagsСброситьКисть();
   for(const k in skinFace) delete skinFace[k];   // новый снимок — настройки лиц с нуля
   bagsData = null;
   retouchEl.classList.remove('shadows-only');
@@ -8652,10 +8652,64 @@ function bokehSprinkle(cv, amount, shape, tint, seed){
   // и терял цвет. На референсе пастельные кружки не светятся, а лежат поверх, как
   // цветное стекло, — значит и накладывать их надо обычным способом.
   const стекло = tint === 'пастель';
+  // ГДЕ СТАВИТЬ ОГОНЬКИ. Раньше место бралось чистым rnd() по всему кадру, и кружок мог
+  // сесть на нос, на щёку или на главный предмет — того, чего у настоящего боке не бывает:
+  // оно живёт в нерезком фоне позади человека. На замере по 22 кадрам с лицами до четверти
+  // огоньков попадало прямо на лицо.
+  // Новых моделей не добавляем, берём уже имеющееся: овалы лиц и сам кадр — яркость и
+  // локальный разброс. На лице ставить нельзя совсем; на человеке (грубый столб вниз от
+  // лица) — сильный штраф; в остальном предпочитаем места потемнее и порыхлее: там фон.
+  // Из нескольких случайных кандидатов берётся первый, прошедший по вероятности, а если ни
+  // один не прошёл — лучший из них. Поэтому число огоньков не меняется НИ НА ОДНОМ кадре,
+  // даже когда фона почти нет, а рисунок остаётся рваным, а не разложенным по сетке.
+  const лица = (bokehЛица||[]).map(f=>({cx:f.cx*W, cy:f.cy*H, rx:f.rx*W, ry:f.ry*H}));
+  const яркВ = (x,y)=>{
+    if(!подл) return 128;
+    const i = ((Math.min(H-1,Math.max(0,y|0)))*W + Math.min(W-1,Math.max(0,x|0)))*4;
+    return подл[i]*0.3 + подл[i+1]*0.6 + подл[i+2]*0.1;
+  };
+  const шагД = Math.max(2, Math.round(баз*0.012));
+  const детально = (x,y)=>{
+    const я0 = яркВ(x,y); let мин=я0, макс=я0;
+    const п = [[-шагД,0],[шагД,0],[0,-шагД],[0,шагД]];
+    for(let k=0;k<4;k++){ const v=яркВ(x+п[k][0], y+п[k][1]); if(v<мин)мин=v; if(v>макс)макс=v; }
+    return макс-мин;
+  };
+  const вЛице = (x,y)=>{
+    for(const f of лица){
+      const дx=(x-f.cx)/Math.max(1,f.rx), дy=(y-f.cy)/Math.max(1,f.ry);
+      if(дx*дx + дy*дy < 1) return true;
+    }
+    return false;
+  };
+  // «Человек» — грубый столб вниз от лица: плечи и корпус. Никакой сегментации, только
+  // геометрия от уже найденного лица, и это не запрет, а штраф: если фона в кадре мало,
+  // огоньки всё равно лягут, просто в последнюю очередь.
+  const наЧеловеке = (x,y)=>{
+    for(const f of лица){
+      if(Math.abs(x-f.cx) < f.rx*2.2 && y > f.cy - f.ry && y < f.cy + f.ry*14) return true;
+    }
+    return false;
+  };
+  const место = ()=>{
+    let лучшийX=0, лучшийY=0, лучшая=-1;
+    for(let п=0; п<6; п++){
+      const x = rnd()*W, y = rnd()*H;
+      if(вЛице(x,y)) continue;
+      const я = яркВ(x,y)/255;
+      const д = Math.min(1, детально(x,y)/28);
+      let оц = (1 - 0.70*я) * (1 - 0.55*д);
+      if(наЧеловеке(x,y)) оц *= 0.25;
+      if(оц > лучшая){ лучшая = оц; лучшийX = x; лучшийY = y; }
+      if(rnd() < оц) return {x, y};
+    }
+    if(лучшая < 0) return {x: rnd()*W, y: rnd()*H};   // весь кадр — лицо: ставим как раньше
+    return {x: лучшийX, y: лучшийY};
+  };
   ctx.save();
   ctx.globalCompositeOperation = стекло ? 'source-over' : 'lighter';
   for(let i=0;i<N;i++){
-    const x = rnd()*W, y = rnd()*H;
+    const м = место(); const x = м.x, y = м.y;
     // Размеры сильно разные: у настоящей россыпи есть и мелкие точки, и крупные шары.
     const кр = rnd(), r = баз * (0.014 + 0.085*кр*кр);
     // Каждый круг не в фокусе ПО-СВОЕМУ: мелкие обычно с чёткой каймой, крупные
@@ -11158,12 +11212,38 @@ let bokehOrig = null;
 // Размытие фона убрано: жене не понравилось, а модель ради него тянулась с сети и
 // не справлялась с тем, что рядом с человеком стоит не человек. Россыпи ничего
 // этого не нужно — она работает на любом снимке и без интернета.
+// Овалы лиц для россыпи — тот же приём, что у «Потёртостей»: ищем один раз при входе в
+// инструмент, храним в долях кадра, поэтому работают на любом размере холста.
+var bokehЛица = [];
+async function bokehЛицаНайти(){
+  bokehЛица = [];
+  try {
+    const kit = await loadFaceKit();
+    const c = document.createElement('canvas');
+    const s = Math.min(1, 1400/Math.max(rtCanvas.width, rtCanvas.height));
+    c.width = Math.round(rtCanvas.width*s); c.height = Math.round(rtCanvas.height*s);
+    c.getContext('2d').drawImage(rtCanvas, 0, 0, c.width, c.height);
+    for(const lms of лицаНайти(kit, c)){
+      let x0=1, y0=1, x1=0, y1=0;
+      for(const p of lms){
+        if(p.x<x0) x0=p.x; if(p.x>x1) x1=p.x;
+        if(p.y<y0) y0=p.y; if(p.y>y1) y1=p.y;
+      }
+      bokehЛица.push({cx:(x0+x1)/2, cy:(y0+y1)/2, rx:(x1-x0)/2*1.15, ry:(y1-y0)/2*1.15});
+    }
+  } catch(e){ bokehЛица = []; }   // нет сети или модели — просто нет защиты, но и не падаем
+}
 function bokehEnter(){
   const spr = document.getElementById('rtSprinkle');
   spr.value = 0; document.getElementById('rtSprinkleV').textContent = '0';
   bokehOrig = rtCanvas.getContext('2d').getImageData(0,0,rtCanvas.width,rtCanvas.height);
   bokehChips(); bokehTints();
   document.getElementById('rtTop').textContent = 'Боке';
+  // Лица ищем сразу при входе: к первому движению ползунка защита уже на месте. Не успела
+  // или недоступна — россыпь просто ляжет как раньше, инструмент от этого не сломается.
+  bokehЛицаНайти().then(()=>{
+    if(rtTool==='bokeh' && +document.getElementById('rtSprinkle').value) bokehDraw();
+  });
 }
 document.getElementById('rtSprinkle').oninput = e=>{
   rtCmpOff();
