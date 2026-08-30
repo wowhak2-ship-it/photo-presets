@@ -2373,7 +2373,9 @@
     <div class="myp-acts">
       <button class="myp-io" id="packsImport">Загрузить купленный файл</button>
       <button class="myp-io" id="packsMake">Собрать свой набор</button>
+      <button class="myp-io" id="packsLic">Активировать лицензию</button>
     </div>
+    <div class="set-note" id="packsLicNote"></div>
     <!-- Артур дважды: «не ясно, что нужно сохранять». Объяснять словами оказалось мало —
          вопрос был не «что такое набор», а «а у меня-то есть из чего собирать». Теперь
          это видно из самой кнопки: она называет число ваших пресетов, а когда их нет —
@@ -6036,7 +6038,7 @@ document.getElementById('stProGo').onclick = async ()=>{
 const packsEl = document.getElementById('packs');
 function openPacks(){
   packsEl.classList.add('open');
-  ensureTrap(); renderPacks(); syncPacksMake();
+  ensureTrap(); renderPacks(); syncPacksMake(); syncPacksLic();
 }
 // Кнопка сборки говорит, из ЧЕГО соберётся набор, — иначе непонятно, что нужно
 // сохранять заранее. Пустой список — не молчаливая ошибка после нажатия, а видимый
@@ -6060,6 +6062,59 @@ function syncPacksMake(){
         ? 'Собирать пока не из чего: <b>своих пресетов ещё нет</b>. Виды из чужих наборов — бесплатных и купленных — в свой набор не идут: продавать можно только собственную работу. Настройте вид на фото и нажмите внизу «Сохранить как пресет».'
         : 'Собирать пока не из чего: <b>своих пресетов ещё нет</b>. Настройте вид на фото и нажмите внизу «Сохранить как пресет» — сохранённые попадут сюда, и кнопка оживёт.');
 }
+// ─── Активация лицензии ───
+// Отдельного экрана подписки пока нет и не нужно: ввод — тем же диалогом, что и остальные
+// вопросы приложения, состояние — одной строкой под кнопками. Разобранная лицензия в
+// хранилище не пишется, только исходная строка (её перепроверяет подпись при запуске).
+function licИмяНабора(id){
+  const p = packInfo(id);
+  return (p && p.name) ? (p.name + ' (' + id + ')') : id;
+}
+function licДень(t){
+  if(t == null) return '';
+  const d = new Date(t);
+  return String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
+}
+function syncPacksLic(){
+  const el = document.getElementById('packsLicNote');
+  const btn = document.getElementById('packsLic');
+  if(!el || !btn) return;
+  if(!лицензия){
+    btn.textContent = 'Активировать лицензию';
+    el.textContent = 'Купили PRO или отдельный набор — вставьте сюда лицензию из письма.';
+    return;
+  }
+  btn.textContent = 'Заменить лицензию';
+  if(лицензия.kind === 'pro'){
+    el.textContent = licИстекла(лицензия)
+      ? ('Подписка PRO закончилась ' + licДень(лицензия.exp) + '. Установленное осталось на месте, новые PRO-наборы и ИИ-ретушь закрыты.')
+      : ('Подписка PRO действует до ' + licДень(лицензия.exp) + '.');
+  }else{
+    el.textContent = 'Куплен набор: ' + лицензия.наборы.map(licИмяНабора).join(', ') + '. Бессрочно.';
+  }
+  if(лицензия.to) el.textContent += ' Лицензия выписана на ' + лицензия.to + '.';
+}
+document.getElementById('packsLic').onclick = async ()=>{
+  const s = await askText('Вставьте лицензию из письма', 'Активировать', 'PRESETY1.…');
+  const строка = (s || '').trim();
+  if(!строка) return;
+  const r = await licУстановить(строка);
+  if(r.error) return toast(r.error);
+  // Разовая покупка — навсегда, поэтому записываем её в packsOwned, а не оставляем жить в
+  // самой лицензии. Иначе человек, купивший набор и позже подключивший PRO, потерял бы
+  // покупку в момент активации подписки: лицензия хранится одна.
+  // Подписку так записывать НЕЛЬЗЯ — она кончается, и месяц PRO не должен оставлять
+  // библиотеку навсегда.
+  if(r.kind === 'pack') r.наборы.forEach(id=> PACKS.own(id));
+  syncPacksLic();
+  renderPacks();                                  // права изменились — витрина пересобирается
+  if(r.kind === 'pro'){
+    toast(r.истекла ? ('Лицензия PRO принята, но её срок истёк ' + licДень(r.exp))
+                    : ('PRO подключён до ' + licДень(r.exp)));
+  }else{
+    toast('Набор открыт: ' + r.наборы.map(licИмяНабора).join(', '));
+  }
+};
 document.getElementById('rowPacks').onclick = openPacks;
 document.getElementById('homePacks').onclick = openPacks;
 document.getElementById('packsClose').onclick = ()=> packsEl.classList.remove('open');
