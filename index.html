@@ -4695,6 +4695,12 @@ MYP.importFrom = function(text){
   const заявка = (data && data.pack && typeof data.pack.paid === 'boolean') ? data.pack.paid : undefined;
   const срс = srcПоНабору(packId, заявка) || SRC_UNKNOWN;
   const авт = packId ? byПоНабору(packId, data.pack && data.pack.author) : null;
+  // ПЛАТНЫЙ НАБОР НЕ СТАВИТСЯ ПО ОДНОМУ ФАЙЛУ. Раньше открытый JSON с заголовком набора
+  // сам себя объявлял покупкой: приложение верило pack.id и записывало набор в packsOwned.
+  // Ни pack.id, ни paid в файле ничего не доказывают — файл пишет кто угодно. Проверка
+  // стоит ЗДЕСЬ, в общей точке импорта, а не у кнопки: так её не обойдёт новый путь.
+  const право = правоСтавитьНабор(packId);
+  if(!право.можно) return { error: право.причина };
   const taken = new Set(list.map(p=> p.name.toLowerCase()));
   const занятыеId = new Set(list.map(p=> p.id));
   let added = 0, updated = 0;
@@ -5213,8 +5219,10 @@ document.getElementById('mypFile').onchange = e=>{
     const res = MYP.importFrom(String(fr.result));
     if(res.error) return toast(res.error);
     renderMyList(); buildChips(); buildHomeLooks();
-    if(res.pack){                              // купленный набор больше не предлагаем купить
-      PACKS.own(res.pack.id);
+    if(res.pack){
+      // Покупкой набор делает доказанное право, а не сам факт загрузки файла. Подписка
+      // права собственности не даёт: она кончится, и набор должен закрыться вместе с ней.
+      if(правоСтавитьНабор(res.pack.id).навсегда) PACKS.own(res.pack.id);
       if(packsEl.classList.contains('open')) renderPacks();
     }
     const n = res.added;
@@ -5654,6 +5662,31 @@ function естьPRO(){
   if(тестовыйPRO()) return true;
   return !!(лицензия && лицензия.kind === 'pro' && !licИстекла(лицензия));
 }
+// Ключ набора из действующей лицензии. У просроченной подписки ключей нет.
+function licКлючНабора(id){
+  if(!лицензия || !id) return null;
+  if(лицензия.kind === 'pro' && licИстекла(лицензия)) return null;
+  const k = лицензия.keys && лицензия.keys[id];
+  return (typeof k === 'string' && k) ? k : null;
+}
+// Можно ли ставить этот набор и считается ли он купленным НАВСЕГДА.
+// Доказательств покупки ровно три, и ни одно из них не лежит в самом файле:
+//   · набор уже в packsOwned — куплен раньше;
+//   · действует подписка PRO — но это НЕ покупка, набор кончится вместе с ней;
+//   · лицензия несёт ключ именно этого набора — это покупка.
+// Набор, которого каталог не знает, ставить можно (это чей-то файл, а не наш товар), но
+// покупкой он не становится: иначе достаточно было бы вписать любой pack.id.
+function правоСтавитьНабор(packId){
+  if(!packId) return { можно:true, навсегда:false };          // файл без набора — обычный импорт
+  const p = packInfo(packId);
+  if(!p) return { можно:true, навсегда:false };               // каталог не знает — прав не даём
+  if(!p.paid) return { можно:true, навсегда:true };           // бесплатный — как раньше
+  if(PACKS.owned().includes(packId)) return { можно:true, навсегда:true };
+  if(licКлючНабора(packId) && лицензия.kind === 'pack') return { можно:true, навсегда:true };
+  if(естьPRO()) return { можно:true, навсегда:false };        // подписка открывает, но не дарит
+  return { можно:false, навсегда:false,
+           причина:'Этот набор платный. Активируйте лицензию или подключите PRO' };
+}
 // Право на ПРИМЕНЕНИЕ пресета — не то же самое, что право на выгрузку. Пользоваться можно
 // и тем, что отдавать наружу нельзя.
 //   own, free — всегда;
@@ -5682,7 +5715,7 @@ async function stПоставить(p, кнопка){
   // Право от ПОДПИСКИ покупкой не считается. Иначе установка по PRO записала бы набор в
   // packsOwned, и после окончания подписки он остался бы открытым навсегда — то есть
   // одного месяца PRO хватило бы, чтобы забрать всю библиотеку насовсем.
-  const своёНавсегда = stБесплатна(p) || PACKS.owned().includes(p.id);
+  const своёНавсегда = правоСтавитьНабор(p.id).навсегда;
   const было = кнопка ? кнопка.textContent : '';
   if(кнопка){ кнопка.disabled = true; кнопка.textContent = 'Ставлю…'; }
   try{
