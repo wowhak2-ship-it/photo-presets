@@ -3839,6 +3839,9 @@ function pickFrame(e){
     HSL_BANDS.forEach(b=> HSL_PARTS.forEach(k=> hsl[b.key][k] = 0)); buildHslTables();
   }
   myActive = null;
+  // Чужой рецепт из редактора вычищен вместе с правками — начинается своя работа.
+  // Это единственный путь снять наследование, и он честный: ничего чужого не осталось.
+  myOrigin = null;
   selected = LOOKS.indexOf(e.look);
   setIntensity(100);
 }
@@ -4461,8 +4464,18 @@ const MYP = {
     // Кривая и цвета — такая же часть пресета, как плёнка и ползунки. Без них
     // фотограф не может сохранить свою работу, а значит не может её ни передать,
     // ни продать: собирать луки мог бы только автор приложения.
-    return this.write(this.all().concat({
-      id: 'p' + Date.now(),
+    //
+    // НАСЛЕДОВАНИЕ ПРАВ. В редакторе сейчас лежит либо своя работа, либо чужой рецепт,
+    // залитый туда применением пресета. Во втором случае правка ползунков ничего не
+    // отмывает: сохранённая вариация остаётся с правами и набором родителя, а from
+    // помнит, из чего она выросла. Иначе цепочка «купил → применил → сдвинул экспозицию
+    // на единицу → сохранил» выдавала бы чужой рецепт за свой.
+    // Происхождение берём из myOrigin, а НЕ ищем родителя в списке: исходный пресет могут
+    // удалить, и права от этого исчезать не должны.
+    const о = myOrigin;
+    const id = 'p' + Date.now();
+    const л = this.write(this.all().concat({
+      id,
       name,
       base: LOOKS[selected].name,          // ИМЯ, не номер: см. myBase()
       intensity,
@@ -4470,10 +4483,14 @@ const MYP = {
       curve: curveTouched() ? JSON.parse(JSON.stringify(curve)) : null,
       hsl: hslTouched() ? JSON.parse(JSON.stringify(hsl)) : null,
       date: Date.now(),
-      // Своя работа. Наследование прав от применённого чужого пресета — следующий этап;
-      // пока метка ставится по тому же правилу, что и в миграции: нет набора — своё.
-      src: SRC_OWN, by: null, from: null
+      pack: о ? о.pack : null,
+      src:  о ? о.src  : SRC_OWN,
+      by:   о ? о.by   : null,
+      from: о ? о.from : null
     }));
+    // Дальше работаем уже из этой вариации: следующее сохранение продолжит цепочку от неё.
+    if(о) myOrigin = { src:о.src, pack:о.pack, by:о.by, from:id };
+    return л;
   },
   // Что можно выгрузить наружу: своя работа и свободные наборы (см. можноОтдать).
   exportable(){ return this.all().filter(можноОтдать); },
@@ -4950,6 +4967,11 @@ function myRecipeText(p){
   return parts.join(' · ');
 }
 let myActive = null;                        // id выбранного своего пресета, иначе null
+// Происхождение того, что СЕЙЧАС лежит в редакторе, если это чужой рецепт: {src, pack, by,
+// from}. null — своя работа. Держим отдельно от myActive намеренно: myActive обнуляется,
+// когда пресет удалили из ленты, а права от удаления родителя не исчезают — иначе
+// «применил купленный → удалил его → сохранил» выдавало бы чужое за своё.
+let myOrigin = null;
 function applyMyPreset(p){
   selected = myBase(p);
   ADJ_KEYS.forEach(k=> adjust[k] = (p.adjust || ZERO_ADJ)[k] || 0);
@@ -4960,6 +4982,14 @@ function applyMyPreset(p){
   syncAdjustUI();
   setIntensity(p.intensity == null ? 100 : p.intensity);
   myActive = p.id;
+  запомнитьПроисхождение(p);
+}
+// В редакторе теперь рецепт этого пресета — запоминаем, чей он. Своя работа родителя
+// не оставляет, поэтому для own просто снимаем метку.
+function запомнитьПроисхождение(p){
+  const с = срсПресета(p);
+  myOrigin = (с === SRC_OWN) ? null
+           : { src:с, pack:p.pack || null, by:p.by || null, from:p.id };
 }
 
 // ─── Диалог: подписать свою катушку ───
@@ -5013,6 +5043,9 @@ document.getElementById('pdlgOk').onclick = ()=>{
       // отдельно, вместе с правами.
       src:SRC_UNKNOWN, by:null, from:null }));
     myActive = list[list.length-1].id;
+    // Происхождение помечаем ВСЕГДА, даже если снимок ещё не открыт и applyMyPreset не
+    // сработает: иначе присланное по ссылке сохранилось бы потом как своя работа.
+    запомнитьПроисхождение(list[list.length-1]);
     if(sourceCanvas) applyMyPreset(list[list.length-1]);
     closeSavePreset();
     buildChips(); buildHomeLooks(); renderMyList(); updateHdrTitle(); render();
