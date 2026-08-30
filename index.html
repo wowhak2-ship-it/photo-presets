@@ -4665,19 +4665,36 @@ MYP.importFrom = function(text){
   if(!arr || !arr.length) return { error:'В файле нет пресетов' };
   const list = this.all();
   const packId = (data && data.pack && data.pack.id) ? String(data.pack.id).slice(0,64) : null;
-  // Права и автор — один раз на весь файл. Каталог важнее заявки файла. Подтвердить
-  // нечем — ставим 'unknown': файл пришёл извне, и молчание каталога не делает его
-  // ни своим, ни бесплатным. Файл вообще без набора — тоже 'unknown' по той же причине.
-  // Плата за это: свой же архив, загруженный обратно кнопкой «Сохранить все», приедет
-  // как 'unknown'. Починится, когда выгрузка начнёт писать происхождение (отдельный этап).
+  // Права и автор ЗАГОЛОВКА — для файла-набора: он назначает свой id всем пресетам внутри.
+  // У резервной копии заголовка нет, и тогда каждый пресет отвечает за себя сам (см. ниже).
   const заявка = (data && data.pack && typeof data.pack.paid === 'boolean') ? data.pack.paid : undefined;
   const срс = srcПоНабору(packId, заявка) || SRC_UNKNOWN;
   const авт = packId ? byПоНабору(packId, data.pack && data.pack.author) : null;
   const taken = new Set(list.map(p=> p.name.toLowerCase()));
+  const занятыеId = new Set(list.map(p=> p.id));
   let added = 0, updated = 0;
   for(const raw of arr){
     const p = sanitizePreset(raw);
     if(!p) continue;
+    // ── происхождение конкретного пресета ──
+    // Заголовок файла (набор) сильнее: он и есть источник. Иначе смотрим поле самого
+    // пресета — так резервная копия возвращает и набор, и права, и автора.
+    const пакP = packId || (raw && raw.pack ? String(raw.pack).slice(0, 64) : null);
+    const подтв = packId ? срс : srcПоНабору(пакP, undefined);
+    const заявл = (raw && ПРАВА_ЗНАЧ.indexOf(raw.src) >= 0) ? raw.src : null;
+    let срсP;
+    if(подтв) срсP = подтв;                                   // каталог знает — он и решает
+    else if(заявл === SRC_OWN && !пакP) срсP = SRC_OWN;       // резервная копия своей работы
+    else if(заявл && ПРАВА_РАНГ[заявл] >= ПРАВА_РАНГ[SRC_UNKNOWN]) срсP = заявл;  // paid/unknown
+    else срсP = SRC_UNKNOWN;                                  // «я свободен» и «я свой из набора» — не доказательство
+    const автP = packId ? авт
+               : (raw && raw.by ? String(raw.by).slice(0, 48) : byПоНабору(пакP, null));
+    const родP = (raw && raw.from) ? String(raw.from).slice(0, 64) : null;
+    // id и дату возвращаем из файла — тогда резерв восстанавливается тем же, чем был.
+    // Занятый id не берём: две записи с одним id развалили бы переименование и удаление.
+    const idP = (raw && typeof raw.id === 'string' && raw.id && raw.id.length <= 64
+                 && !занятыеId.has(raw.id)) ? raw.id : null;
+    const датаP = (raw && typeof raw.date === 'number' && isFinite(raw.date)) ? raw.date : null;
     // Набор ставится ЗАНОВО, а не вторым слоем: если вид с этим именем уже пришёл из
     // того же набора — обновляем его. Иначе повторная установка плодила бы «Кино 2»,
     // «Кино 3». Виды, поставленные до появления меток, узнаём по имени и усыновляем.
@@ -4699,13 +4716,16 @@ MYP.importFrom = function(text){
     let name = p.name, n = 2;                 // одноимённый пресет не затираем, а нумеруем
     while(taken.has(name.toLowerCase())) name = p.name + ' ' + (n++);
     taken.add(name.toLowerCase());
-    list.push({ id:'p' + Date.now() + '_' + added, name, base:p.base,
+    const idНов = idP || ('p' + Date.now() + '_' + added);
+    занятыеId.add(idНов);
+    list.push({ id:idНов, name, base:p.base,
                 intensity:p.intensity, adjust:p.adjust,
-                curve:p.curve || null, hsl:p.hsl || null, date:Date.now(),
+                curve:p.curve || null, hsl:p.hsl || null,
+                date: датаP == null ? Date.now() : датаP,
                 // помним, из какого набора пришёл вид: по этому витрина понимает,
                 // остался ли набор в ленте или человек его вычистил
-                pack: packId,
-                src: срс, by: авт, from: null });
+                pack: пакP,
+                src: срсP, by: автP, from: родP });
     added++;
   }
   if(!added && !updated) return { error:'В файле нет подходящих пресетов' };
@@ -4838,11 +4858,24 @@ async function sharePresetLink(p){
   catch(_){ askText('Скопируйте ссылку на пресет', 'Готово', '', url); }
 }
 
+// Выгрузка несёт не только рецепт, но и ПРОИСХОЖДЕНИЕ: id, дату, набор, права, автора и
+// родителя. Иначе резервная копия возвращается обезличенной — своя работа приезжает как
+// «источник не подтверждён», а купленное теряет метку платности.
+// Версию файла не меняем: поля добавочные, старое приложение их просто не заметит, а
+// файл прежнего вида читается как читался.
+// ВАЖНО: выгрузка ничего не РАЗРЕШАЕТ. Она переносит права как есть; решение, кому что
+// можно, принимает импорт — и он верит файлу только в строгую сторону.
 function presetBlob(list, pack){
   const body = { app:'presety', v:2, presets: list.map(p=>{
     const o = { name:p.name, base:p.base, intensity:p.intensity, adjust:p.adjust };
     if(p.curve) o.curve = p.curve;
     if(hslSetTouched(p.hsl)) o.hsl = p.hsl;
+    o.id = p.id || null;
+    o.date = (typeof p.date === 'number' && isFinite(p.date)) ? p.date : null;
+    o.pack = p.pack || null;
+    o.src = p.src || null;
+    o.by = p.by || null;
+    o.from = p.from || null;
     return o;
   }) };
   if(pack) body.pack = pack;                   // метка набора: по ней витрина узнаёт покупку
@@ -5156,6 +5189,12 @@ const PACKS = {
 // Своим ('own') пресет становится только одним путём — если человек сам его собрал
 // в редакторе. Полученное извне 'own' не становится никогда.
 const SRC_OWN = 'own', SRC_FREE = 'free', SRC_PAID = 'paid', SRC_UNKNOWN = 'unknown';
+const ПРАВА_ЗНАЧ = [SRC_OWN, SRC_FREE, SRC_PAID, SRC_UNKNOWN];
+// Насколько статус СТРОГ: чем больше, тем меньше прав. Нужно на импорте — заявке чужого
+// файла верим только в строгую сторону. «Я платный» и «я неподтверждён» принимаем: ими
+// себе прав не добавишь. «Я свободен» и «я свой» — принимаем только там, где подтвердить
+// нечем И набора нет вовсе, то есть на резервной копии собственной работы.
+const ПРАВА_РАНГ = { own:0, free:1, unknown:2, paid:3 };
 // Платность спрашиваем у КАТАЛОГА, а не у файла: файл — чужой ввод, его правит блокнот.
 // Сети ради этого не поднимаем — берём уже сохранённый packsCache.
 function packInfo(id){
