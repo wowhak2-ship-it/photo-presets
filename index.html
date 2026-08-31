@@ -5756,7 +5756,14 @@ async function stПоставить(p, кнопка){
   const было = кнопка ? кнопка.textContent : '';
   if(кнопка){ кнопка.disabled = true; кнопка.textContent = 'Ставлю…'; }
   try{
-    const о = await fetch('./' + p.file + '?v=' + Date.now(), { cache:'no-store' });
+    let о;
+    // Сорвавшийся fetch бросает своё сообщение — по-английски («Failed to fetch»). Человеку
+    // его показывать нечего: техническую строку оставляем в консоли, наружу отдаём причину.
+    try{ о = await fetch('./' + p.file + '?v=' + Date.now(), { cache:'no-store' }); }
+    catch(сеть){
+      console.error('Пресеты: коллекция не загрузилась —', сеть);
+      throw new Error('Не удалось загрузить коллекцию. Проверьте подключение к интернету и попробуйте ещё раз.');
+    }
     if(!о.ok) throw new Error('Коллекция не загрузилась');
     const буф = await о.arrayBuffer();
     let txt;
@@ -5866,8 +5873,17 @@ function stКарточка(p, главная){
   return el;
 }
 function stКупить(p){
-  if(p.buy) window.open(p.buy, '_blank', 'noopener');
-  else toast('Оплата этой коллекции ещё не открыта');
+  if(p.buy){ window.open(p.buy, '_blank', 'noopener'); return; }
+  // Отдельной цены у платного набора нет — значит открывает его подписка, и разговор про
+  // «оплата не подключена» человека только путал: платить за сам набор и не предлагалось.
+  // Ведём туда, где подписку подключают, — к блоку PRO, который уже стоит ниже списка.
+  const блок = document.getElementById('stPro');
+  if(p.paid && блок && блок.style.display !== 'none'){
+    toast('Этот набор доступен в PRO');
+    блок.scrollIntoView({ behavior:'smooth', block:'center' });
+    return;
+  }
+  toast('Оплата этой коллекции ещё не открыта');
 }
 // Купленный набор приходит файлом — тем же путём, что и раньше. «Восстановить покупки»
 // это и есть: человек кладёт свой файл, а не ищет кнопку в чужом магазине.
