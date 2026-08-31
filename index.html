@@ -6879,12 +6879,19 @@ addEventListener('resize', ()=>{ if(secNow === 'curve') cvDraw(); });
 // по 24 мегапикселя одновременно телефон не переживёт.
 // Съёмка — это сотни кадров, а не десяток: у выписки или крестин их бывает под двести.
 // Потолок поднят до сотни; миниатюры при этом мельче, иначе сотня превью съест память.
-// Потолок съёмки зависит от права. Сегодня оба значения равны сотне: бесплатный лимит
-// НЕ трогаем, чтобы никому ничего не урезать — готова только развилка, чтобы позже
-// поменять одно число, а не искать по коду.
-const BATCH_LIMIT_FREE = 100;
+// Потолок съёмки зависит от права: десять кадров бесплатно, сотня в PRO. Право спрашиваем
+// только через естьPRO() — TEST_PRO и настоящая подписка дают сотню одинаково, а отдельно
+// купленный набор не даёт: он открывает пресеты, а не пакетную обработку.
+const BATCH_LIMIT_FREE = 10;
 const BATCH_LIMIT_PRO  = 100;
 function batchLimit(){ return естьPRO() ? BATCH_LIMIT_PRO : BATCH_LIMIT_FREE; }
+// Молча обрезать выбор нельзя: человек отметил тридцать снимков, а в работу ушло десять —
+// и он об этом не узнает. Отдельного экрана не заводим, говорим той же строкой-подсказкой.
+function batchПределТекст(){
+  return естьPRO()
+    ? ('За раз — не больше ' + BATCH_LIMIT_PRO + ' снимков.')
+    : ('За раз — не больше ' + BATCH_LIMIT_FREE + ' снимков. В PRO — ' + BATCH_LIMIT_PRO + '.');
+}
 let batchItems = [], batchBusy = false;
 const batchEl = document.getElementById('batch');
 const batchStatus = t => { document.getElementById('batchStatus').textContent = t; };
@@ -7535,15 +7542,19 @@ document.getElementById('batchFile').onchange = async e=>{
   // и при замене набрать съёмку было физически невозможно: каждый выбор стирал прошлый.
   const seen = new Set(batchItems.map(i=> i.file.name + '|' + i.file.size + '|' + i.file.lastModified));
   const fresh = [];
+  let упёрлись = false;
   for(const f of picked){
     const key = f.name + '|' + f.size + '|' + f.lastModified;
     if(seen.has(key)) continue;               // тот же снимок дважды не берём
-    if(batchItems.length + fresh.length >= batchLimit()) break;
+    if(batchItems.length + fresh.length >= batchLimit()){ упёрлись = true; break; }
     seen.add(key); fresh.push({ file:f, blob:null, failed:false });
   }
-  if(!fresh.length){ renderBatch(); return toast('Эти снимки уже выбраны'); }
+  // Взяли не всё — говорим об этом. «Уже выбраны» тут было бы неправдой: снимки новые,
+  // просто не поместились.
+  if(!fresh.length){ renderBatch(); return toast(упёрлись ? batchПределТекст() : 'Эти снимки уже выбраны'); }
   batchItems = batchItems.concat(fresh);
   renderBatch();
+  if(упёрлись) toast(batchПределТекст());
   batchStatus('Готовлю ' + fresh.length + '…');
   // мелкие превью, чтобы было видно, ЧТО именно обрабатывается; полные кадры не держим
   for(const it of fresh){
