@@ -3422,7 +3422,9 @@ function buildFullSource(){
     } else if(op.t === 'powder'){
       powderRun(own(), op.faces, op.amount);
     } else if(op.t === 'bokeh'){
-      if(op.sprinkle) bokehSprinkle(own(), op.sprinkle, op.shape, op.tint);
+      // op.точки — готовое размещение из предпросмотра. Старые операции без него
+      // считаются по-прежнему, чтобы уже начатая работа не сломалась.
+      if(op.sprinkle) bokehSprinkle(own(), op.sprinkle, op.shape, op.tint, null, op.точки);
     }
   }
   return c;   // без правок это сам оригинал — читаем из него, но не пишем в него
@@ -9335,13 +9337,27 @@ function bokehRandom(seed){
   let s = seed >>> 0;
   return ()=>{ s = (s*1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
-function bokehSprinkle(cv, amount, shape, tint, seed){
-  if(!amount) return;
+// Размещение считается ОДИН РАЗ и уезжает в операцию. Раньше предпросмотр и сохранение
+// звали эту функцию порознь — предпросмотр по рабочей копии, сохранение по полному кадру, —
+// а место выбирается по яркости РЕАЛЬНЫХ пикселей: на другом разрешении выборки чуть другие,
+// один кандидат принимается иначе, и дальше вся цепочка случайных чисел разъезжается.
+// На замере совпадало 9 кружков из 61 — человек сохранял не то, что видел.
+// Теперь при сохранении ничего не генерируется: рисуется присланный список. Точки хранятся
+// в ДОЛЯХ кадра, поэтому один и тот же список одинаково ложится на любой размер.
+function bokehSprinkle(cv, amount, shape, tint, seed, готовые){
+  if(!amount) return null;
   const W = cv.width, H = cv.height, ctx = cv.getContext('2d');
-  const rnd = bokehRandom(seed || 20260809);
   const пал = BOKEH_PALETTES[tint] || BOKEH_PALETTES['золотое'];
-  const N = Math.round(22 + 78*amount);                 // от горстки до плотной россыпи
   const баз = Math.min(W,H);
+  // Тёплые и ночные огни складываются с кадром КАК СВЕТ. Пастель так нельзя: свет
+  // умеет только осветлять, поэтому светлый оттенок превращался в прозрачную дымку
+  // и терял цвет. На референсе пастельные кружки не светятся, а лежат поверх, как
+  // цветное стекло, — значит и накладывать их надо обычным способом.
+  const стекло = tint === 'пастель';
+  let точки = (готовые && готовые.length) ? готовые : null;
+  if(!точки){                                           // считаем, только если списка нет
+  const rnd = bokehRandom(seed || 20260809);
+  const N = Math.round(22 + 78*amount);                 // от горстки до плотной россыпи
   // Второй набор цветов: на настоящих текстурах в одном кадре и тёплые огни, и
   // холодные разом. Одна палитра на всё выдаёт наклейку с головой.
   // Но «праздник» и «пастель» сняты с референсов и разнообразие несут в себе —
@@ -9352,11 +9368,6 @@ function bokehSprinkle(cv, amount, shape, tint, seed){
   // читаем кадр ДО наложения — по нему решаем, где кружок гасить
   let подл = null;
   try{ подл = ctx.getImageData(0,0,W,H).data; }catch(_){}
-  // Тёплые и ночные огни складываются с кадром КАК СВЕТ. Пастель так нельзя: свет
-  // умеет только осветлять, поэтому светлый оттенок превращался в прозрачную дымку
-  // и терял цвет. На референсе пастельные кружки не светятся, а лежат поверх, как
-  // цветное стекло, — значит и накладывать их надо обычным способом.
-  const стекло = tint === 'пастель';
   // ГДЕ СТАВИТЬ ОГОНЬКИ. Раньше место бралось чистым rnd() по всему кадру, и кружок мог
   // сесть на нос, на щёку или на главный предмет — того, чего у настоящего боке не бывает:
   // оно живёт в нерезком фоне позади человека. На замере по 22 кадрам с лицами до четверти
@@ -9411,8 +9422,7 @@ function bokehSprinkle(cv, amount, shape, tint, seed){
     if(лучшая < 0) return {x: rnd()*W, y: rnd()*H};   // весь кадр — лицо: ставим как раньше
     return {x: лучшийX, y: лучшийY};
   };
-  ctx.save();
-  ctx.globalCompositeOperation = стекло ? 'source-over' : 'lighter';
+  точки = [];
   for(let i=0;i<N;i++){
     const м = место(); const x = м.x, y = м.y;
     // Размеры сильно разные: у настоящей россыпи есть и мелкие точки, и крупные шары.
@@ -9422,13 +9432,6 @@ function bokehSprinkle(cv, amount, shape, tint, seed){
     const soft = Math.min(1, 0.12 + кр*0.7 + rnd()*0.35);
     const наб = rnd() < 0.26 ? сосед : пал;             // четверть огней чужого оттенка
     const c = наб[(rnd()*наб.length)|0];
-    const sp = bokehSprite(shape, r, soft);
-    const цв = document.createElement('canvas'); цв.width=sp.width; цв.height=sp.height;
-    const цx = цв.getContext('2d');
-    цx.drawImage(sp,0,0);
-    цx.globalCompositeOperation='source-in';
-    цx.fillStyle='rgb('+c[0]+','+c[1]+','+c[2]+')';
-    цx.fillRect(0,0,sp.width,sp.height);
     // Яркость тоже вразнобой; крупные слабее — иначе большой шар забивает под собой всё
     const яр = 0.30 + rnd()*0.55;
     // И слабее там, где под кружком уже светло: свет складывается, поэтому на светлом
@@ -9441,12 +9444,30 @@ function bokehSprinkle(cv, amount, shape, tint, seed){
       const L = (подл[k2]*0.3 + подл[k2+1]*0.6 + подл[k2+2]*0.1)/255;
       гашение = 1 - 0.62*L*L;
     }
-    ctx.globalAlpha = стекло
+    // Прозрачность считаем здесь же: она зависит от яркости ПОД кружком, а её на полном
+    // кадре пришлось бы читать заново — и опять разошлось бы с тем, что человек видел.
+    const альфа = стекло
       ? Math.min(0.78, (0.60 - 0.22*кр) * (0.55 + 0.45*яр) * (0.55 + 0.7*amount))
       : Math.min(0.85, (0.62 - 0.30*кр) * яр * (0.5 + 0.8*amount) * гашение);
-    ctx.drawImage(цв, x - sp.width/2, y - sp.height/2);
+    // В долях кадра: x и y от ширины и высоты, радиус от короткой стороны.
+    точки.push({ x: x/W, y: y/H, r: r/баз, soft, c, a: альфа });
+  }
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = стекло ? 'source-over' : 'lighter';
+  for(const т of точки){
+    const sp = bokehSprite(shape, т.r*баз, т.soft);
+    const цв = document.createElement('canvas'); цв.width=sp.width; цв.height=sp.height;
+    const цx = цв.getContext('2d');
+    цx.drawImage(sp,0,0);
+    цx.globalCompositeOperation='source-in';
+    цx.fillStyle='rgb('+т.c[0]+','+т.c[1]+','+т.c[2]+')';
+    цx.fillRect(0,0,sp.width,sp.height);
+    ctx.globalAlpha = т.a;
+    ctx.drawImage(цв, т.x*W - sp.width/2, т.y*H - sp.height/2);
   }
   ctx.restore();
+  return точки;
 }
 function bokehRun(cv, mask, amount, shape){
   if(!mask || !amount) return;
@@ -10807,9 +10828,11 @@ function bokehDraw(){
   const ctx = rtCanvas.getContext('2d');
   const россыпь = +document.getElementById('rtSprinkle').value;
   if(bokehOrig) ctx.putImageData(bokehOrig, 0, 0);
-  if(россыпь) bokehSprinkle(rtCanvas, россыпь/100, bokehShape, bokehTint);
+  // Список точек, посчитанный ЗДЕСЬ, уезжает в операцию: при сохранении россыпь не
+  // пересчитывается, а рисуется по нему. Иначе сохранённый файл отличался от превью.
+  const точки = россыпь ? bokehSprinkle(rtCanvas, россыпь/100, bokehShape, bokehTint) : null;
   rtBokehOp = россыпь
-    ? { t:'bokeh', sprinkle:россыпь/100, shape:bokehShape, tint:bokehTint }
+    ? { t:'bokeh', sprinkle:россыпь/100, shape:bokehShape, tint:bokehTint, точки }
     : null;
 }
 // ─── «Засветка»: свет, попавший в объектив ───
