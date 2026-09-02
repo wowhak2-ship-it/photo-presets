@@ -2965,12 +2965,79 @@ function looksAdapt(src){
   }
   return ж;
 }
+// ─── СЛОЙ ПРИМЕНЁННОГО ПРЕСЕТА ───────────────────────────────────────────────
+// Раньше пресет просто раскладывался по видимым полям редактора, и оттуда следовали две
+// беды.
+//
+// Первая: ползунок ИНТЕНСИВНОСТЬ управлял ТОЛЬКО силой плёнки (LOOKS[selected]).
+// Почти все пресеты собраны на плёнке «Оригинал» — она нейтральная, ослаблять в ней
+// нечего, — а весь их характер живёт в свете, цвете и кривой, которых ползунок не касался.
+// Замер на 25 пресетах: у 21 разница между силой 100 и 0 была РОВНО НОЛЬ.
+//
+// Вторая: платный пресет выкладывал свой рецепт в те же видимые поля, и его можно было
+// просто переписать из панелей «Свет», «Цвет», «Кривая».
+//
+// Поэтому рецепт применённого пресета живёт теперь отдельным слоем, а сила умножает его
+// целиком. У своих и бесплатных слой ОТКРЫТ: те же числа лежат в панелях и правятся
+// руками, как раньше. У платных слой ЗАКРЫТ: в панелях нули, рецепта в общем состоянии
+// нет, но эффект работает полностью.
+//
+// psetВид — снимок того, что легло в видимые панели при применении. По нему считается
+// ручная добавка человека: она в силу не входит и не теряется.
+// Рецепт заперт в замыкании, а не лежит переменной рядом с adjust/curve/hsl. Разница не
+// косметическая: глобальную переменную видно из консоли, и «скрытие» было бы обманом —
+// платный рецепт всё равно читался бы одной строкой. Снаружи доступны только действия,
+// самих чисел не отдаёт ни одно из них.
+const PSET = (function(){
+  let слой = null;          // { скрыт, adjust, curve, hsl }
+  let вид  = null;          // { adjust, curveJSON, hslJSON } — что легло в панели
+  return {
+    задать(с, в){ слой = с; вид = в; },
+    сбросить(){ слой = null; вид = null; },
+    есть(){ return !!слой; },
+    скрыт(){ return !!(слой && слой.скрыт); },
+    // Итоговый «свет»: рецепт пресета в силу, плюс ручная добавка сверх него.
+    // Своё и бесплатное при силе 100 даёт ровно то же, что и раньше:
+    // рецепт + (видимое − рецепт) = видимое.
+    свет(){
+      if(!слой || !вид) return adjust;
+      const k = intensity/100, o = {};
+      ADJ_KEYS.forEach(n=>{
+        const рец = слой.adjust[n] || 0;
+        const рука = (adjust[n] || 0) - (вид.adjust[n] || 0);
+        o[n] = Math.max(-100, Math.min(100, рец*k + рука));
+      });
+      return o;
+    },
+    // Кривая и цвета пресета, уже ослабленные силой, и правило их соединения с ручными.
+    таблицы(k, ручнаяКривая, ручныеЦвета){
+      if(!слой || !вид) return { C: ручнаяКривая, H: ручныеЦвета };
+      const рецC = слой.curve ? curveSetToLuts(fadeCurveSet(слой.curve, k)) : null;
+      const рецH = hslSetTouched(слой.hsl) ? hslSetToTables(слой.hsl, k) : null;
+      if(слой.скрыт){
+        // Закрытый рецепт в панелях не лежит — накладываем его сам, ручное сверху.
+        return { C: composeLuts(рецC, ручнаяКривая), H: composeHsl(рецH, ручныеЦвета) };
+      }
+      // Открытый рецепт лежит в панелях. Пока его не трогали рукой, сила ослабляет его;
+      // тронули — дальше главная рука человека, и сила кривую с цветом не трогает.
+      return {
+        C: (JSON.stringify(curve) === вид.curveJSON) ? рецC : ручнаяКривая,
+        H: (JSON.stringify(hsl)   === вид.hslJSON)   ? рецH : ручныеЦвета
+      };
+    }
+  };
+})();
+function psetСбросить(){ PSET.сбросить(); }
+function adjustЭфф(){ return PSET.свет(); }
+
 // Итоговые таблицы: сперва то, что заложено в пресет, следом ручная правка.
 let mixCurve = null, mixHsl = null;
 function syncTables(){
-  const L = lookLayers(LOOKS[selected], intensity/100);
-  mixCurve = composeLuts(L.curve, curveLuts);
-  mixHsl = composeHsl(L.hsl, hslTables);
+  const k = intensity/100;
+  const L = lookLayers(LOOKS[selected], k);
+  const { C, H } = PSET.таблицы(k, curveLuts, hslTables);
+  mixCurve = composeLuts(L.curve, C);
+  mixHsl = composeHsl(L.hsl, H);
 }
 function applyHsl(img, T, y0, y1){
   if(!T) return img;
@@ -3611,7 +3678,7 @@ function processedData(src){
   syncTables();                                           // пресет + рука в одних таблицах
   applyHsl(proc, mixHsl);                                 // отдельные цвета
   applyCurve(proc, mixCurve);                             // кривая — последней, как в Lightroom
-  applyAdjust(proc, adjust);   // manual doctoring on top of the preset
+  applyAdjust(proc, adjustЭфф());   // manual doctoring on top of the preset
   return proc;
 }
 // Cache the processed image so the compare slider never recomputes the filter while dragging
@@ -3620,8 +3687,8 @@ function buildEdited(){
   if(!editedCanvas) editedCanvas = document.createElement('canvas');
   editedCanvas.width = w; editedCanvas.height = h;
   editedCanvas.getContext('2d').putImageData(processedData(), 0, 0);
-  const bl = bloomAmount(LOOKS[selected], intensity/100, adjust);
-  if(bl) applyBloom(editedCanvas, bl, bloomIsWarm(LOOKS[selected], adjust));
+  const bl = bloomAmount(LOOKS[selected], intensity/100, adjustЭфф());
+  if(bl) applyBloom(editedCanvas, bl, bloomIsWarm(LOOKS[selected], adjustЭфф()));
 }
 // Lightweight compositing of original (left) + cached edited (right) — runs on every drag frame
 function drawCompare(){
@@ -3674,7 +3741,7 @@ function currentFrame(){
   if(myActive){
     const list = MYP.all(), k = list.findIndex(p=> p.id === myActive);
     if(k >= 0) return { no: LOOKS.length + k + 1, name: list[k].name };
-    myActive = null;                      // пресет удалили — возвращаемся к базовому луку
+    myActive = null; psetСбросить();      // пресет удалили — возвращаемся к базовому луку
   }
   return { no: selected + 1, name: LOOKS[selected].name };
 }
@@ -3740,8 +3807,8 @@ function renderNow(){
   const data = processedData(src);
   if(stage.width !== src.width || stage.height !== src.height){ stage.width = src.width; stage.height = src.height; }
   sctx.putImageData(data, 0, 0);
-  const bl = bloomAmount(LOOKS[selected], intensity/100, adjust);
-  if(bl) applyBloom(stage, bl, bloomIsWarm(LOOKS[selected], adjust));
+  const bl = bloomAmount(LOOKS[selected], intensity/100, adjustЭфф());
+  if(bl) applyBloom(stage, bl, bloomIsWarm(LOOKS[selected], adjustЭфф()));
   if(!scrubbing) paintStageBg();
   syncToolEdge();
 }
@@ -3846,6 +3913,7 @@ function pickFrame(e){
   // Чужой рецепт из редактора вычищен вместе с правками — начинается своя работа.
   // Это единственный путь снять наследование, и он честный: ничего чужого не осталось.
   myOrigin = null;
+  psetСбросить();                        // взяли голую плёнку — слоя пресета больше нет
   selected = LOOKS.indexOf(e.look);
   setIntensity(100);
 }
@@ -5007,13 +5075,33 @@ function applyMyPreset(p){
   // Ничего не удаляем и не портим: пресет остаётся в библиотеке, снимок на экране прежний,
   // человек просто не получает чужой рецепт в редактор.
   if(!можноПрименить(p)){ toast('Этот пресет доступен в PRO'); return; }
+  // КУПЛЕННЫЙ РЕЦЕПТ В ПАНЕЛИ НЕ КЛАДЁМ. Пользоваться платным пресетом можно, а получить
+  // его готовой таблицей чисел в «Свет», «Цвет» и «Кривая» — нет: иначе покупка сводится
+  // к одному разу, дальше значения просто переписываются руками. Рецепт живёт в закрытом
+  // слое: в общем состоянии редактора его нет, из консоли панелей не достать.
+  // Своё и бесплатное — как раньше: числа в панелях, правь сколько хочешь.
+  const скрыт = срсПресета(p) === SRC_PAID;
   selected = myBase(p);
-  ADJ_KEYS.forEach(k=> adjust[k] = (p.adjust || ZERO_ADJ)[k] || 0);
-  CURVE_KEYS.forEach(k=> curve[k] = (p.curve && p.curve[k]) ? p.curve[k].map(t=> t.slice()) : flatCurve());
-  HSL_BANDS.forEach(b=> HSL_PARTS.forEach(k=>
-    hsl[b.key][k] = (p.hsl && p.hsl[b.key] ? p.hsl[b.key][k] : 0) || 0));
+  if(скрыт){
+    ADJ_KEYS.forEach(k=> adjust[k] = 0);
+    CURVE_KEYS.forEach(k=> curve[k] = flatCurve());
+    HSL_BANDS.forEach(b=> HSL_PARTS.forEach(k=> hsl[b.key][k] = 0));
+  }else{
+    ADJ_KEYS.forEach(k=> adjust[k] = (p.adjust || ZERO_ADJ)[k] || 0);
+    CURVE_KEYS.forEach(k=> curve[k] = (p.curve && p.curve[k]) ? p.curve[k].map(t=> t.slice()) : flatCurve());
+    HSL_BANDS.forEach(b=> HSL_PARTS.forEach(k=>
+      hsl[b.key][k] = (p.hsl && p.hsl[b.key] ? p.hsl[b.key][k] : 0) || 0));
+  }
   buildCurveLuts(); buildHslTables();
   syncAdjustUI();
+  // Слой пресета и снимок видимого: по ним сила ослабляет ВЕСЬ рецепт, а не одну плёнку,
+  // и по ним же отделяется ручная добавка человека.
+  PSET.задать({ скрыт,
+                adjust: Object.assign({}, ZERO_ADJ, p.adjust || {}),
+                curve: p.curve ? JSON.parse(JSON.stringify(p.curve)) : null,
+                hsl: p.hsl ? JSON.parse(JSON.stringify(p.hsl)) : null },
+              { adjust: Object.assign({}, adjust),
+                curveJSON: JSON.stringify(curve), hslJSON: JSON.stringify(hsl) });
   setIntensity(p.intensity == null ? 100 : p.intensity);
   myActive = p.id;
   запомнитьПроисхождение(p);
@@ -5170,7 +5258,7 @@ function renderMyList(){
     x.onclick = async ()=>{
       if(!await askConfirm('Удалить пресет «' + p.name + '»?')) return;
       MYP.remove(p.id);
-      if(myActive === p.id) myActive = null;
+      if(myActive === p.id){ myActive = null; psetСбросить(); }
       renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
     };
     const acts = document.createElement('div'); acts.className = 'myp-row2';
@@ -6462,8 +6550,8 @@ function buildExport(maxDim, base){
   const full = document.createElement('canvas');
   full.width = src.width; full.height = src.height;
   full.getContext('2d').putImageData(processedData(src), 0, 0);
-  const bl = bloomAmount(LOOKS[selected], intensity/100, adjust);
-  if(bl) applyBloom(full, bl, bloomIsWarm(LOOKS[selected], adjust));
+  const bl = bloomAmount(LOOKS[selected], intensity/100, adjustЭфф());
+  if(bl) applyBloom(full, bl, bloomIsWarm(LOOKS[selected], adjustЭфф()));
   if(!maxDim || Math.max(full.width, full.height) <= maxDim) return full;
   const k = maxDim / Math.max(full.width, full.height);
   const out = document.createElement('canvas');
@@ -6586,8 +6674,9 @@ async function buildExportAsync(maxDim, base, onProgress){
   const proc = new ImageData(new Uint8ClampedArray(orig.data), W, H);
   const look = LOOKS[selected], mix = intensity/100;
   syncTables();                                 // слои пресета и руки — до начала счёта
+  const adj = adjustЭфф();                      // рецепт пресета в силу плюс ручная добавка
   let spread = null;
-  try{ spread = processParallel(proc, orig, look, mix, adjust, W, H, onProgress); }catch(e){}
+  try{ spread = processParallel(proc, orig, look, mix, adj, W, H, onProgress); }catch(e){}
   if(spread){ try{ await spread; }catch(e){ spread = null; } }
   if(!spread){
     // одно ядро: режем на порции и отдаём управление между ними, чтобы не подвесить экран
@@ -6596,7 +6685,7 @@ async function buildExportAsync(maxDim, base, onProgress){
       const y1 = Math.min(H, y + band);
       const sub = { data: proc.data.subarray(y*W*4, y1*W*4), width: W, height: H };
       applyLook(sub, look, mix, { data: orig.data.subarray(y*W*4, y1*W*4) }, y, y1);
-      applyAdjust(sub, adjust, y, y1);
+      applyAdjust(sub, adj, y, y1);
       applyHsl(sub, mixHsl, y, y1);
       applyCurve(sub, mixCurve, y, y1);
       if(onProgress) onProgress(y1 / H * 0.9);
