@@ -28,7 +28,14 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      // Сносим ТОЛЬКО прошлые версии страницы. Раньше здесь удалялось всё чужое, и вместе
+      // со старым кэшем каждый раз улетали photo-presets-ai и photo-presets-spots —
+      // модели ИИ на 51 и 69 МБ. Человек на мобильном интернете платил за 120 МБ
+      // повторной загрузки при каждом обновлении приложения (замерено на телефоне:
+      // после переустановки воркера обе модели скачивались заново).
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE && /^photo-presets-v\d+$/.test(k)).map(k => caches.delete(k))
+      ))
       .then(() => self.clients.claim())
   );
 });
