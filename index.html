@@ -6607,10 +6607,14 @@ function ensureWorkers(){
       'onmessage = e => { const m = e.data;',
       '  const d = new Uint8ClampedArray(m.band);',
       '  const img = { data:d, width:m.W, height:m.H };',
+      // ПОРЯДОК ТОТ ЖЕ, ЧТО НА ЭКРАНЕ: плёнка, цвета, кривая и только потом свет.
+      // Раньше здесь свет шёл вторым, и сохранённый файл отличался от превью — человек
+      // утверждал одну картинку, а получал другую. Порядок задан в processedData, витрина
+      // считает так же; эти три места обязаны совпадать дословно.
       '  applyLook(img, m.look, m.mix, m.orig ? { data:new Uint8ClampedArray(m.orig) } : null, m.y0, m.y1);',
-      '  applyAdjust(img, m.adjust, m.y0, m.y1);',
       '  applyHsl(img, m.hsl, m.y0, m.y1);',
       '  applyCurve(img, m.curve, m.y0, m.y1);',
+      '  applyAdjust(img, m.adjust, m.y0, m.y1);',
       '  postMessage({ id:m.id, y0:m.y0, band:d.buffer }, [d.buffer]); };'
     ].join('\n');
     const url = URL.createObjectURL(new Blob([src], { type:'application/javascript' }));
@@ -6684,10 +6688,11 @@ async function buildExportAsync(maxDim, base, onProgress){
     for(let y = 0; y < H; y += band){
       const y1 = Math.min(H, y + band);
       const sub = { data: proc.data.subarray(y*W*4, y1*W*4), width: W, height: H };
+      // Порядок как в processedData и в воркере: плёнка, цвета, кривая, свет.
       applyLook(sub, look, mix, { data: orig.data.subarray(y*W*4, y1*W*4) }, y, y1);
-      applyAdjust(sub, adj, y, y1);
       applyHsl(sub, mixHsl, y, y1);
       applyCurve(sub, mixCurve, y, y1);
+      applyAdjust(sub, adj, y, y1);
       if(onProgress) onProgress(y1 / H * 0.9);
       await nextFrame();
     }
@@ -6695,8 +6700,10 @@ async function buildExportAsync(maxDim, base, onProgress){
   const full = document.createElement('canvas');
   full.width = W; full.height = H;
   full.getContext('2d').putImageData(proc, 0, 0);
-  const bl = bloomAmount(look, mix, adjust);
-  if(bl) applyBloom(full, bl, bloomIsWarm(look, adjust));
+  // Свечение считаем по ДЕЙСТВУЮЩЕМУ свету, как и весь остальной конвейер: у платного
+  // пресета видимый adjust пуст, и по нему блум вышел бы другим, чем на экране.
+  const bl = bloomAmount(look, mix, adj);
+  if(bl) applyBloom(full, bl, bloomIsWarm(look, adj));
   if(onProgress) onProgress(0.95);
   await nextFrame();
   if(!maxDim || Math.max(W, H) <= maxDim) return full;
