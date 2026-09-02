@@ -36,6 +36,42 @@
         "./store/gorod.webp",
         "./store/portret.webp",
         "./store/zakat.webp"
+      ],
+      "styles": [
+        {
+          "name": "Охра и шалфей",
+          "tile": "./store/tiles/simmetriya-pro-7/01.webp"
+        },
+        {
+          "name": "Медовая комната",
+          "tile": "./store/tiles/simmetriya-pro-7/02.webp"
+        },
+        {
+          "name": "Выцветшее лето",
+          "tile": "./store/tiles/simmetriya-pro-7/03.webp"
+        },
+        {
+          "name": "Вагон",
+          "tile": "./store/tiles/simmetriya-pro-7/04.webp"
+        },
+        {
+          "name": "Кабинет коллекционера",
+          "tile": "./store/tiles/simmetriya-pro-7/05.webp"
+        },
+        {
+          "name": "Розовый отель",
+          "tile": "./store/tiles/simmetriya-pro-7/06.webp"
+        },
+        {
+          "name": "Алые зебры",
+          "tile": "./store/tiles/simmetriya-pro-7/07.webp"
+        }
+      ],
+      "afters": [
+        "./store/tiles/simmetriya-pro-7/after-0.webp",
+        "./store/tiles/simmetriya-pro-7/after-1.webp",
+        "./store/tiles/simmetriya-pro-7/after-2.webp",
+        "./store/tiles/simmetriya-pro-7/after-3.webp"
       ]
     },
     {
@@ -53,6 +89,58 @@
         "./store/portret.webp",
         "./store/gorod.webp",
         "./store/zakat.webp"
+      ],
+      "styles": [
+        {
+          "name": "Золотая листва",
+          "tile": "./store/tiles/osen-pro-11/01.webp"
+        },
+        {
+          "name": "Контровой свет",
+          "tile": "./store/tiles/osen-pro-11/02.webp"
+        },
+        {
+          "name": "Полдень в парке",
+          "tile": "./store/tiles/osen-pro-11/03.webp"
+        },
+        {
+          "name": "Пасмурный день",
+          "tile": "./store/tiles/osen-pro-11/04.webp"
+        },
+        {
+          "name": "В тени",
+          "tile": "./store/tiles/osen-pro-11/05.webp"
+        },
+        {
+          "name": "Туман и дождь",
+          "tile": "./store/tiles/osen-pro-11/06.webp"
+        },
+        {
+          "name": "Тёплая осень",
+          "tile": "./store/tiles/osen-pro-11/07.webp"
+        },
+        {
+          "name": "Тёмная осень",
+          "tile": "./store/tiles/osen-pro-11/08.webp"
+        },
+        {
+          "name": "Светлая осень",
+          "tile": "./store/tiles/osen-pro-11/09.webp"
+        },
+        {
+          "name": "Осень Ч/Б тёплый",
+          "tile": "./store/tiles/osen-pro-11/10.webp"
+        },
+        {
+          "name": "Осень Ч/Б глубокий",
+          "tile": "./store/tiles/osen-pro-11/11.webp"
+        }
+      ],
+      "afters": [
+        "./store/tiles/osen-pro-11/after-0.webp",
+        "./store/tiles/osen-pro-11/after-1.webp",
+        "./store/tiles/osen-pro-11/after-2.webp",
+        "./store/tiles/osen-pro-11/after-3.webp"
       ]
     },
     {

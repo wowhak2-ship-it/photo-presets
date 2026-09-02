@@ -1129,7 +1129,7 @@
     padding:14px 20px 0;}
   .st-tile{position:relative; aspect-ratio:1/1; border-radius:12px; overflow:hidden;
     background:#15110B; border:1px solid var(--line); cursor:pointer; padding:0;}
-  .st-tile canvas{width:100%; height:100%; object-fit:cover; display:block;}
+  .st-tile canvas, .st-tile img{width:100%; height:100%; object-fit:cover; display:block;}
   .st-tile span{position:absolute; left:0; right:0; bottom:0; padding:16px 7px 6px;
     font-family:var(--mono); font-size:8.5px; letter-spacing:.1em; color:#fff; text-align:left;
     background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.72) 100%);}
@@ -4496,8 +4496,14 @@ const MYP = {
     if(о) myOrigin = { src:о.src, pack:о.pack, by:о.by, from:id };
     return л;
   },
-  // Что можно выгрузить наружу: своя работа и свободные наборы (см. можноОтдать).
-  exportable(){ return this.all().filter(можноОтдать); },
+  // РЕЗЕРВНАЯ КОПИЯ — ТОЛЬКО СВОЯ РАБОТА.
+  // Раньше сюда шли ещё и виды из бесплатных наборов, и копия распухала чужим добром,
+  // которое и так лежит в витрине в одно касание. Смысл копии в другом: сохранить то,
+  // что нигде больше не восстановишь, — придуманное самим. Купленное возвращается
+  // лицензией, бесплатное — из витрины, своё — только отсюда.
+  // Поштучное «Поделиться» это не трогает: отдать один бесплатный вид по-прежнему можно
+  // (см. можноОтдать), запрет там остаётся только на купленное и неподтверждённое.
+  exportable(){ return this.all().filter(p=> срсПресета(p) === SRC_OWN); },
   // Из чего можно собрать СВОЙ набор на продажу: только собственная работа. Ни бесплатный
   // чужой вид, ни купленный товаром стать не могут — даже после переименования, потому
   // что смотрим на происхождение, а не на имя.
@@ -5191,24 +5197,30 @@ function склПресетов(n){
   const t = n % 100, o = n % 10;
   return (t >= 11 && t <= 14) ? 'пресетов' : (o === 1 ? 'пресет' : (o >= 2 && o <= 4 ? 'пресета' : 'пресетов'));
 }
+function склСтилей(n){
+  const t = n % 100, o = n % 10;
+  return (t >= 11 && t <= 14) ? 'стилей' : (o === 1 ? 'стиль' : (o >= 2 && o <= 4 ? 'стиля' : 'стилей'));
+}
 document.getElementById('mypExportAll').onclick = ()=>{
   const all = MYP.all(), list = MYP.exportable();
-  // Купленное и неподтверждённое в резервную копию не идёт. Молча выкидывать нельзя:
-  // человек рассчитывает, что сохранил всё, и обнаружит недостачу уже после переустановки.
+  // В копию идёт только своя работа. Молча выкидывать остальное нельзя: человек
+  // рассчитывает, что сохранил всё, и обнаружит недостачу уже после переустановки.
   const куп = all.filter(p=> срсПресета(p) === SRC_PAID).length;
+  const беспл = all.filter(p=> срсПресета(p) === SRC_FREE).length;
   const неп = all.filter(p=> срсПресета(p) === SRC_UNKNOWN).length;
   if(!list.length){
     return toast(all.length
-      ? 'В копию нечего сохранить: все пресеты — купленные или с неподтверждённым источником'
+      ? 'В копию идут только ваши собственные пресеты, а таких пока нет'
       : 'Пока нечего сохранять');
   }
   sharePresets(list, 'presety-' + list.length);
-  if(куп || неп){
+  if(куп || беспл || неп){
     const части = [];
     if(куп) части.push(куп + (куп === 1 ? ' купленный' : ' купленных'));
+    if(беспл) части.push(беспл + ' из наборов');
     if(неп) части.push(неп + (неп === 1 ? ' неподтверждённый' : ' неподтверждённых'));
     toast('Сохранено ' + list.length + ' ' + склПресетов(list.length) +
-          '. Не попали в копию: ' + части.join(' и '));
+          ' — ваши. Остальное вернётся из витрины и по лицензии: ' + части.join(', '));
   }
 };
 document.getElementById('mypFile').onchange = e=>{
@@ -5399,16 +5411,32 @@ function stКадр(путь){
 // Пресеты коллекции лежат в её файле. Тянем их ТОЛЬКО когда они понадобились для
 // картинки, и запоминаем: иначе открытие магазина качало бы все файлы сразу.
 const stФайлы = new Map();
+// ЗАШИФРОВАННЫЙ НАБОР ЧИТАЕТСЯ ТЕМ ЖЕ ПУТЁМ, но только при наличии права.
+// Когда платные наборы стали контейнерами PRESETY2, витрина продолжала звать r.json() —
+// и падала на двоичном файле у ВСЕХ, включая тех, кто набор уже купил: плитки, «до/после»
+// и примерка оказывались пустыми при живом ключе на руках. Теперь ключ спрашивается у
+// лицензии: есть — отдаём настоящие рецепты, нет — пустой список, и витрина показывает
+// заранее отрисованные картинки (styles/afters из каталога). Рецепт при этом на устройство
+// без права не попадает.
 function stПресеты(p){
   if(!p.file) return Promise.resolve([]);
   if(stФайлы.has(p.file)) return stФайлы.get(p.file);
   const пр = fetch('./' + p.file, { cache:'force-cache' })
-    .then(r=> r.ok ? r.json() : null)
+    .then(async r=>{
+      if(!r.ok) return null;
+      const буф = await r.arrayBuffer();
+      if(!encЭто(буф)) return JSON.parse(new TextDecoder().decode(new Uint8Array(буф)));
+      const ключ = licКлючНабора(p.id);
+      if(!ключ) return null;                   // права нет — и рецептов тоже
+      return JSON.parse(await encРасшифровать(буф, ключ, p.id));
+    })
     .then(j=> (j && Array.isArray(j.presets)) ? j.presets.map(sanitizePreset).filter(Boolean) : [])
     .catch(()=> []);
   stФайлы.set(p.file, пр);
   return пр;
 }
+// Лицензию вставили или сняли — прошлый ответ («рецептов нет») больше не верен.
+function stЗабытьФайлы(){ stФайлы.clear(); }
 // Один пресет на готовый холст — тем же путём, что и в редакторе: плёнка, её цвета и
 // кривая, потом ручные правки пресета. Глобальное состояние не трогаем: магазин
 // считает свои картинки, пока человек редактирует свой снимок.
@@ -5470,6 +5498,17 @@ function stСравнение(опц){
     stПрименить(до, img, null);
     let p = опц.preset;
     if(!p && опц.pack){ const л = await stПресеты(опц.pack); p = л[опц.index || 0] || null; }
+    // Рецепта нет — набор платный и не куплен. Тогда «после» берём готовой картинкой из
+    // каталога: она отрисована тем же кодом заранее, поэтому выглядит ровно так же, а
+    // рецепт на устройство не попадает. Не будет и картинки — покажем кадр как есть,
+    // но это лучше, чем пустой холст.
+    if(!p && опц.pack && !опц.image){
+      const гот = (опц.pack.afters || [])[опц.index || 0];
+      if(гот){
+        const готовый = await stКадр(гот);
+        if(готовый){ stПрименить(после, готовый, null); return; }
+      }
+    }
     stПрименить(после, img, p);
   };
   if('IntersectionObserver' in window){
@@ -5731,6 +5770,9 @@ async function licУстановить(строка){
     л.наборы.forEach(id=>{ if(licКлючНабора(id)) PACKS.own(id); });
   }
   licГотова = true;
+  // Витрина могла уже сходить за набором и получить «рецептов нет» — теперь ключ есть,
+  // и запомненный отказ надо забыть, иначе плитки останутся картинками до перезапуска.
+  stЗабытьФайлы();
   return { kind:л.kind, id:л.id, exp:л.exp, наборы:л.наборы, to:л.to,
            истекла: licИстекла(л) };
 }
@@ -6077,44 +6119,69 @@ async function stОткрытьКоллекцию(p){
     body.appendChild(gal);
   }
 
-  // Плитка стилей
+  // ПЛИТКА СТИЛЕЙ. Два источника, и это не дублирование:
+  //   · есть рецепты (свой набор, бесплатный или уже купленный) — считаем плитки на месте,
+  //     как раньше;
+  //   · рецептов нет (платный, ещё не куплен) — берём готовые картинки из каталога.
+  // Второй путь появился, потому что без него страница платного набора не показывала
+  // НИЧЕГО: человек приходил смотреть, что покупает, и видел пустоту. Витрина обязана
+  // продавать, а рецепты при этом остаются закрытыми.
   const пресеты = await stПресеты(p);
-  if(пресеты.length){
+  const готовые = пресеты.length ? [] : (Array.isArray(p.styles) ? p.styles : []);
+  const всего = пресеты.length || готовые.length;
+  if(всего){
     const t = document.createElement('div'); t.className = 'st-sect';
-    t.innerHTML = '<div class="st-sect-t">' + пресеты.length + ' стилей</div>';
+    t.innerHTML = '<div class="st-sect-t">' + всего + ' ' + склСтилей(всего) + '</div>';
     body.appendChild(t);
     const grid = document.createElement('div'); grid.className = 'st-grid';
-    пресеты.forEach((пр, i)=>{
+    // Плитки идут по РАЗНЫМ кадрам коллекции по кругу: на одном и том же снимке семь
+    // видов выглядят вариациями одного, а человеку надо увидеть, что вид работает и на
+    // портрете, и на городе, и на закате.
+    const кадры = (p.samples && p.samples.length) ? p.samples : [p.cover];
+    for(let i = 0; i < всего; i++){
+      const пр = пресеты[i] || null;
+      const гот = готовые[i] || null;
       const b = document.createElement('button'); b.className = 'st-tile';
-      const c = document.createElement('canvas');
-      const nm = document.createElement('span'); nm.textContent = пр.name || ('СТИЛЬ ' + (i+1));
-      b.append(c, nm);
-      // Плитки идут по РАЗНЫМ кадрам коллекции по кругу: на одном и том же снимке семь
-      // видов выглядят вариациями одного, а человеку надо увидеть, что вид работает и на
-      // портрете, и на городе, и на закате.
-      const кадры = (p.samples && p.samples.length) ? p.samples : [p.cover];
-      // превью плитки маленькое — на карточку 96 px незачем считать большой кадр
-      const ob = new IntersectionObserver(async es=>{
-        if(!es.some(e=> e.isIntersecting)) return;
-        ob.disconnect();
-        const img = await stКадр(кадры[i % кадры.length]);
-        if(!img) return;
-        c.width = c.height = 168;
-        stПрименить(c, img, пр);
-      }, { rootMargin:'200px' });
-      ob.observe(b);
-      b.onclick = ()=> stПоказатьСтиль(p, пр, кадры[i % кадры.length]);
+      const nm = document.createElement('span');
+      nm.textContent = (пр && пр.name) || (гот && гот.name) || ('СТИЛЬ ' + (i+1));
+      if(пр){
+        const c = document.createElement('canvas');
+        b.append(c, nm);
+        // превью плитки маленькое — на карточку 96 px незачем считать большой кадр
+        const ob = new IntersectionObserver(async es=>{
+          if(!es.some(e=> e.isIntersecting)) return;
+          ob.disconnect();
+          const img = await stКадр(кадры[i % кадры.length]);
+          if(!img) return;
+          c.width = c.height = 168;
+          stПрименить(c, img, пр);
+        }, { rootMargin:'200px' });
+        ob.observe(b);
+        b.onclick = ()=> stПоказатьСтиль(p, пр, кадры[i % кадры.length]);
+      }else{
+        const im = document.createElement('img');
+        im.loading = 'lazy'; im.decoding = 'async'; im.alt = nm.textContent;
+        im.src = гот.tile;
+        b.append(im, nm);
+        b.onclick = ()=> stПоказатьКартинку(гот.tile, nm.textContent);
+      }
       grid.appendChild(b);
-    });
+    }
     body.appendChild(grid);
   }
 
   // Примерка и покупка — липкой полосой у нижнего края
   const низ = document.createElement('div'); низ.className = 'st-sticky';
-  const примерить = document.createElement('button');
-  примерить.className = 'st-btn wide'; примерить.textContent = 'Попробовать на своей фотографии';
-  примерить.onclick = ()=> stПримерка(p);
-  низ.appendChild(примерить);
+  // Примерку показываем ТОЛЬКО когда есть чем считать. У платного некупленного набора
+  // рецептов на устройстве нет, и кнопка раньше открывала выбор фото, а потом показывала
+  // кадр без единого изменения — человек читал это как «приложение сломано» ровно в тот
+  // момент, когда был готов заинтересоваться. Лучше не обещать, чем обмануть.
+  if(пресеты.length){
+    const примерить = document.createElement('button');
+    примерить.className = 'st-btn wide'; примерить.textContent = 'Попробовать на своей фотографии';
+    примерить.onclick = ()=> stПримерка(p);
+    низ.appendChild(примерить);
+  }
   const вЛенте = stВЛенте(p);
   if(!(stКуплена(p) && вЛенте)){
     const b = document.createElement('button');
@@ -6166,6 +6233,27 @@ function stПоказатьСтиль(p, пр, кадр){
   x.onclick = ()=> слой.remove();
   document.body.appendChild(слой);
 }
+// То же самое, но для готовой картинки: у платного набора рецепта на устройстве нет,
+// пересчитать «до/после» нечем — показываем крупно то, что нарисовано заранее.
+function stПоказатьКартинку(src, имя){
+  const слой = document.createElement('div');
+  слой.style.cssText = 'position:fixed; inset:0; z-index:60; background:var(--bg-deep); display:flex; flex-direction:column;';
+  const шапка = document.createElement('div'); шапка.className = 'cam-top';
+  const x = document.createElement('button'); x.className = 'cam-x'; x.textContent = '✕';
+  const t = document.createElement('span'); t.className = 'cam-title';
+  t.textContent = String(имя || 'СТИЛЬ').toUpperCase();
+  const пусто = document.createElement('span'); пусто.style.width = '40px';
+  шапка.append(x, t, пусто);
+  const тело = document.createElement('div'); тело.className = 'st-body';
+  const im = document.createElement('img');
+  im.src = src; im.alt = имя || '';
+  im.style.cssText = 'display:block; width:100%; border-radius:14px;';
+  const обёртка = document.createElement('div'); обёртка.style.padding = '0 20px';
+  обёртка.appendChild(im); тело.appendChild(обёртка);
+  слой.append(шапка, тело);
+  x.onclick = ()=> слой.remove();
+  document.body.appendChild(слой);
+}
 // ─── Примерка на своей фотографии ───
 // Сначала показываем человеку результат на ЕГО кадре, и только потом говорим про деньги.
 let stЖдёмФото = null;
@@ -6179,6 +6267,10 @@ async function stПримерить(img){
   if(!p) return false;
   const пресеты = await stПресеты(p);
   const пр = пресеты[0] || null;
+  // Второй заслон: кнопку примерки у платного некупленного набора мы и не рисуем, но
+  // сюда ведёт ещё общий обработчик выбора файла. Без рецепта показывать нечего —
+  // молча подсунуть исходник вместо результата хуже, чем честно сказать.
+  if(!пр){ stЖдёмФото = null; toast('Примерка откроется вместе с коллекцией'); return true; }
   const body = document.getElementById('stSellBody');
   body.innerHTML = '';
   document.getElementById('stSell').classList.add('open'); ensureTrap();
