@@ -4851,6 +4851,22 @@ MYP.importFrom = function(text){
 function appBase(){
   return location.origin + location.pathname.replace(/[^/]*$/, '');
 }
+// ПУБЛИЧНЫЙ адрес приложения — для ссылок, которые уходят в переписку.
+// Строить их из location нельзя: внутри мобильной оболочки приложение отдаётся с
+// https://localhost/, и присланная оттуда ссылка мертва у кого угодно, включая самого
+// отправителя. На стенде разработчика (127.0.0.1, локальная сеть) — та же беда.
+// Поэтому в таких случаях подставляем настоящий адрес сайта, а в обычном браузере
+// оставляем текущий: так ссылка работает и на зеркале, и на своём домене.
+const САЙТ = 'https://wowhak2-ship-it.github.io/photo-presets/';
+function linkBase(){
+  try{
+    const х = location.hostname;
+    const местный = !х || х === 'localhost' || х === '::1'
+                 || /^127\./.test(х) || /^192\.168\./.test(х) || /^10\./.test(х) || /\.local$/i.test(х);
+    if((location.protocol === 'http:' || location.protocol === 'https:') && !местный) return appBase();
+  }catch(_){}
+  return САЙТ;
+}
 // Ссылку читают глазами и пересылают в переписке, поэтому она должна быть короткой.
 // JSON тратил половину длины на собственные кавычки и на имя плёнки словом («Оригинал» —
 // это восемь букв кириллицы, то есть шестнадцать байт). Пишем поля подряд через «~»,
@@ -4894,7 +4910,7 @@ function presetToLink(p){
     parts[5] = hs.join(';');
   }
   while(parts.length && parts[parts.length-1] === '') parts.pop();   // хвост пустых полей ни к чему
-  return appBase() + '?p=' + packB64(parts.join('~'));
+  return linkBase() + '?p=' + packB64(parts.join('~'));
 }
 function presetFromLink(code){
   try{
@@ -5014,6 +5030,22 @@ function fileSlug(s){
   const out = String(s).toLowerCase().split('').map(ch=> map[ch] != null ? map[ch] : ch).join('')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
   return out || 'presety';
+}
+// СОХРАНЕНИЕ — ЭТО СОХРАНЕНИЕ, А НЕ «ПОДЕЛИТЬСЯ».
+// Резервная копия своих пресетов должна лечь файлом на устройство, и человек остаётся в
+// приложении. Раньше и сохранение, и передача шли через одну функцию, а та первым делом
+// звала navigator.share — на телефоне это открывало системный лист «отправить куда-то»,
+// и «сохранить» превращалось в «отдай кому-нибудь». Теперь пути разные: здесь только
+// скачивание файла, share тут не участвует вовсе.
+function savePresetsFile(list, slug){
+  const blob = presetBlob(list, null);
+  if(!blob){ toast('Эти пресеты нельзя сохранить: они купленные или с неподтверждённым источником'); return false; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = slug + '.presety.json';
+  a.click();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 1000);
+  return true;
 }
 async function sharePresets(list, slug, pack){
   const blob = presetBlob(list, pack);
@@ -5301,7 +5333,7 @@ document.getElementById('mypExportAll').onclick = ()=>{
       ? 'В копию идут только ваши собственные пресеты, а таких пока нет'
       : 'Пока нечего сохранять');
   }
-  sharePresets(list, 'presety-' + list.length);
+  if(!savePresetsFile(list, 'presety-' + list.length)) return;
   if(куп || беспл || неп){
     const части = [];
     if(куп) части.push(куп + (куп === 1 ? ' купленный' : ' купленных'));
