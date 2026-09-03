@@ -783,6 +783,27 @@
   .pdlg-line input{flex:1; min-width:0; background:transparent; border:0; outline:none;
     color:var(--text); font-family:inherit; font-size:16px; padding:0;}
   .pdlg-line input::placeholder{color:var(--faint);}
+  /* Поле для лицензии: видно всю строку, перенос по любому знаку — иначе base64url
+     уезжает одной строкой вправо и непонятно, вставилось целиком или нет. */
+  .cdlg-long{margin-top:16px;}
+  .cdlg-long textarea{width:100%; box-sizing:border-box; resize:vertical; min-height:88px;
+    background:rgba(255,255,255,.03); border:1px solid var(--line-2); border-radius:11px;
+    padding:11px 12px; color:var(--text); outline:none;
+    font-family:var(--mono); font-size:12px; line-height:1.55; letter-spacing:.02em;
+    word-break:break-all; overflow-wrap:anywhere;}
+  .cdlg-long textarea:focus{border-color:rgba(224,162,74,.45);}
+  .cdlg-long textarea::placeholder{color:var(--faint); letter-spacing:.06em;}
+  .cdlg-row{display:flex; align-items:center; gap:10px; margin-top:9px; flex-wrap:wrap;}
+  .cdlg-row button{flex:0 0 auto; background:transparent; color:var(--gold);
+    border:1px solid rgba(224,162,74,.45); border-radius:10px; padding:8px 13px;
+    font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;}
+  .cdlg-row button:active{transform:scale(.98);}
+  /* Счётчик — единственное, что показываем о лицензии. Саму строку, ключи и подпись
+     не печатаем нигде: подсказка нужна, чтобы увидеть НЕДОСТАЧУ, а не содержимое. */
+  .cdlg-meta{flex:1; min-width:0; font-family:var(--mono); font-size:10px; line-height:1.5;
+    letter-spacing:.08em; color:var(--faint);}
+  .cdlg-meta.bad{color:var(--china);}
+  .cdlg-meta.ok{color:#8FCF7A;}
   .pdlg-date{font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--faint); flex:0 0 auto;}
   .pdlg-recipe{margin-top:12px; font-family:var(--mono); font-size:10px; line-height:1.6;
     letter-spacing:.06em; color:var(--faint);}
@@ -824,6 +845,14 @@
     font-size:12px; padding:6px 4px; letter-spacing:.06em;}
   .myp-x:active{color:var(--china);}
   .myp-empty{font-size:13px; line-height:1.5; color:var(--faint); padding:2px 2px 4px;}
+  /* Заголовок раздела по происхождению. Тише строк списка: он размечает полку, а не
+     соперничает с именами пресетов. */
+  .myp-sect{padding:14px 2px 7px;}
+  .myp-sect:first-child{padding-top:2px;}
+  .myp-sect b{display:block; font-family:var(--mono); font-size:10px; font-weight:600;
+    letter-spacing:.16em; color:var(--gold);}
+  .myp-sect i{display:block; font-style:normal; font-size:11.5px; line-height:1.45;
+    color:var(--faint); margin-top:3px;}
   /* Была голой строчкой текста внизу — Артур её просто не нашёл. Теперь такая же
      кнопка, как соседние, только тише по цвету. */
   .exp-batch{width:100%; margin-top:8px; background:transparent; border:1px solid var(--line-2);
@@ -899,10 +928,15 @@
   .batch{position:fixed; inset:0; z-index:58; background:var(--bg-deep); display:none; flex-direction:column;}
   .batch.open{display:flex;}
   .batch-body{flex:1; min-height:0; overflow-y:auto; padding:calc(64px + env(safe-area-inset-top)) 20px 12px;}
-  .batch-look{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:10px;
-    letter-spacing:.1em; color:var(--dim); margin-bottom:12px;}
-  .batch-look b{color:var(--gold); font-weight:500;}
-  .batch-look i{width:3px; height:3px; border-radius:50%; background:var(--faint);}
+  /* План съёмки: четыре подписанных поля вместо одной технической строчки. */
+  .batch-plan{display:grid; grid-template-columns:repeat(2,1fr); gap:1px; margin-bottom:14px;
+    background:var(--line); border:1px solid var(--line); border-radius:12px; overflow:hidden;}
+  .batch-plan .bp{background:var(--panel); padding:9px 12px; min-width:0;}
+  .batch-plan i{display:block; font-style:normal; font-family:var(--mono); font-size:9px;
+    letter-spacing:.16em; color:var(--faint);}
+  .batch-plan b{display:block; font-size:13.5px; font-weight:500; color:var(--gold); margin-top:3px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .batch-plan .bp.pale b{color:var(--dim);}
   .batch-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
   .bi{position:relative; border-radius:3px; overflow:hidden; background:var(--panel); aspect-ratio:3/4;}
   .bi canvas{width:100%; height:100%; object-fit:cover; display:block; opacity:.5; transition:opacity .2s;}
@@ -1134,8 +1168,23 @@
     font-family:var(--mono); font-size:8.5px; letter-spacing:.1em; color:#fff; text-align:left;
     background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.72) 100%);}
   .st-tile:active{transform:scale(.97);}
+  /* Липкая полоса внизу страницы набора БОЛЬШЕ НЕ КРАСИТ СОБОЙ КАДР.
+     Раньше здесь стоял градиент до сплошного --bg-deep уже на 34 % высоты. У платного
+     некупленного набора в полосе одна кнопка, её высота 79 px — значит около 52 px
+     сплошной черноты с резкой верхней кромкой ложились поверх плиток и читались как
+     вторая панель, подложенная под кнопку. Теперь подложку несёт сама кнопка: её видно
+     на любом кадре, а плитка остаётся видна целиком.
+     pointer-events: полоса стала прозрачной, и без этого она молча перехватывала бы
+     нажатия по плиткам под собой — невидимая преграда хуже видимой плашки. */
   .st-sticky{position:sticky; bottom:0; padding:14px 20px calc(14px + env(safe-area-inset-bottom));
-    background:linear-gradient(180deg, rgba(10,9,8,0) 0%, var(--bg-deep) 34%);}
+    background:none; pointer-events:none;}
+  .st-sticky > *{pointer-events:auto;}
+  /* Прозрачная кнопка поверх фотографии нечитаема — даём ей собственный тон приложения
+     и размытие под ней. Обводка и цвет текста остаются прежними: это та же кнопка. */
+  .st-sticky .st-btn.ghost{background:rgba(22,18,12,.92);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);}
+  .st-sticky .st-restore{background:rgba(10,9,8,.72); border-radius:12px; margin-top:8px;
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);}
   /* Экран «понравился результат» после примерки: сначала кадр, потом цена. */
   .st-sell{padding:0 20px; text-align:center;}
   .st-sell h2{font-size:22px; font-weight:600; margin:20px 0 0;}
@@ -2142,7 +2191,16 @@
     <span style="width:40px"></span>
   </div>
   <div class="batch-body">
-    <div class="batch-look"><b id="batchLook">—</b><i></i><span id="batchSize">Оригинал</span></div>
+    <!-- ЧТО ИМЕННО БУДЕТ ОБРАБОТАНО — ДО НАЖАТИЯ, А НЕ ПОСЛЕ.
+         Раньше здесь стояла одна техническая строчка в десять пикселей: имя лука и размер.
+         Силы в ней не было вовсе, а читалась она как сноска. Человек запускал счёт на десятки
+         кадров, не зная точно, что на них ляжет. -->
+    <div class="batch-plan" id="batchPlan">
+      <div class="bp"><i>КАДРЫ</i><b id="batchNum">нет</b></div>
+      <div class="bp"><i>ЛУК</i><b id="batchLook">—</b></div>
+      <div class="bp"><i>СИЛА</i><b id="batchInt">100%</b></div>
+      <div class="bp"><i>РАЗМЕР</i><b id="batchSize">Оригинал</b></div>
+    </div>
     <div class="batch-grid" id="batchGrid"></div>
   </div>
   <div class="ov-dock batch-dock">
@@ -2206,6 +2264,19 @@
     <div class="pdlg-line" id="cdlgLine" style="display:none">
       <input id="cdlgInput" type="text" maxlength="48" autocomplete="off"
              autocapitalize="sentences" spellcheck="false">
+    </div>
+    <!-- ДЛИННЫЙ ВВОД: лицензия. Отдельный элемент, а не тот же input, ровно по одной
+         причине: у input стоит maxlength="48" — он нужен коротким ответам (имя набора),
+         но лицензия длиной под три сотни символов молча обрезалась на 48-м, и человек
+         получал «подпись не сходится», не понимая, что вставилось меньше половины.
+         Здесь ограничения длины нет и быть не должно. -->
+    <div class="cdlg-long" id="cdlgLong" style="display:none">
+      <textarea id="cdlgArea" rows="4" autocomplete="off" autocapitalize="off"
+                autocorrect="off" spellcheck="false"></textarea>
+      <div class="cdlg-row">
+        <button type="button" id="cdlgPaste">Вставить из буфера</button>
+        <div class="cdlg-meta" id="cdlgMeta"></div>
+      </div>
     </div>
     <div class="pdlg-btns">
       <button id="cdlgX">Отмена</button>
@@ -2291,7 +2362,7 @@
       <div class="set-gl">МОИ ПРЕСЕТЫ</div>
       <div id="mypList"></div>
       <div class="myp-acts">
-        <button class="myp-io" id="mypImport">Загрузить из файла</button>
+        <button class="myp-io" id="mypImport">Импортировать</button>
         <button class="myp-io" id="mypExportAll">Сохранить все</button>
       </div>
     </div>
@@ -2371,7 +2442,6 @@
     <div class="st-sect"><div class="st-sect-t">Свои наборы</div></div>
     <div style="padding:0 20px">
     <div class="myp-acts">
-      <button class="myp-io" id="packsImport">Загрузить купленный файл</button>
       <button class="myp-io" id="packsMake">Собрать свой набор</button>
       <button class="myp-io" id="packsLic">Активировать лицензию</button>
     </div>
@@ -3611,6 +3681,63 @@ onbEl.classList.add('open');
   })();
 })();
 
+// ЕДИНСТВЕННАЯ ТОЧКА ПРИЁМА СНИМКОВ ИЗ ДРУГОГО ПРИЛОЖЕНИЯ.
+// В браузере снимок приходит через «Поделиться» веб-приложением: воркер кладёт его в кэш,
+// и его забирает код выше. В мобильной оболочке этого пути нет — там систему обслуживает
+// нативная часть, и она зовёт ЭТУ функцию. Своего разбора и своего импорта у неё нет:
+// она передаёт сюда пути к уже скопированным во временную папку файлам.
+//
+// Почему пути, а не сами байты: адрес content:// странице недоступен, а гнать десяток
+// снимков через мост строкой base64 — это десятки мегабайт в одном вызове. Capacitor
+// умеет отдать локальный файл обычным адресом, который читается fetch'ем: байты идут
+// потоком и приходят В ТОМ ЖЕ ВИДЕ — значит EXIF цел ровно настолько, насколько он цел
+// у обычного выбора из галереи.
+//
+// Дальше работает то, что уже есть: один снимок — takePhotoFile, как из «Открыть фото»;
+// несколько — существующий выборщик съёмки. Второго конвейера импорта здесь нет.
+window.PresetyПринятьСнимки = async function(пути){
+  const список = Array.isArray(пути) ? пути.filter(Boolean) : [];
+  if(!список.length) return 'пусто';
+  const адрес = п => (window.Capacitor && Capacitor.convertFileSrc) ? Capacitor.convertFileSrc(п) : п;
+  const файлы = [];
+  for(const п of список){
+    try{
+      const r = await fetch(адрес(п));
+      if(!r.ok) continue;
+      const b = await r.blob();
+      if(!b || !b.size) continue;
+      const имя = String(п).split(/[\\/]/).pop() || 'photo.jpg';
+      файлы.push(new File([b], имя, { type: b.type || 'image/jpeg' }));
+    }catch(_){}
+  }
+  if(!файлы.length){ toast('Снимок не открылся'); return 'не прочиталось'; }
+  closeOnb();
+  // Работа в редакторе не пропадает молча: если человек уже открыл СВОЙ снимок, мы его
+  // не трогаем, а присланные кадры уходят в съёмку.
+  // Смотрим на sourceFile, а не на sourceCanvas: на старте в холсте всегда лежит
+  // демо-кадр приложения, и по холсту «занято» получалось бы всегда — присланный снимок
+  // молча никуда не попадал. sourceFile ставит только takePhotoFile, то есть настоящий
+  // выбор человека.
+  if(!sourceFile){
+    await takePhotoFile(файлы[0]);
+    if(!sourceFile) return 'не открылось';
+  }
+  if(файлы.length === 1 && !batchEl.classList.contains('open')){
+    // В редактор, а не на главную: человек пришёл сюда со снимком в руках, и лишний
+    // экран между ним и кадром — это шаг, которого он не просил. Так же ведёт себя
+    // «Поделиться» в браузере.
+    goEditor();
+    return 'открыт один кадр';
+  }
+  openBatch();
+  const dt = new DataTransfer();
+  файлы.forEach(f=> dt.items.add(f));
+  const вход = document.getElementById('batchFile');
+  вход.files = dt.files;
+  вход.dispatchEvent(new Event('change'));
+  return 'кадров: ' + файлы.length;
+};
+
 // Мессенджеры открывают ссылки в своём встроенном окне. У него отдельное хранилище:
 // пресет, добавленный там, в приложение не попадёт и пропадёт вместе с этим окном.
 // Признак такого окна — пометка WebView в имени браузера либо мостик самого мессенджера.
@@ -3920,13 +4047,15 @@ function frameList(){
 function frameActive(e, i){
   return e.mine ? myActive === e.p.id : (!myActive && i === selected);
 }
-function pickFrame(e){
-  if(e.mine){ applyMyPreset(e.p); return; }
-  // Уходим со своего пресета на встроенный лук — снимаем и правки, которые пришли
-  // ИЗ пресета. Иначе человек тапает «Ч/Б», думает что видит чистую плёнку, а на ней
-  // молча висит чужая экспозиция +18. Между обычными луками правки, как и раньше,
-  // сохраняются: они там свои, руками наведённые.
-  if(myActive){
+// Снять рецепт и встать на голую плёнку. Одно место на два входа: переход со своего
+// пресета на встроенный лук и вход в «Свой пресет». Правило «что считается рецептом»
+// (свет, кривая, цвета, сила, слой пресета, наследование) описано здесь один раз.
+//   правки=true  — стереть и ручные ползунки тоже: человек начинает с чистого листа;
+//   правки=false — оставить наведённое руками, снять только пришедшее из пресета.
+// Обрезка, ретушь и прочие операции над самим снимком сюда НЕ входят: это работа над
+// кадром, а не рецепт, и стирать её вместе с плёнкой значило бы отнимать сделанное.
+function сброситьВид(лук, правки){
+  if(правки){
     ADJ_KEYS.forEach(k=> adjust[k] = 0); syncAdjustUI();
     CURVE_KEYS.forEach(k=> curve[k] = flatCurve()); buildCurveLuts();
     HSL_BANDS.forEach(b=> HSL_PARTS.forEach(k=> hsl[b.key][k] = 0)); buildHslTables();
@@ -3935,9 +4064,18 @@ function pickFrame(e){
   // Чужой рецепт из редактора вычищен вместе с правками — начинается своя работа.
   // Это единственный путь снять наследование, и он честный: ничего чужого не осталось.
   myOrigin = null;
+  syncKeepBtn();                         // своя работа — «Сохранить как пресет» возвращается
   psetСбросить();                        // взяли голую плёнку — слоя пресета больше нет
-  selected = LOOKS.indexOf(e.look);
+  selected = Math.max(0, LOOKS.indexOf(лук));
   setIntensity(100);
+}
+function pickFrame(e){
+  if(e.mine){ applyMyPreset(e.p); return; }
+  // Уходим со своего пресета на встроенный лук — снимаем и правки, которые пришли
+  // ИЗ пресета. Иначе человек тапает «Ч/Б», думает что видит чистую плёнку, а на ней
+  // молча висит чужая экспозиция +18. Между обычными луками правки, как и раньше,
+  // сохраняются: они там свои, руками наведённые.
+  сброситьВид(e.look, !!myActive);
 }
 
 // Снимок из галереи и снимок с камеры телефона приходят одинаково — файлом, поэтому
@@ -4088,7 +4226,19 @@ function applyPendingTool(){
   if(t==='hsl'){ goEditor(); setSection('color'); return; }
   // «Свой пресет» — не отдельный экран, а те же разделы редактора: свет, цвет,
   // кривая. Заводить им копию значило бы держать две правды об одном и том же.
-  if(t==='build'){ goEditor(); setSection('light'); return; }
+  //
+  // Входим С ЧИСТОГО ЛИСТА: плёнка «Оригинал», сила 100 %, ползунки в нуле, кривая
+  // прямая, цвета не тронуты, чужой рецепт снят. Раньше кадр открывался таким, каким
+  // его оставили: сюда приходят делать СВОЙ вид, а начинали поверх чужого — только что
+  // применённого купленного или подаренного. Своим он от этого не становился (права
+  // наследуются), но человек этого не видел и строил вид на чужой основе.
+  // Сам снимок и работа над ним — обрезка, ретушь — остаются: стирается рецепт, не кадр.
+  if(t==='build'){
+    сброситьВид(LOOKS[0], true);
+    buildChips(); updateHdrTitle();       // лента и шапка обязаны показать «01 · ОРИГИНАЛ»
+    goEditor(); setSection('light');
+    return;
+  }
   if(t==='batch'){ openBatch(); return; }
   if(t==='collage'){ openCollage(); return; }
   if(!t) return;   // выбрали фото просто через «Галерея»/«Камера» — остаёмся на главной, фото уже подхвачено лентой луков
@@ -4369,12 +4519,17 @@ function buildHomeLooks(){
   const bd = base.getContext('2d').getImageData(0, 0, tw, th);
   const frames = frameList();                 // встроенные луки + свои пресеты
   const total = frames.length;
-  const mine = frames.length - LOOKS.length;
   const counter = document.getElementById('edgeCount');
   const roll = document.getElementById('rollInfo');
+  // «СВОИМ» считается ТОЛЬКО собственная работа. Раньше здесь стояло mine = вся
+  // библиотека минус встроенные луки, то есть размер полки: купленные, бесплатные из
+  // наборов и подаренные по ссылке шли в «свои». На живом телефоне это читалось как
+  // «35 ЛУКОВ · 25 СВОИХ», хотя своей работы был один пресет. Лежит на устройстве —
+  // ещё не мой; чужое своим не становится ни от переименования, ни от времени.
+  const своих = MYP.all().filter(p=> срсПресета(p) === SRC_OWN).length;
   // «1 СВОЙ», но «2 СВОИХ» — без согласования подпись читается как машинная
   const счёт = total + ' ЛУКОВ'
-    + (mine ? ' · ' + mine + (mine % 10 === 1 && mine % 100 !== 11 ? ' СВОЙ' : ' СВОИХ') : '');
+    + (своих ? ' · ' + своих + (своих % 10 === 1 && своих % 100 !== 11 ? ' СВОЙ' : ' СВОИХ') : '');
   if(roll) roll.textContent = счёт;
   const looksN = document.getElementById('looksN'); if(looksN) looksN.textContent = счёт;
   // подпись на карточке «Пресеты» — сколько видов лежит за ней
@@ -5185,6 +5340,19 @@ function запомнитьПроисхождение(p){
   const с = срсПресета(p);
   myOrigin = (с === SRC_OWN) ? null
            : { src:с, pack:p.pack || null, by:p.by || null, from:p.id };
+  syncKeepBtn();
+}
+// «СОХРАНИТЬ КАК ПРЕСЕТ» — ТОЛЬКО ДЛЯ СВОЕЙ РАБОТЫ.
+// В редакторе лежит купленный рецепт — кнопки нет. Утечки не было и раньше: копия
+// платного наследовала права родителя и оставалась платной. Но кнопка обещала то, чего
+// не даёт: человек нажимал «сохранить как пресет» на купленном виде и получал ещё одну
+// запись с тем же замком. Обещание и результат теперь совпадают.
+// Смотрим на myOrigin, а не на PSET.скрыт(): происхождение переживает удаление родителя,
+// а закрытый слой сбрасывается вместе с правками.
+function syncKeepBtn(){
+  const b = document.getElementById('adjKeep');
+  if(!b) return;
+  b.style.display = (myOrigin && myOrigin.src === SRC_PAID) ? 'none' : '';
 }
 
 // ─── Диалог: подписать свою катушку ───
@@ -5205,6 +5373,11 @@ const dayMonth = t=>{ const d = new Date(t || Date.now());
   return String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0'); };
 function openSavePreset(){
   if(!sourceCanvas) return;
+  // ЗАСЛОН ВНУТРИ САМОЙ ФУНКЦИИ, а не только на кнопке: кнопку мы прячем, но позвать
+  // сохранение можно и другим путём. Купленный рецепт своим не становится никогда.
+  if(myOrigin && myOrigin.src === SRC_PAID){
+    return toast('Купленный пресет нельзя сохранить как свой. Поправьте кадр руками — своя работа сохранится');
+  }
   pdlgOpen('НОВЫЙ ПРЕСЕТ', dayMonth(),
     myRecipeText({ base:LOOKS[selected].name, intensity, adjust }), '', 'Сохранить пресет');
 }
@@ -5220,6 +5393,7 @@ pdlgName.oninput = ()=>{
 pdlgName.onkeydown = e=>{ if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('pdlgOk').click(); } };
 document.getElementById('pdlgX').onclick = closeSavePreset;
 document.getElementById('adjKeep').onclick = openSavePreset;
+syncKeepBtn();                           // холодный старт: в редакторе ещё своя работа
 document.getElementById('pdlgOk').onclick = ()=>{
   const name = pdlgName.value.trim();
   if(!name) return;
@@ -5272,29 +5446,77 @@ function toast(text){
 // Своё подтверждение. Системный confirm() возвращает false, когда браузер решил
 // диалоги не показывать, — и человек видит кнопку, которая ничего не делает.
 let cdlgResolve = null, cdlgAsksText = false;
-function cdlgOpen(text, okText, ask, placeholder, value){
+let cdlgДлинный = false;                 // true — ответ ждём в textarea, а не в input
+function cdlgOpen(text, okText, ask, placeholder, value, длинный){
   const el = document.getElementById('cdlg');
   cdlgAsksText = !!ask;
+  cdlgДлинный = !!(ask && длинный);
   document.getElementById('cdlgTx').textContent = text;
   document.getElementById('cdlgOk').textContent = okText || 'Удалить';
   document.getElementById('cdlgOk').classList.toggle('gold', !!ask);
-  document.getElementById('cdlgLine').style.display = ask ? 'flex' : 'none';
+  document.getElementById('cdlgLine').style.display = (ask && !cdlgДлинный) ? 'flex' : 'none';
+  document.getElementById('cdlgLong').style.display = cdlgДлинный ? 'block' : 'none';
   const inp = document.getElementById('cdlgInput');
-  if(ask){ inp.placeholder = placeholder || ''; inp.value = value || ''; }
+  const обл = document.getElementById('cdlgArea');
+  if(ask){
+    const поле = cdlgДлинный ? обл : inp;
+    поле.placeholder = placeholder || '';
+    поле.value = value || '';
+    if(cdlgДлинный) cdlgМетаОбновить();
+  }
   el.classList.add('open');
-  if(ask) setTimeout(()=> inp.focus(), 50);
+  if(ask) setTimeout(()=> (cdlgДлинный ? обл : inp).focus(), 50);
   return new Promise(res=>{ cdlgResolve = res; });
 }
 // Ответ «нет» отличается от пустого ответа: отмена даёт null, пустое поле — пустую строку.
 function askConfirm(text, okText){ return cdlgOpen(text, okText, false); }
 function askText(text, okText, placeholder, value){ return cdlgOpen(text, okText, true, placeholder, value); }
+// Длинный ответ: лицензия. Отдельная дверь, потому что у короткого поля стоит потолок
+// в 48 знаков, а у лицензии их под три сотни.
+function askLong(text, okText, placeholder){ return cdlgOpen(text, okText, true, placeholder, '', true); }
 function cdlgClose(ok){
   document.getElementById('cdlg').classList.remove('open');
   const r = cdlgResolve; cdlgResolve = null;
   if(!r) return;
   if(!cdlgAsksText) return r(ok);
-  r(ok ? document.getElementById('cdlgInput').value : null);
+  const поле = document.getElementById(cdlgДлинный ? 'cdlgArea' : 'cdlgInput');
+  r(ok ? поле.value : null);
 }
+// Подсказка под полем лицензии. Печатаем ТОЛЬКО размеры: сколько знаков, сколько частей
+// и какой длины каждая. Ни самой строки, ни ключей набора, ни подписи — они здесь не
+// нужны, а на чужом экране или скриншоте были бы утечкой.
+function cdlgМетаОбновить(){
+  const el = document.getElementById('cdlgMeta');
+  if(!el) return;
+  const сыро = document.getElementById('cdlgArea').value;
+  const s = licОчистить(сыро);
+  el.classList.remove('bad', 'ok');
+  if(!s){ el.textContent = 'поле пустое'; return; }
+  const ч = s.split('.');
+  const части = [ 'знаков ' + s.length, 'частей ' + ч.length ];
+  if(ч.length === 3) части.push('payload ' + ч[1].length, 'подпись ' + ч[2].length);
+  const беда = licБеда(s);
+  el.textContent = части.join(' · ') + (беда ? ' — ' + беда : '');
+  el.classList.add(беда ? 'bad' : 'ok');
+}
+document.getElementById('cdlgArea').oninput = cdlgМетаОбновить;
+// «Вставить из буфера». Прямое чтение буфера браузер разрешает не всегда: нужен ключ
+// clipboard-read, жест человека и защищённое соединение. Поэтому отказ — не ошибка:
+// обычная вставка пальцем продолжает работать, о ней и говорим.
+document.getElementById('cdlgPaste').onclick = async ()=>{
+  const обл = document.getElementById('cdlgArea');
+  try{
+    if(!navigator.clipboard || !navigator.clipboard.readText) throw new Error('нет доступа');
+    const t = await navigator.clipboard.readText();
+    if(!t) return toast('В буфере пусто');
+    обл.value = t;
+    cdlgМетаОбновить();
+    обл.focus();
+  }catch(_){
+    обл.focus();
+    toast('Браузер не даёт читать буфер — вставьте вручную: долгое нажатие в поле → «Вставить»');
+  }
+};
 document.getElementById('cdlgOk').onclick = ()=> cdlgClose(true);
 document.getElementById('cdlgX').onclick = ()=> cdlgClose(false);
 document.getElementById('cdlg').onclick = e=>{ if(e.target.id === 'cdlg') cdlgClose(false); };
@@ -5314,30 +5536,61 @@ function renderMyList(){
     e.textContent = 'Пока пусто. Настройте фото в редакторе и сохраните обработку как пресет — она встанет кадром в ленту. Или загрузите чужие пресеты файлом.';
     host.appendChild(e); return;
   }
-  list.forEach((p, i)=>{
-    const row = document.createElement('div'); row.className = 'myp';
-    const no = document.createElement('span'); no.className = 'myp-n';
-    no.textContent = String(LOOKS.length + i + 1).padStart(2,'0');
-    const tx = document.createElement('div'); tx.className = 'myp-tx';
-    const b = document.createElement('b'); b.textContent = p.name;
-    b.title = 'Переименовать';
-    b.style.cursor = 'pointer';
-    b.onclick = ()=> openRenamePreset(p);
-    const s = document.createElement('s'); s.textContent = myRecipeText(p);
-    tx.appendChild(b); tx.appendChild(s);
-    const sh = document.createElement('button'); sh.className = 'myp-x'; sh.textContent = 'Поделиться';
-    sh.onclick = ()=> sharePresetLink(p);
-    const x = document.createElement('button'); x.className = 'myp-x'; x.textContent = 'Удалить';
-    x.onclick = async ()=>{
-      if(!await askConfirm('Удалить пресет «' + p.name + '»?')) return;
-      MYP.remove(p.id);
-      if(myActive === p.id){ myActive = null; psetСбросить(); }
-      renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
-    };
-    const acts = document.createElement('div'); acts.className = 'myp-row2';
-    acts.appendChild(sh); acts.appendChild(x);
-    row.appendChild(no); row.appendChild(tx); row.appendChild(acts);
-    host.appendChild(row);
+  // РАЗДЕЛЫ ПО ПРОИСХОЖДЕНИЮ. Одним списком человек не мог понять, что из этого его
+  // работа, что куплено, а что подарили ссылкой, — а от этого зависит, можно ли пресет
+  // передать дальше. Порядок разделов — по убыванию прав: сначала то, чем человек
+  // распоряжается свободно.
+  const РАЗДЕЛЫ = [
+    { срс:SRC_OWN,     имя:'МОИ',        нота:'ваша работа — можно передать и продать' },
+    { срс:SRC_FREE,    имя:'БЕСПЛАТНЫЕ', нота:'из наборов Presety' },
+    { срс:SRC_PAID,    имя:'КУПЛЕННЫЕ',  нота:'доступны по лицензии, рецепт закрыт' },
+    { срс:SRC_UNKNOWN, имя:'ПОЛУЧЕННЫЕ', нота:'от другого автора — применять можно, передавать дальше нельзя' }
+  ];
+  РАЗДЕЛЫ.forEach(р=>{
+    const свои = list.filter(p=> срсПресета(p) === р.срс);
+    if(!свои.length) return;
+    const h = document.createElement('div'); h.className = 'myp-sect';
+    const t = document.createElement('b'); t.textContent = р.имя + ' — ' + свои.length;
+    const n = document.createElement('i'); n.textContent = р.нота;
+    h.appendChild(t); h.appendChild(n);
+    host.appendChild(h);
+    свои.forEach(p=>{
+      const row = document.createElement('div'); row.className = 'myp';
+      const no = document.createElement('span'); no.className = 'myp-n';
+      // Номер берём по месту в ЛЕНТЕ, а не по порядку внутри раздела: та же цифра стоит
+      // на кадре контактного листа и в шапке редактора. Разделы переставляют строки
+      // местами — номера при этом обязаны остаться прежними, иначе «12» в настройках и
+      // «12» на листе окажутся разными видами.
+      no.textContent = String(LOOKS.length + list.indexOf(p) + 1).padStart(2,'0');
+      const tx = document.createElement('div'); tx.className = 'myp-tx';
+      const b = document.createElement('b'); b.textContent = p.name;
+      b.title = 'Переименовать';
+      b.style.cursor = 'pointer';
+      b.onclick = ()=> openRenamePreset(p);
+      const s = document.createElement('s');
+      // Рецепт купленного не печатаем и здесь: строка «ПЛЁНКА · сила 70 % · контраст +14» —
+      // это и есть рецепт, читаемый глазами. В панелях он закрыт, значит и в списке тоже.
+      s.textContent = (р.срс === SRC_PAID) ? 'рецепт закрыт' : myRecipeText(p);
+      tx.appendChild(b); tx.appendChild(s);
+      const acts = document.createElement('div'); acts.className = 'myp-row2';
+      // «Поделиться» показываем только тому, что действительно можно отдать. Заслон внутри
+      // sharePresetLink остаётся на месте — кнопка просто не обещает невозможного.
+      if(можноОтдать(p)){
+        const sh = document.createElement('button'); sh.className = 'myp-x'; sh.textContent = 'Поделиться';
+        sh.onclick = ()=> sharePresetLink(p);
+        acts.appendChild(sh);
+      }
+      const x = document.createElement('button'); x.className = 'myp-x'; x.textContent = 'Удалить';
+      x.onclick = async ()=>{
+        if(!await askConfirm('Удалить пресет «' + p.name + '»?')) return;
+        MYP.remove(p.id);
+        if(myActive === p.id){ myActive = null; psetСбросить(); }
+        renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle();
+      };
+      acts.appendChild(x);
+      row.appendChild(no); row.appendChild(tx); row.appendChild(acts);
+      host.appendChild(row);
+    });
   });
 }
 // ─── Настройки приложения: только то, что действительно на что-то влияет ───
@@ -5401,8 +5654,18 @@ document.getElementById('mypFile').onchange = e=>{
       if(packsEl.classList.contains('open')) renderPacks();
     }
     const n = res.added;
-    toast('Добавлено ' + n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'пресет'
-        : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'пресета' : 'пресетов')));
+    const слово = n % 10 === 1 && n % 100 !== 11 ? 'пресет'
+                : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'пресета' : 'пресетов');
+    // Говорим не только «сколько», но и «с какими правами». Раньше человек видел
+    // «Добавлено 7 пресетов» и считал их своими: они лежали в его библиотеке и стояли
+    // в его ленте. Потом упирался в запрет передать их дальше и не понимал, почему.
+    const пришло = MYP.all().slice(-n);
+    const чужих = пришло.filter(p=> срсПресета(p) === SRC_UNKNOWN).length;
+    const своих = пришло.filter(p=> срсПресета(p) === SRC_OWN).length;
+    toast('Добавлено ' + n + ' ' + слово
+        + (чужих === n ? '. Они от другого автора: применять можно, передавать дальше нельзя'
+         : своих === n ? '. Это ваша работа — права сохранены'
+         : '. Часть от другого автора: их можно применять, но не передавать дальше'));
   };
   fr.onerror = ()=> toast('Файл не прочитался');
   fr.readAsText(f);
@@ -5789,6 +6052,38 @@ if(ТЕСТОВАЯ_СБОРКА){
 const LIC_КЛЮЧ = 'presetyLic';
 const LIC_ПРЕФИКС = 'PRESETY1';
 const LIC_ВЕРСИЯ = 1;                 // максимальная версия формата, которую понимаем
+// ПОДГОТОВКА ВСТАВЛЕННОЙ СТРОКИ.
+// Лицензия ездит через почту и мессенджеры, а те переносят её по строкам, добавляют
+// отступы и невидимые знаки. Убираем РОВНО их и ничего больше.
+// Почему это безопасно: алфавит лицензии — base64url (A–Z, a–z, 0–9, «-», «_») плюс
+// точка-разделитель. Ни пробел, ни перенос строки, ни неразрывный пробел, ни мягкий
+// перенос, ни знаки нулевой ширины, ни BOM в этот алфавит не входят и значащими быть
+// не могут. Поэтому payload и подпись остаются побайтно теми же, и проверка идёт по
+// исходной лицензии. Никаких других замен здесь нет и быть не должно: любая правка
+// значащего символа сломала бы подпись — и виноватым выглядел бы формат, а не мы.
+function licОчистить(s){
+  // \s — пробелы и переносы строк; дальше поимённо невидимки, которые вставляют
+  // почтовые клиенты: неразрывный пробел, мягкий перенос, знаки нулевой ширины, BOM.
+  return String(s == null ? '' : s)
+    .replace(/[\s\u00A0\u00AD\u200B-\u200D\u2060\uFEFF]/g, '');
+}
+
+// Короткая причина, почему строка заведомо не лицензия. Нужна ДО проверки подписи:
+// «подпись не сходится» на обрезанной строке уводит в неверную сторону — человек начинает
+// думать, что лицензия плохая, хотя вставилась её половина.
+function licБеда(s){
+  if(!s) return 'пусто';
+  const ч = s.split('.');
+  if(ч[0] !== LIC_ПРЕФИКС) return 'начало не PRESETY1';
+  if(ч.length < 3) return 'строка вставлена не полностью';
+  if(ч.length > 3) return 'лишние точки';
+  if(!ч[1] || !ч[2]) return 'строка вставлена не полностью';
+  // Подпись Ed25519 — всегда 64 байта, то есть ровно 86 знаков base64url без хвостовых «=».
+  // Короче — строку обрезали; это самая частая беда при вставке из письма.
+  if(ч[2].length < 86) return 'подпись обрезана';
+  if(!/^[A-Za-z0-9_-]+$/.test(ч[1]) || !/^[A-Za-z0-9_-]+$/.test(ч[2])) return 'посторонние знаки';
+  return null;
+}
 // ПУБЛИЧНАЯ половина ключа магазина: 32 байта Ed25519 в base64url. Ею только проверяют
 // подпись — подписать ею нельзя, поэтому держать её в открытом коде безопасно и нужно.
 // Приватная половина живёт вне git, у владельца магазина, и в приложение не попадает
@@ -5910,9 +6205,12 @@ async function licПрочитать(){
 // Установка лицензии человеком. Негодную не сохраняем: незачем держать мусор, который
 // всё равно не работает. Годную сохраняем целиком, строкой.
 async function licУстановить(строка){
-  const л = await licПроверить(строка);
+  // Чистим ЗДЕСЬ, а не только у кнопки: активация приезжает и из файла, и из ответа
+  // платёжной системы, и любой будущий путь должен получить ту же подготовку. Убираются
+  // только пробелы и невидимки — см. licОчистить, значащие знаки не трогаются.
+  const s = licОчистить(строка);
+  const л = await licПроверить(s);
   if(!л) return { error:'Лицензия не читается или подпись не сходится' };
-  const s = String(строка).trim();
   if(л.kind === 'pro'){
     // Подписка заменяет только предыдущую подписку. packsOwned не трогаем: месяц PRO не
     // должен оставлять библиотеку навсегда, а чужие покупки — тем более пропадать.
@@ -6549,9 +6847,21 @@ function syncPacksLic(){
   el.textContent = части.join(' ');
 }
 document.getElementById('packsLic').onclick = async ()=>{
-  const s = await askText('Вставьте лицензию из письма', 'Активировать', 'PRESETY1.…');
-  const строка = (s || '').trim();
+  const s = await askLong('Вставьте лицензию из письма — строку целиком, от PRESETY1 до конца',
+                          'Активировать', 'PRESETY1.…');
+  if(s === null) return;                          // отменили
+  const строка = licОчистить(s);
   if(!строка) return;
+  // Сначала говорим про НЕДОСТАЧУ, и только потом про подпись. Обрезанная строка тоже
+  // не проходит проверку подписи, но «подпись не сходится» уводит в неверную сторону:
+  // человек решает, что лицензия испорчена, и идёт просить новую вместо того, чтобы
+  // скопировать эту целиком.
+  const беда = licБеда(строка);
+  if(беда === 'строка вставлена не полностью' || беда === 'подпись обрезана'){
+    return toast('Лицензия вставлена не полностью (' + строка.length + ' знаков). '
+               + 'Скопируйте ВСЮ строку PRESETY1… до самого конца, вместе с последней частью после точки.');
+  }
+  if(беда) return toast('Это не похоже на лицензию: ' + беда);
   const r = await licУстановить(строка);
   if(r.error) return toast(r.error);
   // Право на купленный набор выдаёт сама licУстановить — здесь остаётся только показать
@@ -6568,7 +6878,11 @@ document.getElementById('packsLic').onclick = async ()=>{
 document.getElementById('rowPacks').onclick = openPacks;
 document.getElementById('homePacks').onclick = openPacks;
 document.getElementById('packsClose').onclick = ()=> packsEl.classList.remove('open');
-document.getElementById('packsImport').onclick = ()=> document.getElementById('mypFile').click();
+// Кнопки «Загрузить купленный файл» больше нет. Она вела в тот же файловый выбор, что и
+// «Загрузить из файла»: две разные подписи и одно поведение. Хуже того, обе обещали
+// невозможное — купленный набор приезжает зашифрованным контейнером с сайта, а ключ к
+// нему приходит с лицензией, файлом его не «загрузить». Осталась одна кнопка
+// «Импортировать», а покупка возвращается кнопкой «Активировать лицензию» рядом.
 // Сборка набора: своя работа превращается в товар одним файлом. Имя набора и автор
 // нужны не для красоты — по ним покупатель видит, чей это вид, а витрина понимает,
 // что набор уже стоит.
@@ -7183,10 +7497,25 @@ const batchStatus = t => { document.getElementById('batchStatus').textContent = 
 function openBatch(){
   if(!sourceCanvas) return;
   ensureTrap(); ensureWorkers();
-  document.getElementById('batchLook').textContent = currentFrame().name.toUpperCase();
-  document.getElementById('batchSize').textContent = expMax ? expMax + ' px' : 'Оригинал';
   batchItems = []; renderBatch();
   batchEl.classList.add('open');
+}
+// План съёмки: что именно и чем будет обработано. Пересобирается вместе со списком
+// кадров — иначе цифра «КАДРЫ» осталась бы от прошлого открытия.
+function syncBatchPlan(){
+  const n = batchItems.length;
+  const num = document.getElementById('batchNum');
+  if(num){
+    num.textContent = n ? (n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'кадр'
+      : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'кадра' : 'кадров'))) : 'не выбраны';
+    num.parentNode.classList.toggle('pale', !n);
+  }
+  const look = document.getElementById('batchLook');
+  if(look) look.textContent = currentFrame().name;
+  const int = document.getElementById('batchInt');
+  if(int) int.textContent = intensity + '%';
+  const size = document.getElementById('batchSize');
+  if(size) size.textContent = expMax ? expMax + ' px' : 'Оригинал';
 }
 function closeBatch(){
   if(batchBusy) return;                       // на середине счёта не закрываем
@@ -7194,6 +7523,7 @@ function closeBatch(){
   batchItems = []; renderBatch();
 }
 function renderBatch(){
+  syncBatchPlan();
   const grid = document.getElementById('batchGrid');
   grid.innerHTML = '';
   batchItems.forEach((it, i)=>{
@@ -7232,7 +7562,12 @@ function renderBatch(){
     pick.textContent = 'Сохранить по одному';
     batchStatus('Съёмка готова: ' + ok + ' из ' + batchItems.length);
   } else {
-    go.textContent = всего ? 'Обработать ' + всего : 'Обработать';
+    // Кнопка называет и число кадров, и вид: «Обработать» ни о чём не говорила, а нажатие
+    // запускает счёт на десятки кадров, который потом не отменить одним движением.
+    // Имя лука приписываем, только когда он выбран, — «· Оригинал» было бы шумом.
+    const луч = currentFrame().name;
+    const свой = !(selected === 0 && !myActive);
+    go.textContent = всего ? ('Обработать ' + всего + (свой ? ' · ' + луч : '')) : 'Обработать';
     pick.textContent = всего ? 'Добавить ещё' : 'Выбрать кадры';
     batchStatus(noLook
       ? 'Вид не выбран — кадры сохранятся как есть. Откройте фото и выберите плёнку'
