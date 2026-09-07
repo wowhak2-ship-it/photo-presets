@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Пресеты · проверка обновления</title>
+<style>
+  :root{ --bg:#0E0D0B; --fg:#EDE6DA; --dim:#8B8378; --line:#2A2723; --ok:#7FBF6A; --bad:#E4794A; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:16px 14px 40px; background:var(--bg); color:var(--fg);
+        font:14px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  h1{ font-size:14px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim);
+      font-weight:600; margin:0 0 14px; }
+  .row{ border-top:1px solid var(--line); padding:9px 0; }
+  .k{ color:var(--dim); font-size:11px; letter-spacing:.1em; text-transform:uppercase; }
+  .v{ font-size:17px; margin-top:2px; word-break:break-word; }
+  .ok{ color:var(--ok); } .bad{ color:var(--bad); }
+  .note{ color:var(--dim); font-size:12px; margin:16px 0 8px; }
+  button{ display:block; width:100%; margin:8px 0; padding:13px 12px; background:transparent;
+          color:var(--fg); border:1px solid var(--line); border-radius:10px;
+          font:inherit; font-size:14px; text-align:left; }
+  button:disabled{ color:var(--dim); }
+  button small{ display:block; color:var(--dim); font-size:11px; margin-top:3px; }
+</style>
+</head>
+<body>
+<h1>Пресеты · проверка обновления</h1>
+<div id="out"></div>
+
+<div class="note">Страница только читает состояние. Ничего не удаляет, не чистит и не меняет:
+ни кэши приложения, ни модели ИИ, ни сохранённые пресеты.</div>
+
+<button id="кнОбновить">Проба 1 · попросить обновление
+  <small>то же самое, что приложение делает при каждом запуске: спрашивает сайт и,
+  если версия новее, ставит её. Покажет, чем кончилась установка.</small></button>
+<button id="кнЗапись">Проба 2 · записать комплект
+  <small>повторяет то, что делает установка: пишет копии страницы и иконок (~1 МБ) в свой
+  временный кэш и сразу его удаляет. Кэши приложения не трогает — покажет текст ошибки,
+  если места нет.</small></button>
+
+<script>
+const out = document.getElementById('out');
+const строки = [];
+function печать(k, v, класс){
+  строки.push('<div class="row"><div class="k">' + k + '</div><div class="v ' +
+              (класс || '') + '">' + String(v) + '</div></div>');
+  out.innerHTML = строки.join('');
+}
+const мб = b => (b / 1048576).toFixed(0) + ' МБ';
+const номер = t => ((t || '').match(/photo-presets-(v\d+)/) || [])[1] || '—';
+const жив = w => w ? w.state : 'нет';
+let reg = null;
+
+// ───────────────────────── ТОЛЬКО ЧТЕНИЕ ─────────────────────────
+(async function(){
+  // 1. Какие кэши лежат на устройстве.
+  let имена = [];
+  try{ имена = await caches.keys(); }catch(e){ печать('caches.keys()', 'ошибка: ' + e, 'bad'); }
+  const версии = имена.filter(k=> /^photo-presets-v\d+$/.test(k)).sort();
+  печать('кэш(и) версии', версии.length ? версии.join('  +  ') : 'НЕТ',
+         версии.length === 1 ? '' : 'bad');
+
+  // 2. Что эти кэши реально отдают — страница и воркер внутри них.
+  for(const имя of версии){
+    try{
+      const c = await caches.open(имя);
+      const r = (await c.match('./index.html')) || (await c.match('./'));
+      const t = r ? await r.text() : '';
+      const замок = t.indexOf('Сохранить как пресет — в PRO') >= 0;
+      печать(имя + ' · index.html',
+             !t ? 'страницы в кэше нет'
+                : (замок ? 'НОВОЕ ядро (PRO-замок есть)' : 'СТАРОЕ ядро (PRO-замка нет)') +
+                  ' · ' + t.length.toLocaleString('ru') + ' знаков',
+             !t ? 'bad' : (замок ? 'ok' : 'bad'));
+      const s = await c.match('./sw.js');
+      печать(имя + ' · sw.js в кэше', s ? номер(await s.text()) : 'не лежит');
+    }catch(e){ печать(имя, 'ошибка: ' + e, 'bad'); }
+  }
+
+  // 3. Кто управляет страницей и что стоит рядом.
+  try{ reg = await navigator.serviceWorker.getRegistration(); }
+  catch(e){ печать('getRegistration', 'ошибка: ' + e, 'bad'); }
+  const c0 = navigator.serviceWorker.controller;
+  печать('controller', c0 ? c0.state + ' · ' + c0.scriptURL.replace(/^https?:\/\/[^/]+/, '')
+                          : 'НЕТ — страницей никто не управляет', c0 ? '' : 'bad');
+  if(reg){
+    печать('scope', reg.scope.replace(/^https?:\/\/[^/]+/, ''));
+    печать('active', жив(reg.active));
+    печать('waiting', жив(reg.waiting), reg.waiting ? 'bad' : '');
+    печать('installing', жив(reg.installing));
+  }else{
+    печать('registration', 'НЕТ регистрации', 'bad');
+  }
+
+  // 4. Что лежит на сайте прямо сейчас (случайный хвост — чтобы ответ пришёл из сети).
+  try{
+    печать('на сайте сейчас',
+           номер(await fetch('./sw.js?d=' + Date.now(), { cache:'no-store' }).then(r=>r.text())));
+  }catch(_){ печать('на сайте сейчас', 'нет сети', 'bad'); }
+
+  // 5. Место: установка качает свой комплект целиком, без места она срывается молча.
+  try{
+    const s = await navigator.storage.estimate();
+    печать('место', 'занято ' + мб(s.usage) + ' из ' + мб(s.quota) +
+                    ' · свободно ' + мб(s.quota - s.usage),
+           (s.quota - s.usage) < 60 * 1048576 ? 'bad' : '');
+  }catch(_){ печать('место', 'не знаю'); }
+  try{ печать('постоянное хранилище', (await navigator.storage.persisted()) ? 'да' : 'нет'); }
+  catch(_){}
+
+  печать('прочие кэши', имена.filter(k=> !/^photo-presets-v\d+$/.test(k)).join(', ') || '—');
+  печать('снято', new Date().toLocaleTimeString('ru'));
+})();
+
+// ───────────────────────── ПРОБЫ, ТОЛЬКО ПО КНОПКЕ ─────────────────────────
+document.getElementById('кнОбновить').onclick = async function(){
+  this.disabled = true;
+  if(!reg){ печать('проба 1', 'регистрации нет — просить нечего', 'bad'); return; }
+  печать('проба 1 · обновление', 'спрашиваю сайт…');
+  const место = строки.length - 1;
+  const показать = (s, класс)=>{
+    строки[место] = '<div class="row"><div class="k">проба 1 · обновление</div>' +
+                    '<div class="v ' + (класс || '') + '">' + s + '</div></div>';
+    out.innerHTML = строки.join('');
+  };
+  const итог = await new Promise(готово=>{
+    const таймер = setTimeout(()=> готово('прошло 60 с, состояние не изменилось'), 60000);
+    const следить = w=>{
+      if(!w) return;
+      const шаг = ()=>{
+        показать('новый воркер: ' + w.state, w.state === 'redundant' ? 'bad' : '');
+        if(w.state === 'redundant'){ clearTimeout(таймер); готово('СРЫВ установки (redundant)'); }
+        if(w.state === 'activated'){ clearTimeout(таймер); готово('установился и включился'); }
+      };
+      шаг();
+      w.addEventListener('statechange', шаг);
+    };
+    reg.addEventListener('updatefound', ()=> следить(reg.installing));
+    следить(reg.installing || reg.waiting);
+    reg.update().catch(e=>{ clearTimeout(таймер); готово('update() отказал: ' + e); });
+  });
+  показать(итог, /СРЫВ|отказал|не изменилось/.test(итог) ? 'bad' : 'ok');
+};
+
+document.getElementById('кнЗапись').onclick = async function(){
+  this.disabled = true;
+  // Свой отдельный кэш со своим именем: ни один кэш приложения при этом не открывается.
+  const проба = 'проба-обновления';
+  try{
+    const c = await caches.open(проба);
+    await c.addAll(['./index.html', './manifest.webmanifest', './demo.jpg', './avatar.jpg',
+                    './icon-512-v2.png', './icon-512-maskable-v2.png']);
+    печать('проба 2 · запись комплекта', 'получилось', 'ok');
+  }catch(e){
+    печать('проба 2 · запись комплекта',
+           'СРЫВ · ' + (e && e.name ? e.name + ': ' : '') + e, 'bad');
+  }
+  try{ await caches.delete(проба); }catch(_){}
+  печать('временный кэш', 'удалён (свой, не приложения)');
+};
+</script>
+</body>
+</html>
