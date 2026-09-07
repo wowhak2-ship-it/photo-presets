@@ -5418,8 +5418,12 @@ function syncKeepBtn(){
 // ПРЕДЛОЖЕНИЕ ОФОРМИТЬ PRO. Отдельного экрана не заводим: он уже есть — раздел «Наборы»,
 // там же блок с планами и кнопкой «Подключить PRO». Здесь только объясняем, за что
 // платят, и отводим туда. Право спрашиваем ЕДИНСТВЕННОЙ функцией естьPRO().
-async function предложитьPRO(текст){
-  if(await askConfirm(текст, 'Подключить PRO')) openPacks();
+const PRO_ЗАГОЛОВОК = 'НАСТРОЙКИ ГОТОВЫ';
+const PRO_ТЕКСТ = 'Свет, цвет и кривая доступны бесплатно. Готовое фото можно сохранить '
+                + 'без PRO. В PRO можно сохранить эти настройки как свой пресет и применять '
+                + 'их снова к другим кадрам.';
+async function предложитьPRO(){
+  if(await askConfirm(PRO_ТЕКСТ, 'Подключить PRO', PRO_ЗАГОЛОВОК)) openPacks();
 }
 
 // ─── Диалог: подписать свою катушку ───
@@ -5450,12 +5454,7 @@ function openSavePreset(){
   // меняется, готовый снимок сохраняется. Платой закрыто ровно одно — оставить настройки
   // себе на будущее. Поэтому выходим ДО окна с именем: настройки в редакторе остаются
   // как были, человек продолжает с того же места.
-  if(!естьPRO()){
-    предложитьPRO('Настраивайте фото как угодно — свет, цвет и кривая доступны бесплатно, '
-                + 'и готовый снимок сохранится. В PRO настройки можно оставить своим пресетом '
-                + 'и применять их снова, к любому кадру.');
-    return;
-  }
+  if(!естьPRO()){ предложитьPRO(); return; }
   pdlgOpen('НОВЫЙ ПРЕСЕТ', dayMonth(),
     myRecipeText({ base:LOOKS[selected].name, intensity, adjust }), '', 'Сохранить пресет');
 }
@@ -5509,12 +5508,7 @@ document.getElementById('pdlgOk').onclick = ()=>{
   // ПОСЛЕДНИЙ РУБЕЖ. Окно без PRO не открывается, но створка сохранения — здесь, и
   // проверка обязана стоять там, где рождается пресет: новый путь к этой строке однажды
   // появится. Право то же самое, спрошено той же единственной функцией.
-  if(!естьPRO()){
-    closeSavePreset();
-    предложитьPRO('Сохранить настройки своим пресетом можно в PRO. Сам редактор остаётся '
-                + 'открытым: свет, цвет и кривая работают, готовый снимок сохраняется.');
-    return;
-  }
+  if(!естьPRO()){ closeSavePreset(); предложитьPRO(); return; }
   const list = MYP.add(name);
   myActive = list[list.length-1].id;      // сразу работаем из только что сохранённого
   closeSavePreset();
@@ -5534,10 +5528,14 @@ function toast(text){
 // диалоги не показывать, — и человек видит кнопку, которая ничего не делает.
 let cdlgResolve = null, cdlgAsksText = false;
 let cdlgДлинный = false;                 // true — ответ ждём в textarea, а не в input
-function cdlgOpen(text, okText, ask, placeholder, value, длинный){
+function cdlgOpen(text, okText, ask, placeholder, value, длинный, заголовок){
   const el = document.getElementById('cdlg');
   cdlgAsksText = !!ask;
   cdlgДлинный = !!(ask && длинный);
+  // Заголовок раньше был намертво вписан в разметку и всегда говорил «ПОДТВЕРЖДЕНИЕ».
+  // Теперь его можно назвать по делу; кто не называет — получает прежнее слово, поэтому
+  // все остальные окна выглядят как выглядели.
+  document.getElementById('cdlgT').textContent = заголовок || 'ПОДТВЕРЖДЕНИЕ';
   document.getElementById('cdlgTx').textContent = text;
   document.getElementById('cdlgOk').textContent = okText || 'Удалить';
   document.getElementById('cdlgOk').classList.toggle('gold', !!ask);
@@ -5556,7 +5554,7 @@ function cdlgOpen(text, okText, ask, placeholder, value, длинный){
   return new Promise(res=>{ cdlgResolve = res; });
 }
 // Ответ «нет» отличается от пустого ответа: отмена даёт null, пустое поле — пустую строку.
-function askConfirm(text, okText){ return cdlgOpen(text, okText, false); }
+function askConfirm(text, okText, заголовок){ return cdlgOpen(text, okText, false, '', '', false, заголовок); }
 function askText(text, okText, placeholder, value){ return cdlgOpen(text, okText, true, placeholder, value); }
 // Длинный ответ: лицензия. Отдельная дверь, потому что у короткого поля стоит потолок
 // в 48 знаков, а у лицензии их под три сотни.
