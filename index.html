@@ -5423,7 +5423,8 @@ const PRO_ТЕКСТ = 'Свет, цвет и кривая доступны бе
                 + 'без PRO. В PRO можно сохранить эти настройки как свой пресет и применять '
                 + 'их снова к другим кадрам.';
 async function предложитьPRO(){
-  if(await askConfirm(PRO_ТЕКСТ, 'Подключить PRO', PRO_ЗАГОЛОВОК)) openPacks();
+  // Последним доводом идёт золото: подключение PRO — созидательное действие.
+  if(await askConfirm(PRO_ТЕКСТ, 'Подключить PRO', PRO_ЗАГОЛОВОК, true)) openPacks();
 }
 
 // ─── Диалог: подписать свою катушку ───
@@ -5528,7 +5529,7 @@ function toast(text){
 // диалоги не показывать, — и человек видит кнопку, которая ничего не делает.
 let cdlgResolve = null, cdlgAsksText = false;
 let cdlgДлинный = false;                 // true — ответ ждём в textarea, а не в input
-function cdlgOpen(text, okText, ask, placeholder, value, длинный, заголовок){
+function cdlgOpen(text, okText, ask, placeholder, value, длинный, заголовок, созидательное){
   const el = document.getElementById('cdlg');
   cdlgAsksText = !!ask;
   cdlgДлинный = !!(ask && длинный);
@@ -5538,7 +5539,12 @@ function cdlgOpen(text, okText, ask, placeholder, value, длинный, заг�
   document.getElementById('cdlgT').textContent = заголовок || 'ПОДТВЕРЖДЕНИЕ';
   document.getElementById('cdlgTx').textContent = text;
   document.getElementById('cdlgOk').textContent = okText || 'Удалить';
-  document.getElementById('cdlgOk').classList.toggle('gold', !!ask);
+  // Красный в приложении означает разрушение: удалить пресет, снести набор. Окно, которое
+  // ЧТО-ТО ДАЁТ, красным быть не должно — оно просит согласия, а не предупреждает. Золото
+  // включают два случая: окно с полем ввода (там кнопка всегда созидательная) и явная
+  // пометка от вызывающего. Кто её не ставит, получает прежнюю красную кнопку — поэтому
+  // все подтверждения удаления выглядят ровно как выглядели.
+  document.getElementById('cdlgOk').classList.toggle('gold', !!ask || !!созидательное);
   document.getElementById('cdlgLine').style.display = (ask && !cdlgДлинный) ? 'flex' : 'none';
   document.getElementById('cdlgLong').style.display = cdlgДлинный ? 'block' : 'none';
   const inp = document.getElementById('cdlgInput');
@@ -5554,7 +5560,9 @@ function cdlgOpen(text, okText, ask, placeholder, value, длинный, заг�
   return new Promise(res=>{ cdlgResolve = res; });
 }
 // Ответ «нет» отличается от пустого ответа: отмена даёт null, пустое поле — пустую строку.
-function askConfirm(text, okText, заголовок){ return cdlgOpen(text, okText, false, '', '', false, заголовок); }
+function askConfirm(text, okText, заголовок, созидательное){
+  return cdlgOpen(text, okText, false, '', '', false, заголовок, созидательное);
+}
 function askText(text, okText, placeholder, value){ return cdlgOpen(text, okText, true, placeholder, value); }
 // Длинный ответ: лицензия. Отдельная дверь, потому что у короткого поля стоит потолок
 // в 48 знаков, а у лицензии их под три сотни.
