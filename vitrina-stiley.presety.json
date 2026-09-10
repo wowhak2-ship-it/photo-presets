@@ -4,7 +4,7 @@
   "pack": {
     "id": "vitrina-6",
     "name": "Витрина стилей",
-    "count": 7,
+    "count": 6,
     "author": "Пресеты"
   },
   "presets": [
@@ -275,82 +275,6 @@
           "hue": -4,
           "sat": -20,
           "lum": -4
-        }
-      }
-    },
-    {
-      "name": "Светлый воздух",
-      "base": "Оригинал",
-      "intensity": 100,
-      "adjust": {
-        "exposure": 16,
-        "contrast": -18,
-        "temp": 4,
-        "saturation": -12,
-        "grain": 0,
-        "bloom": 14,
-        "shadows": 32,
-        "highlights": -20,
-        "tint": 2,
-        "splitSh": 6,
-        "splitHi": 14,
-        "vibrance": 14,
-        "vignette": 0
-      },
-      "curve": {
-        "rgb": [
-          [
-            0,
-            28
-          ],
-          [
-            60,
-            86
-          ],
-          [
-            128,
-            148
-          ],
-          [
-            200,
-            210
-          ],
-          [
-            255,
-            246
-          ]
-        ]
-      },
-      "hsl": {
-        "red": {
-          "hue": 0,
-          "sat": -8,
-          "lum": 8
-        },
-        "orange": {
-          "hue": -2,
-          "sat": 4,
-          "lum": 12
-        },
-        "yellow": {
-          "hue": -6,
-          "sat": -22,
-          "lum": 10
-        },
-        "green": {
-          "hue": -8,
-          "sat": -26,
-          "lum": 10
-        },
-        "aqua": {
-          "hue": 0,
-          "sat": -18,
-          "lum": 8
-        },
-        "blue": {
-          "hue": 0,
-          "sat": -14,
-          "lum": 8
         }
       }
     },
