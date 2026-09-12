@@ -1958,7 +1958,7 @@
     </button>
     <button class="ht" data-go="ai">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2c4.6 0 7.4 3.1 7.4 7.6 0 4.9-3.3 9.6-7.4 9.6S4.6 15.7 4.6 10.8c0-4.5 2.8-7.6 7.4-7.6z"/><path d="M8.9 11.4c.9-.8 2-.8 2.9 0M15.1 11.4c-.6-.5-1.3-.7-2-.5"/><path d="M17.6 4.2l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5z" fill="currentColor" stroke="none"/></svg>
-      <b>ИИ-ретушь</b><i>мешки и кожа</i>
+      <b>Ретушь</b><i>автоматическая</i>
     </button>
     <button class="ht" data-go="bokeh">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="10" r="4.2"/><circle cx="16" cy="7" r="2.6"/><circle cx="15.5" cy="15" r="3.4"/></svg>
@@ -4257,6 +4257,11 @@ function applyPendingTool(){
   setTab(t==='adjust' ? 'adjust' : 'presets');
 }
 function runTool(tool){
+  // «Ретушь» — платная карточка целиком. Спрашиваем право ЗДЕСЬ, до галереи и до экрана:
+  // пускать внутрь с выключенным ползунком — значит показать человеку неработающий
+  // инструмент и заставить догадываться. Право то же самое, естьPRO(), и ни одна модель
+  // при отказе не поднимается — ни поиск лица, ни ABPN.
+  if(tool === 'ai' && !естьPRO()){ предложитьРетушь(); return; }
   // коллаж набирает кадры сам, открытый снимок ему не нужен — остальным инструментам нужен
   if(tool !== 'collage' && !sourceCanvas){ pendingTool = tool; document.getElementById('file').click(); return; }
   pendingTool = tool; applyPendingTool();
@@ -5416,7 +5421,7 @@ function syncKeepBtn(){
   // Без PRO кнопку НЕ прячем и НЕ гасим: человек должен видеть, что дальше есть, и
   // узнать об этом до того, как настроит вид и упрётся. Скрытая кнопка не объясняет
   // ничего, а выключенная выглядит поломкой. Говорим тем же оборотом, что и в других
-  // местах приложения: «ИИ-ретушь — в PRO».
+  // местах приложения: «Ретушь — в PRO».
   // Право спрашиваем осторожно: этот же syncKeepBtn зовётся при разборе страницы, когда
   // лицензионный слой ещё НЕ объявлен, и прямой вызов ронял всю страницу. Пока право
   // неизвестно — считаем «нет», как и всюду в приложении: закрыто по умолчанию.
@@ -5436,6 +5441,14 @@ const PRO_ТЕКСТ = 'Свет, цвет и кривая доступны бе
 async function предложитьPRO(){
   // Последним доводом идёт золото: подключение PRO — созидательное действие.
   if(await askConfirm(PRO_ТЕКСТ, 'Подключить PRO', PRO_ЗАГОЛОВОК, true)) openPacks();
+}
+// То же окно для платной карточки «Ретушь». Слова свои: «НАСТРОЙКИ ГОТОВЫ» говорит про
+// сохранение пресета и здесь звучало бы не про то.
+const РЕТУШЬ_ЗАГОЛОВОК = 'РЕТУШЬ — В PRO';
+const РЕТУШЬ_ТЕКСТ = 'В PRO доступна автоматическая ретушь лица: мешки под глазами и кожа '
+                   + 'одним движением ползунка.';
+async function предложитьРетушь(){
+  if(await askConfirm(РЕТУШЬ_ТЕКСТ, 'Подключить PRO', РЕТУШЬ_ЗАГОЛОВОК, true)) openPacks();
 }
 
 // ─── Диалог: подписать свою катушку ───
@@ -8947,6 +8960,7 @@ function openSpots(){
   }));
 }
 function openAi(){
+  if(!естьPRO()){ предложитьРетушь(); return; }   // вторая дверь к тому же экрану
   aiЖду(aiSess ? 'Открываю…' : 'Готовлю ИИ…');
   // ДАЁМ БРАУЗЕРУ НАРИСОВАТЬ кружок, прежде чем занимать поток. Открытие оверлея —
   // тяжёлая синхронная работа на несколько секунд; если запустить её сразу, экран
@@ -9336,7 +9350,7 @@ function rtSetTool(tool){
   document.getElementById('rtTints').style.display = bokeh?'flex':'none';
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
-    spots ? 'Точки' : bags ? 'Консилер' : skin ? 'Кожа' : teeth ? 'Зубы' : ai ? 'ИИ-ретушь' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка' : vig ? 'Виньетка' : hal ? 'Свечение' : dbl ? 'Двойная' : dust ? 'Потёртости'
+    spots ? 'Точки' : bags ? 'Консилер' : skin ? 'Кожа' : teeth ? 'Зубы' : ai ? 'Ретушь' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка' : vig ? 'Виньетка' : hal ? 'Свечение' : dbl ? 'Двойная' : dust ? 'Потёртости'
          : tool==='paint' ? 'Замазать' : 'Ретушь';
   // ряд с «Отменить» — только там, где есть что отменять, то есть у кисти и штампа
   // «Отменить» нужна и в консилере, но только с кистью: в автоматическом режиме отменять
@@ -13254,7 +13268,7 @@ async function aiEnter(){
   // не сможет пользоваться, нечестно. Новых элементов не заводим — говорим той же
   // строкой заголовка, что уже сообщает «Ищу лицо…» и «Лицо не найдено»,
   // и оставляем ползунок выключенным, каким он и пришёл сюда.
-  if(!естьPRO()){ top.textContent = 'ИИ-ретушь — в PRO'; return; }
+  if(!естьPRO()){ top.textContent = 'Ретушь — в PRO'; return; }
   if(bagsBusy) return; bagsBusy = true;
   try{
     top.textContent = bagsKit ? 'Ищу лицо…' : 'Загружаю модель лица…';
@@ -13273,7 +13287,7 @@ async function aiEnter(){
     aiЛица[rtFaceSel] = з;
     aiData = [з];
     if(rtTool !== 'ai'){ bagsBusy = false; return; }
-    top.textContent = 'ИИ-ретушь' + (aiПров === 'wasm' ? ' (без ускорения)' : '');
+    top.textContent = 'Ретушь' + (aiПров === 'wasm' ? ' (без ускорения)' : '');
     sl.disabled = false; aiЖду(false);
     rtDrawFaces(aiPickFace);
     rtFacesHint(faces.length, 'кому править кожу');
@@ -13310,7 +13324,7 @@ async function aiPickFace(){
     з.orig = rtCanvas.getContext('2d').getImageData(з.bx, з.by, з.bw, з.bh);
     aiЛица[rtFaceSel] = з;
     aiData = [з];
-    top.textContent = 'ИИ-ретушь';
+    top.textContent = 'Ретушь';
     sl.disabled = false;
     if(v) aiСлайдер();
   }catch(e){ top.textContent = 'ИИ не смог посчитать это лицо'; sl.disabled = false; }
