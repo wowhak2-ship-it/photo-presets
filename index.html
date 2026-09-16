@@ -3536,42 +3536,46 @@ function buildFullSource(){
       const out = document.createElement('canvas'); out.width = rw; out.height = rh;
       out.getContext('2d').drawImage(rot, rx, ry, rw, rh, 0, 0, rw, rh);
       c = out; cloned = true;
-    } else if(op.t === 'heal'){
-      const cv = own();
-      healSpot(cv, op.x*cv.width, op.y*cv.height, op.r*cv.width,
-               op.sx != null ? { x:op.sx*cv.width, y:op.sy*cv.height } : null,
-               { hardness:op.hardness, strength:op.strength });
-    } else if(op.t === 'bags'){
-      bagsRun(own(), op.faces, op.amount, op.кисть, op.тени);
-    } else if(op.t === 'skin'){
-      skinRun(own(), op.faces, op.amount);
-    } else if(op.t === 'dbl'){
-      dblRun(own(), op);
-    } else if(op.t === 'dust'){
-      dustRun(own(), op);
-    } else if(op.t === 'hal'){
-      halRun(own(), op);
-    } else if(op.t === 'vig'){
-      vigRun(own(), op);
-    } else if(op.t === 'flare'){
-      flareRun(own(), op);
-    } else if(op.t === 'tone'){
-      toneRun(own(), op.faces, op.amount);
-    } else if(op.t === 'teeth'){
-      teethRun(own(), op.faces, op.amount, op.spots);
-    } else if(op.t === 'spots'){
-      spotsRun(own(), op.точки);
-    } else if(op.t === 'ai'){
-      aiRun(own(), op);
-    } else if(op.t === 'powder'){
-      powderRun(own(), op.faces, op.amount);
-    } else if(op.t === 'bokeh'){
-      // op.точки — готовое размещение из предпросмотра. Старые операции без него
-      // считаются по-прежнему, чтобы уже начатая работа не сломалась.
-      if(op.sprinkle) bokehSprinkle(own(), op.sprinkle, op.shape, op.tint, null, op.точки);
-    }
+    } else replayOp(own(), op);
   }
   return c;   // без правок это сам оригинал — читаем из него, но не пишем в него
+}
+// Одна операция журнала на любом холсте (кроме crop — он меняет сам холст). Этим же путём
+// экспорт повторяет правки на оригинале, а редактор — пересобирает превью сеанса ретуши.
+function replayOp(cv, op){
+  if(op.t === 'heal'){
+    healSpot(cv, op.x*cv.width, op.y*cv.height, op.r*cv.width,
+             op.sx != null ? { x:op.sx*cv.width, y:op.sy*cv.height } : null,
+             { hardness:op.hardness, strength:op.strength });
+  } else if(op.t === 'bags'){
+    bagsRun(cv, op.faces, op.amount, op.кисть, op.тени);
+  } else if(op.t === 'skin'){
+    skinRun(cv, op.faces, op.amount);
+  } else if(op.t === 'dbl'){
+    dblRun(cv, op);
+  } else if(op.t === 'dust'){
+    dustRun(cv, op);
+  } else if(op.t === 'hal'){
+    halRun(cv, op);
+  } else if(op.t === 'vig'){
+    vigRun(cv, op);
+  } else if(op.t === 'flare'){
+    flareRun(cv, op);
+  } else if(op.t === 'tone'){
+    toneRun(cv, op.faces, op.amount);
+  } else if(op.t === 'teeth'){
+    teethRun(cv, op.faces, op.amount, op.spots);
+  } else if(op.t === 'spots'){
+    spotsRun(cv, op.точки);
+  } else if(op.t === 'ai'){
+    aiRun(cv, op);
+  } else if(op.t === 'powder'){
+    powderRun(cv, op.faces, op.amount);
+  } else if(op.t === 'bokeh'){
+    // op.точки — готовое размещение из предпросмотра. Старые операции без него
+    // считаются по-прежнему, чтобы уже начатая работа не сломалась.
+    if(op.sprinkle) bokehSprinkle(cv, op.sprinkle, op.shape, op.tint, null, op.точки);
+  }
 }
 
 // Снимков в пути может быть несколько сразу: демонстрационный кадр грузится с запуском
@@ -8911,7 +8915,7 @@ function openRetouch(){
   rtUndo = []; document.getElementById('rtUndo').disabled = true;
   rtOps = []; rtBagsOp = null; rtSkinOp = null; rtBokehOp = null; rtPowderOp = null; rtToneOp = null; rtFlareOp = null; flareOrig = null; rtVigOp = null; vigOrig = null; rtHalOp = null; halOrig = null; halСлойКэш = null; halСлойКлюч = -1; rtDblOp = null; dblOrig = null; dblImg = null; rtDustOp = null; dustOrig = null; dustЛица = []; bokehЛица = []; rtFaces = null; skinData = null; powderData = null; toneData = null; teethData = null; rtTeethOp = null; aiСброс(); точData = null; rtSpotsOp = null; bagsСброситьКисть();
   for(const k in skinFace) delete skinFace[k];   // новый снимок — настройки лиц с нуля
-  bagsData = null;
+  bagsData = null; bagsПоздние = [];
   retouchEl.classList.remove('shadows-only');
   retouchEl.classList.add('open');
   document.getElementById('rtCompare').classList.add('on');
@@ -9305,6 +9309,7 @@ function rtPlaceMarkers(){
 }
 function rtSetTool(tool){
   rtCmpOff();          // смена инструмента выходит из сравнения
+  if(rtTool === 'bags' && tool !== 'bags') bagsЗавершитьХолст();
   rtTool=tool;
   rtSyncPan();         // в «Тенях» руки нет, в кисти есть
   document.querySelectorAll('.rt-mode').forEach(b=>b.classList.toggle('active', b.dataset.tool===tool));
@@ -9504,7 +9509,7 @@ var BAGS_РЕЛЬЕФ = 1.0;       // 1 — складку и край мешк�
 var BAGS_К_ЩЕКЕ = 0.4;      // доводка подглазья до тона соседней щеки
 var BAGS_ОТТЕНОК = 0.55;    // colorCorrection: нейтрализация синевы и лиловости, без участия яркости
 var BAGS_РОСТ = 0;          // 1 — зона растёт вниз до конца тени; 0 — не растёт (щёки целее)
-var BAGS_ТЕНИ = 0.5;        // shadowLift: ползунок «Тени под глазами», 0..1
+var BAGS_ТЕНИ = 0;          // «Тени под глазами»: доп. подъём ядра борозды поверх v3.1; 0 = ровно v3.1
 var BAGS_БОРОЗДА = 3.0;     // во что превращается полная единица ползунка
 var BAGS_БОРОЗДА_ПОДЪЁМ = 22; // насколько выше обычного можно поднять именно борозду     // добавка к ослаблению ТОЛЬКО в узкой маске борозды
 var BAGS_БОРОЗДА_НАЧАЛО = 0.15; // с какой доли глубины дуги начинается усиление
@@ -9839,8 +9844,9 @@ function bagsPrepare(faces, cv, щедро){
       if(пере.length) regs.length = 0, regs.push(...пере);
     }
   }
-  if(cv !== rtCanvas) return regs.length ? {regs} : null;
-  bagsData = regs.length ? {regs} : null;
+  // faces кладём рядом с зонами: по ним считает Консилер (bagsApply → kv2Apply)
+  if(cv !== rtCanvas) return regs.length ? {regs, faces} : null;
+  bagsData = regs.length ? {regs, faces} : null;
   return regs.length;
 }
 // ─── Боке ───
@@ -10936,306 +10942,468 @@ function rtFacesBusy(on){
   s.addEventListener('change',      ()=> rtFacesBusy(false));
 });
 
+// ─── Консилер: micro Dodge & Burn по точкам лица (порт R&D candidate v3.1, production с 16.09.2026) ───
+// Эталон: C:\Users\Public\Presety-RnD\konsiler-poc\reference-v3.1 (SPEC.md, params.json, code/).
+// Формула зафиксирована Артуром 16.09.2026 — не менять. Старый консилер удалён (откат — git до 16.09.2026).
+// Это ПОРТ, не новая разработка: формула, маска-кисть, сила 0.65, gate, chroma_safety и пороги
+// повторяют Python один в один; при расхождении правится порт, а не эталон. Устройство:
+//   • точки лица задают только область поиска; модель «каким был бы тон кожи здесь» — робастная
+//     плоскость по подглазью и полосе щеки; правится только то, что ТЕМНЕЕ модели, и на 0.65;
+//   • поле умножается на «кисть» — плато с мягким спадом, как красит ретушёр, к ресничному краю не вплотную;
+//   • gate: дальний глаз при повороте, переносица в области, тёплый валик, тень освещения → глаз не трогаем;
+//   • chroma_safety: правка виртуально применяется и проверяется на гамут/край/цветность до записи.
+// Ползунок силы → сила лица по KV31 (50 = принятые 0.65); «Тени под глазами» — доп. подъём ядра борозды (см. KV31).
+const KV2 = {
+  зона_низ: 0.80, зона_верх: 0.05, перо_века: 0.05, зона_бока: 1.15, перо_зоны: 0.12, глаз_запас: 1.12,
+  сигма_карты: 0.045, сила_L: 0.65, предел_L: 18.0, сила_a: 0.25, сила_b: 0.35, предел_ab: 2.0,
+  цвет_от_века: 0.05, цвет_полный_с: 0.18, зона_низ_для_модели: 1.10,
+  // маска применения — «кисть» (variant 5, см. microdb.маска_кисти)
+  кисть_u_ширина: 0.50, кисть_v_центр: 0.30, кисть_v_ширина: 0.34, кисть_степень: 4, защита_века: 0.03, перо_защиты: 0.10,
+  гамут_макс_доля: 0.02, край_макс_доля: 0.25, хрома_отн_макс: 1.15, хрома_отн_мин: 0.85,
+  тон_макс_сдвиг_град: 10.0, цветность_макс_сдвиг: 0.13, цветность_мин_ΔL: 2.0
+};
+const KV2_GATE = { мин_отношение_ширин: 0.60, переносица_в_roi: 0.5, макс_наклон_L_на_eyeW: 33.0, макс_насыщенность_валика: 1.5 };
+const KV2_EYES = [
+  { низ:[33,7,163,144,145,153,154,155,133],   верх:[173,157,158,159,160,161,246] },
+  { низ:[263,249,390,373,374,380,381,382,362], верх:[398,384,385,386,387,388,466] }
+];
+const KV2_CHIN = 152, KV2_NOSE = [6,197,195,5];
+
+
+// ── цвет: ровно cv2 RGB2LAB / LAB2RGB (float) ──
+function kv2ToLab(r, g, b, out, o){            // r,g,b в 0..1
+  r = r <= 0.04045 ? r/12.92 : Math.pow((r+0.055)/1.055, 2.4);
+  g = g <= 0.04045 ? g/12.92 : Math.pow((g+0.055)/1.055, 2.4);
+  b = b <= 0.04045 ? b/12.92 : Math.pow((b+0.055)/1.055, 2.4);
+  let X = (0.412453*r + 0.357580*g + 0.180423*b) / 0.950456;
+  let Y =  0.212671*r + 0.715160*g + 0.072169*b;
+  let Z = (0.019334*r + 0.119193*g + 0.950227*b) / 1.088754;
+  const fx = X > 0.008856 ? Math.cbrt(X) : 7.787*X + 16/116;
+  const fy = Y > 0.008856 ? Math.cbrt(Y) : 7.787*Y + 16/116;
+  const fz = Z > 0.008856 ? Math.cbrt(Z) : 7.787*Z + 16/116;
+  out[o]   = Y > 0.008856 ? 116*fy - 16 : 903.3*Y;
+  out[o+1] = 500*(fx - fy);
+  out[o+2] = 200*(fy - fz);
+}
+function kv2FromLab(L, a, b, out, o){          // → 0..1 с обрезкой, как из_lab
+  const fy = (L + 16)/116, fx = fy + a/500, fz = fy - b/200;
+  const Y = L > 7.9996 ? fy*fy*fy : L/903.3;
+  const X = (fx > 0.206893 ? fx*fx*fx : (fx - 16/116)/7.787) * 0.950456;
+  const Z = (fz > 0.206893 ? fz*fz*fz : (fz - 16/116)/7.787) * 1.088754;
+  let r =  3.240479*X - 1.537150*Y - 0.498535*Z;
+  let g = -0.969256*X + 1.875991*Y + 0.041556*Z;
+  let bb=  0.055648*X - 0.204043*Y + 1.057311*Z;
+  r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; bb = bb < 0 ? 0 : bb > 1 ? 1 : bb;
+  out[o]   = r  <= 0.0031308 ? 12.92*r  : 1.055*Math.pow(r,  1/2.4) - 0.055;
+  out[o+1] = g  <= 0.0031308 ? 12.92*g  : 1.055*Math.pow(g,  1/2.4) - 0.055;
+  out[o+2] = bb <= 0.0031308 ? 12.92*bb : 1.055*Math.pow(bb, 1/2.4) - 0.055;
+}
+// Lab → sRGB БЕЗ обрезки (константы как в Python lab_в_rgb_без_обрезки — это проверка гамута)
+function kv2LabToRgbRaw(L, a, b, out, o){
+  const fy = (L + 16)/116, fx = fy + a/500, fz = fy - b/200;
+  const k = 6/29, finv = t => t > k ? t*t*t : 3*k*k*(t - 4/29);
+  const X = 0.95047*finv(fx), Y = finv(fy), Z = 1.08883*finv(fz);
+  const lin = [3.2406*X - 1.5372*Y - 0.4986*Z, -0.9689*X + 1.8758*Y + 0.0415*Z, 0.0557*X - 0.2040*Y + 1.0570*Z];
+  for(let i = 0; i < 3; i++){
+    const m = Math.abs(lin[i]), s = lin[i] < 0 ? -1 : 1;
+    out[o+i] = s * (m <= 0.0031308 ? 12.92*m : 1.055*Math.pow(Math.max(m, 1e-9), 1/2.4) - 0.055);
+  }
+}
+const kv2SrgbLin = s => { s = s < 0 ? 0 : s > 1 ? 1 : s; return s <= 0.04045 ? s/12.92 : Math.pow((s+0.055)/1.055, 2.4); };
+
+// ── размытие Гаусса как cv2.GaussianBlur((k,k), σ, BORDER_REPLICATE) ──
+function kv2Blur(src, w, h, sigma, dst, tmp){
+  const k = Math.max(3, Math.round(sigma*4) | 1), r = (k-1) >> 1;
+  const ker = new Float64Array(k); let s = 0;
+  for(let i = 0; i < k; i++){ const x = i - r; ker[i] = Math.exp(-x*x/(2*sigma*sigma)); s += ker[i]; }
+  for(let i = 0; i < k; i++) ker[i] /= s;
+  dst = dst || new Float32Array(w*h); tmp = tmp || new Float32Array(w*h);
+  for(let y = 0; y < h; y++){                       // по строкам
+    const row = y*w;
+    for(let x = 0; x < w; x++){
+      let acc = 0;
+      for(let i = 0; i < k; i++){ let xx = x + i - r; xx = xx < 0 ? 0 : xx >= w ? w-1 : xx; acc += ker[i]*src[row+xx]; }
+      tmp[row+x] = acc;
+    }
+  }
+  for(let y = 0; y < h; y++){                       // по столбцам
+    for(let x = 0; x < w; x++){
+      let acc = 0;
+      for(let i = 0; i < k; i++){ let yy = y + i - r; yy = yy < 0 ? 0 : yy >= h ? h-1 : yy; acc += ker[i]*tmp[yy*w+x]; }
+      dst[y*w+x] = acc;
+    }
+  }
+  return dst;
+}
+// заливка многоугольника (целые точки, чётно-нечётное правило) — как cv2.fillPoly без сглаживания
+function kv2FillPoly(mask, w, h, pts){
+  const n = pts.length;
+  for(let y = 0; y < h; y++){
+    const xs = [];
+    for(let i = 0; i < n; i++){
+      const a = pts[i], b = pts[(i+1)%n];
+      if((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) xs.push(a.x + (y - a.y)*(b.x - a.x)/(b.y - a.y));
+    }
+    xs.sort((p, q) => p - q);
+    for(let i = 0; i + 1 < xs.length; i += 2){
+      const x0 = Math.max(0, Math.ceil(xs[i])), x1 = Math.min(w-1, Math.floor(xs[i+1]));
+      for(let x = x0; x <= x1; x++) mask[y*w+x] = 1;
+    }
+  }
+}
+const kv2Smooth = (x, край, перо) => { let t = (x - край)/Math.max(перо, 1e-6); t = t < 0 ? 0 : t > 1 ? 1 : t; return t*t*(3 - 2*t); };
+function kv2Interp(x, xp, fp){                    // np.interp
+  const n = xp.length;
+  if(x <= xp[0]) return fp[0];
+  if(x >= xp[n-1]) return fp[n-1];
+  let lo = 0, hi = n - 1;
+  while(hi - lo > 1){ const m = (lo + hi) >> 1; if(xp[m] <= x) lo = m; else hi = m; }
+  return fp[lo] + (fp[hi] - fp[lo])*(x - xp[lo])/(xp[hi] - xp[lo]);
+}
+function kv2Median(arr, n){ const a = arr.subarray(0, n).slice().sort(); return n & 1 ? a[n>>1] : 0.5*(a[(n>>1)-1] + a[n>>1]); }
+
+// ── геометрия глаз (общее.глаза_из_точек) ──
+function kv2Eyes(lms, W, H){
+  const P = i => ({ x: lms[i].x*W, y: lms[i].y*H });
+  const chin = lms[KV2_CHIN] ? P(KV2_CHIN) : null;
+  const eyes = [];
+  for(const e of KV2_EYES){
+    const низ = e.низ.map(P), контур = [...e.низ, ...e.верх].map(P);
+    const c1 = низ[0], c2 = низ[низ.length-1];
+    const eyeW = Math.hypot(c2.x - c1.x, c2.y - c1.y);
+    if(eyeW < 8) continue;
+    const ось = { x:(c2.x - c1.x)/eyeW, y:(c2.y - c1.y)/eyeW };
+    let вниз = { x:-ось.y, y:ось.x };
+    const центр = { x: контур.reduce((s,p)=>s+p.x,0)/контур.length, y: контур.reduce((s,p)=>s+p.y,0)/контур.length };
+    if(chin){ if(вниз.x*(chin.x - центр.x) + вниз.y*(chin.y - центр.y) < 0) вниз = { x:-вниз.x, y:-вниз.y }; }
+    else if(вниз.y < 0) вниз = { x:-вниз.x, y:-вниз.y };
+    const uк = низ.map(p => ((p.x - c1.x)*ось.x + (p.y - c1.y)*ось.y)/eyeW);
+    const vк = низ.map(p => ((p.x - c1.x)*вниз.x + (p.y - c1.y)*вниз.y)/eyeW);
+    eyes.push({ eyeW, ось, вниз, центр, низ, контур, c1, uк, vк });
+  }
+  return eyes;
+}
+// сетка u, v для одной точки
+function kv2UV(г, x, y){
+  const dx = x - г.c1.x, dy = y - г.c1.y;
+  const u = (dx*г.ось.x + dy*г.ось.y)/г.eyeW;
+  const v = (dx*г.вниз.x + dy*г.вниз.y)/г.eyeW - kv2Interp(u, г.uк, г.vк);
+  return [u, v];
+}
+// окно вокруг области поиска: u ∈ [−0.335, 1.335], v ∈ [0, 1.22] плюс запас на размытия
+function kv2Window(г, W, H, margin){
+  const vmin = Math.min(...г.vк) - 0.1, vmax = Math.max(...г.vк) + KV2.зона_низ_для_модели + KV2.перо_зоны + 0.05;
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for(const u of [-0.4, 1.4]) for(const v of [vmin, vmax]){
+    const x = г.c1.x + (u*г.ось.x + v*г.вниз.x)*г.eyeW, y = г.c1.y + (u*г.ось.y + v*г.вниз.y)*г.eyeW;
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+  }
+  for(const p of г.контур){ x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+  x0 = Math.max(0, Math.floor(x0 - margin)); y0 = Math.max(0, Math.floor(y0 - margin));
+  x1 = Math.min(W, Math.ceil(x1 + margin) + 1); y1 = Math.min(H, Math.ceil(y1 + margin) + 1);
+  return { x0, y0, w: x1 - x0, h: y1 - y0 };
+}
+// область поиска в окне: roi (зона_низ) и roi_модель (зона_низ_для_модели), плюс u, v
+function kv2Region(г, ок){
+  const w = ок.w, h = ок.h, n = w*h;
+  const u = new Float32Array(n), v = new Float32Array(n), roi = new Float32Array(n), roiM = new Float32Array(n), кисть = new Float32Array(n);
+  for(let y = 0; y < h; y++) for(let x = 0; x < w; x++){
+    const i = y*w + x, uv = kv2UV(г, ок.x0 + x, ок.y0 + y);
+    u[i] = uv[0]; v[i] = uv[1];
+    const верх = kv2Smooth(uv[1] - KV2.зона_верх, 0, KV2.перо_века);
+    const бока = kv2Smooth(KV2.зона_бока - Math.abs(uv[0] - 0.5)*2, 0, KV2.перо_зоны*2);
+    roi[i]  = kv2Smooth(KV2.зона_низ - uv[1], 0, KV2.перо_зоны) * верх * бока;
+    roiM[i] = kv2Smooth(KV2.зона_низ_для_модели - uv[1], 0, KV2.перо_зоны) * верх * бока;
+    // «кисть» — маска применения: плато с мягким спадом, центр на борозде, широкий переход от защиты века
+    кисть[i] = Math.exp(-Math.pow((uv[0] - 0.5)/KV2.кисть_u_ширина, KV2.кисть_степень)) * Math.exp(-Math.pow((uv[1] - KV2.кисть_v_центр)/KV2.кисть_v_ширина, KV2.кисть_степень))
+             * kv2Smooth(uv[1] - KV2.защита_века, 0, KV2.перо_защиты);
+  }
+  // вырез глаза: контур ×1.12 от центра, залит и размыт
+  const ц = г.контур.reduce((s,p)=>({x:s.x+p.x, y:s.y+p.y}), {x:0,y:0}); ц.x /= г.контур.length; ц.y /= г.контур.length;
+  const poly = г.контур.map(p => ({ x: Math.trunc(ц.x + (p.x - ц.x)*KV2.глаз_запас) - ок.x0, y: Math.trunc(ц.y + (p.y - ц.y)*KV2.глаз_запас) - ок.y0 }));
+  const глаз = new Float32Array(n); kv2FillPoly(глаз, w, h, poly);
+  const r = Math.max(3, Math.trunc(KV2.перо_века*г.eyeW) | 1);
+  const глазР = kv2BlurK(глаз, w, h, r, r/3);
+  for(let i = 0; i < n; i++){ const k = 1 - глазР[i]; roi[i] *= k; roiM[i] *= k; кисть[i] = Math.min(1, кисть[i])*k; }
+  return { u, v, roi, roiM, кисть };
+}
+// GaussianBlur с заданным ядром k и sigma (граница REFLECT_101, как по умолчанию в cv2 — для маски глаза)
+function kv2BlurK(src, w, h, k, sigma){
+  const r = (k-1) >> 1, ker = new Float64Array(k); let s = 0;
+  for(let i = 0; i < k; i++){ const x = i - r; ker[i] = Math.exp(-x*x/(2*sigma*sigma)); s += ker[i]; }
+  for(let i = 0; i < k; i++) ker[i] /= s;
+  const refl = (i, n) => { while(i < 0 || i >= n){ i = i < 0 ? -i : 2*n - 2 - i; } return i; };
+  const tmp = new Float32Array(w*h), dst = new Float32Array(w*h);
+  for(let y = 0; y < h; y++) for(let x = 0; x < w; x++){ let a = 0; for(let i = 0; i < k; i++) a += ker[i]*src[y*w + refl(x+i-r, w)]; tmp[y*w+x] = a; }
+  for(let y = 0; y < h; y++) for(let x = 0; x < w; x++){ let a = 0; for(let i = 0; i < k; i++) a += ker[i]*tmp[refl(y+i-r, h)*w + x]; dst[y*w+x] = a; }
+  return dst;
+}
+// ожидаемый тон — робастная плоскость (ожидаемый_тон, степень 1)
+function kv2Plane(канал, маска, w, h, симметрично){
+  const n = w*h; let cnt = 0;
+  for(let i = 0; i < n; i++) if(маска[i] > 0.05) cnt++;
+  if(cnt < 50) return { модель: Float32Array.from(канал), коэф:null };
+  const idx = new Int32Array(cnt); let mx = 0, my = 0, k = 0;
+  for(let i = 0; i < n; i++) if(маска[i] > 0.05){ idx[k++] = i; mx += i % w; my += (i / w) | 0; }
+  mx /= cnt; my /= cnt;
+  let sx = 0, sy = 0;
+  for(let j = 0; j < cnt; j++){ const i = idx[j], dx = (i % w) - mx, dy = ((i / w) | 0) - my; sx += dx*dx; sy += dy*dy; }
+  sx = Math.max(Math.sqrt(sx/cnt), 1e-6); sy = Math.max(Math.sqrt(sy/cnt), 1e-6);
+  const X = new Float64Array(cnt), Y = new Float64Array(cnt), Z = new Float64Array(cnt), Wt = new Float64Array(cnt), R = new Float32Array(cnt), Dv = new Float32Array(cnt);
+  for(let j = 0; j < cnt; j++){ const i = idx[j]; X[j] = ((i % w) - mx)/sx; Y[j] = (((i / w) | 0) - my)/sy; Z[j] = канал[i]; Wt[j] = маска[i]; }
+  let c0 = 0, c1 = 0, c2 = 0;
+  for(let it = 0; it < 6; it++){
+    // нормальные уравнения (AᵀWA) c = AᵀW z
+    let s00=0,s01=0,s02=0,s11=0,s12=0,s22=0,b0=0,b1=0,b2=0;
+    for(let j = 0; j < cnt; j++){ const ww = Wt[j], x = X[j], y = Y[j], z = Z[j];
+      s00 += ww; s01 += ww*x; s02 += ww*y; s11 += ww*x*x; s12 += ww*x*y; s22 += ww*y*y; b0 += ww*z; b1 += ww*x*z; b2 += ww*y*z; }
+    const det = s00*(s11*s22 - s12*s12) - s01*(s01*s22 - s12*s02) + s02*(s01*s12 - s11*s02);
+    if(Math.abs(det) < 1e-12) break;
+    c0 = (b0*(s11*s22 - s12*s12) - s01*(b1*s22 - s12*b2) + s02*(b1*s12 - s11*b2))/det;
+    c1 = (s00*(b1*s22 - s12*b2) - b0*(s01*s22 - s12*s02) + s02*(s01*b2 - b1*s02))/det;
+    c2 = (s00*(s11*b2 - b1*s12) - s01*(s01*b2 - b1*s02) + b0*(s01*s12 - s11*s02))/det;
+    for(let j = 0; j < cnt; j++) R[j] = Z[j] - (c0 + c1*X[j] + c2*Y[j]);
+    const med = kv2Median(R, cnt);
+    for(let j = 0; j < cnt; j++) Dv[j] = Math.abs(R[j] - med);
+    const s = 1.4826*kv2Median(Dv, cnt) + 1e-6;
+    for(let j = 0; j < cnt; j++){
+      const откл = симметрично ? Math.abs(R[j]) : Math.max(0, -R[j]);
+      let t = откл/(1.2*s); t = t > 1 ? 1 : t;
+      const q = 1 - t*t; Wt[j] = маска[idx[j]]*Math.max(0.02, q*q);
+    }
+  }
+  const модель = new Float32Array(n);
+  for(let i = 0; i < n; i++) модель[i] = c0 + c1*((i % w) - mx)/sx + c2*(((i / w) | 0) - my)/sy;
+  return { модель, коэф:[c0, c1, c2], sx, sy };
+}
+// chroma_safety по полю одного глаза (окно)
+function kv2ChromaCheck(lab, поле, n){
+  let cntR = 0; for(let i = 0; i < n; i++) if(поле[3*i] > 0.5) cntR++;
+  if(cntR < 30) return { статус:'SAFE', метрики:{} };
+  const rgb0 = new Float32Array(3), t = new Float32Array(3);
+  const C0 = new Float32Array(n), h0 = new Float32Array(n), cv0 = new Float32Array(3*n);
+  let C0sum = 0;
+  for(let i = 0; i < n; i++){
+    if(поле[3*i] <= 0.5) continue;
+    kv2LabToRgbRaw(lab[3*i], lab[3*i+1], lab[3*i+2], rgb0, 0);
+    for(let c = 0; c < 3; c++) rgb0[c] = rgb0[c] < 0 ? 0 : rgb0[c] > 1 ? 1 : rgb0[c];
+    const sum = Math.max(rgb0[0] + rgb0[1] + rgb0[2], 1e-4);
+    cv0[3*i] = rgb0[0]/sum; cv0[3*i+1] = rgb0[1]/sum; cv0[3*i+2] = rgb0[2]/sum;
+    C0[i] = Math.hypot(lab[3*i+1], lab[3*i+2]); C0sum += C0[i];
+    h0[i] = Math.atan2(lab[3*i+2], lab[3*i+1])*180/Math.PI;
+  }
+  const мерить = (толькоL) => {
+    let гам = 0, край = 0, C1sum = 0, сдв = 0, сдвN = 0, цв = 0, цвN = 0;
+    for(let i = 0; i < n; i++){
+      const dL = поле[3*i]; if(dL <= 0.5) continue;
+      const L = lab[3*i] + dL, a = lab[3*i+1] + (толькоL ? 0 : поле[3*i+1]), b = lab[3*i+2] + (толькоL ? 0 : поле[3*i+2]);
+      kv2LabToRgbRaw(L, a, b, t, 0);
+      if(t[0] < -0.01 || t[1] < -0.01 || t[2] < -0.01 || t[0] > 1.01 || t[1] > 1.01 || t[2] > 1.01) гам++;
+      if(t[0] <= 0.02 || t[1] <= 0.02 || t[2] <= 0.02 || t[0] >= 0.98 || t[1] >= 0.98 || t[2] >= 0.98) край++;
+      C1sum += Math.hypot(a, b);
+      if(C0[i] > 5){ let d = (Math.atan2(b, a)*180/Math.PI - h0[i] + 180) % 360; if(d < 0) d += 360; сдв += Math.abs(d - 180); сдвN++; }
+      if(dL > KV2.цветность_мин_ΔL){
+        const r0 = t[0] < 0 ? 0 : t[0] > 1 ? 1 : t[0], g0 = t[1] < 0 ? 0 : t[1] > 1 ? 1 : t[1], b0 = t[2] < 0 ? 0 : t[2] > 1 ? 1 : t[2];
+        const sum = Math.max(r0 + g0 + b0, 1e-4);
+        цв += Math.abs(r0/sum - cv0[3*i]) + Math.abs(g0/sum - cv0[3*i+1]) + Math.abs(b0/sum - cv0[3*i+2]); цвN++;
+      }
+    }
+    const м = { гамут: гам/cntR, край: край/cntR, хрома_отн: C1sum/Math.max(C0sum, 1e-6), сдвиг_тона: сдвN ? сдв/сдвN : 0, цветность: цвN ? цв/цвN : 0 };
+    const плохо = м.гамут > KV2.гамут_макс_доля || м.край > KV2.край_макс_доля || м.хрома_отн > KV2.хрома_отн_макс || м.хрома_отн < KV2.хрома_отн_мин
+               || м.сдвиг_тона > KV2.тон_макс_сдвиг_град || м.цветность > KV2.цветность_макс_сдвиг;
+    for(const k in м) м[k] = Math.round(м[k]*1000)/1000;
+    return { плохо, м };
+  };
+  const полн = мерить(false);
+  if(!полн.плохо) return { статус:'SAFE', метрики: полн.м };
+  const тл = мерить(true);
+  if(!тл.плохо){ for(let i = 0; i < n; i++){ поле[3*i+1] = 0; поле[3*i+2] = 0; } return { статус:'SAFE_L_ONLY', метрики:{ полная: полн.м, только_L: тл.м } }; }
+  поле.fill(0);
+  return { статус:'UNSAFE', метрики:{ полная: полн.м, только_L: тл.м } };
+}
+
+// ── правило лица (candidate v3.1, вариант B, принят Артуром 15.09.2026; см. tools/konsiler_v31.py) ──
+// Ползунок → сила: 0→0, 25→0.325, 50→0.65, 75→0.775, 100→0.90, между точками линейно.
+// Hard gate (дальний глаз при повороте, переносица в области) — всё лицо без правки.
+// Наклон света и тёплый валик — ограничители: ниже порога предела нет, выше — допустимая сила
+// падает линейно от 0.65 на пороге до 0 при удвоении порога (пороги те же).
+// chroma_safety как есть и бинарно: только на выбранной силе, без подбора меньшей; глаз UNSAFE по цвету →
+// всё лицо без правки (SAFE_L_ONLY допускается, как в v3).
+// Фактическая сила лица = min(ползунок, безопасные силы обоих глаз); оба глаза — одной силой.
+// Второй ползунок «Тени под глазами» (принят 16.09.2026): d — глубина остатка, D — 95-й процентиль d внутри
+// кисти (своя у глаза), w = smoothstep(d; 0.40·D → 0.85·D), ΔL_доп = тени·(cap − s)·d·w·кисть,
+// cap = min(0.90, soft-пределы лица); только L; chroma по итогу — не прошла, снимаем только доп. подъём.
+const KV31 = { ползунок:[[0,0],[25,0.325],[50,0.65],[75,0.775],[100,0.90]], шаги:[], мин:0.2, базовая:0.65,
+               // «Тени под глазами»: доп. подъём только ядра тёмного остатка, не выше безопасного cap лица
+               ядро_от:0.40, ядро_до:0.85, перцентиль:95, потолок:0.90 };
+function kv31Перцентиль(arr, n, q){                // np.percentile (linear)
+  if(!n) return 0; const a = arr.subarray(0, n).slice().sort(); const idx = (n - 1)*q/100, lo = Math.floor(idx), hi = Math.min(n - 1, lo + 1);
+  return a[lo] + (a[hi] - a[lo])*(idx - lo);
+}
+function kv31СилаПолзунка(v){
+  const p = KV31.ползунок; if(v <= p[0][0]) return p[0][1]; if(v >= p[p.length-1][0]) return p[p.length-1][1];
+  for(let i = 1; i < p.length; i++) if(v <= p[i][0]) return p[i-1][1] + (p[i][1] - p[i-1][1])*(v - p[i-1][0])/(p[i][0] - p[i-1][0]);
+  return p[p.length-1][1];
+}
+const kv31Предел = (m, T) => (m == null || m <= T) ? null : Math.max(0, KV31.базовая*(1 - (m - T)/T));
+
+// ── главный вход: кадр (canvas) + точки одного лица → правка на холсте, статусы по глазам ──
+function kv2Apply(cv, lms, opts){
+  opts = opts || {};
+  const ползунок = opts.ползунок == null ? 50 : opts.ползунок;
+  const тени = opts.тени == null ? 0 : opts.тени;
+  const W = cv.width, H = cv.height, ctx = cv.getContext('2d', { willReadFrequently:true });
+  const eyes = kv2Eyes(lms, W, H);
+  const статусы = eyes.map(г => ({ статус:'SAFE', почему:'', метрики:{ eyeW: Math.round(г.eyeW) } }));
+  const t0 = performance.now();
+  const итог = (сила, причина, changed, maxL) => ({ статусы, сила, причина, мс: Math.round(performance.now() - t0), maxL: Math.round((maxL||0)*10)/10, пикселей: changed||0 });
+  if(eyes.length < 2) return итог(0, 'меньше двух глаз');
+  // ── gate 1: поворот головы (hard)
+  const отн = Math.min(eyes[0].eyeW, eyes[1].eyeW)/Math.max(eyes[0].eyeW, eyes[1].eyeW);
+  const дальний = eyes[0].eyeW <= eyes[1].eyeW ? 0 : 1;
+  for(const s of статусы) s.метрики.отношение_ширин = Math.round(отн*100)/100;
+  if(отн < KV2_GATE.мин_отношение_ширин){ статусы[дальний].статус = 'UNSAFE'; статусы[дальний].почему = 'дальний глаз при сильном повороте головы (ширины глаз ' + отн.toFixed(2) + ' < 0.60)'; статусы[дальний].hard = 'дальний глаз'; }
+  const глаза = [];                                       // всё, что не зависит от силы, считаем один раз
+  for(let ei = 0; ei < eyes.length; ei++){
+    const г = eyes[ei], st = статусы[ei];
+    const сиг = Math.max(1.0, KV2.сигма_карты*г.eyeW);
+    const kBlur = Math.max(3, Math.round(сиг*4) | 1), rEye = Math.max(3, Math.trunc(KV2.перо_века*г.eyeW) | 1);
+    const ок = kv2Window(г, W, H, ((kBlur-1) >> 1) + rEye + 3);
+    if(ок.w < 4 || ок.h < 4){ глаза.push(null); continue; }
+    const w = ок.w, h = ок.h, n = w*h;
+    const px = ctx.getImageData(ок.x0, ок.y0, w, h).data;
+    const lab = new Float32Array(3*n);
+    for(let i = 0; i < n; i++) kv2ToLab(px[4*i]/255, px[4*i+1]/255, px[4*i+2]/255, lab, 3*i);
+    const { u, v, roi, roiM, кисть } = kv2Region(г, ок);
+    // ── gate 2: переносица в области поиска (hard)
+    let вес = 0;
+    for(const k of KV2_NOSE){
+      const px_ = Math.min(W-1, Math.max(0, Math.trunc(lms[k].x*W))), py_ = Math.min(H-1, Math.max(0, Math.trunc(lms[k].y*H)));
+      const lx = px_ - ок.x0, ly = py_ - ок.y0;
+      вес = Math.max(вес, (lx >= 0 && ly >= 0 && lx < w && ly < h) ? roi[ly*w + lx] : 0);
+    }
+    st.метрики.переносица_в_roi = Math.round(вес*100)/100;
+    if(вес > KV2_GATE.переносица_в_roi){ st.hard = 'переносица'; if(st.статус === 'SAFE'){ st.статус = 'UNSAFE'; st.почему = 'область поиска заходит на переносицу (вес ' + вес.toFixed(2) + ')'; } }
+    // ── gate 3: тёплый валик (ограничитель)
+    { let va=0, vb=0, vn=0, sa=0, sb=0, sn=0;
+      for(let i = 0; i < n; i++){
+        const du = Math.abs(u[i] - 0.5); if(du >= 0.4) continue;
+        if(v[i] > 0.05 && v[i] < 0.22){ va += lab[3*i+1]; vb += lab[3*i+2]; vn++; }
+        else if(v[i] > 0.85 && v[i] < 1.1){ sa += lab[3*i+1]; sb += lab[3*i+2]; sn++; }
+      }
+      if(vn > 30 && sn > 30){ const отнВ = Math.hypot(va/vn, vb/vn)/Math.max(Math.hypot(sa/sn, sb/sn), 1e-6); st.метрики.насыщенность_валика = Math.round(отнВ*100)/100; }
+    }
+    // ── модель тона L и gate 4: крутизна света (ограничитель)
+    const Lc = new Float32Array(n); for(let i = 0; i < n; i++) Lc[i] = lab[3*i];
+    const пл = kv2Plane(Lc, roiM, w, h, false);
+    if(пл.коэф) st.метрики.наклон_света = Math.round(Math.hypot(пл.коэф[1]/пл.sx*г.eyeW, пл.коэф[2]/пл.sy*г.eyeW)*10)/10;
+    st.пределы = { наклон: kv31Предел(st.метрики.наклон_света, KV2_GATE.макс_наклон_L_на_eyeW), валик: kv31Предел(st.метрики.насыщенность_валика, KV2_GATE.макс_насыщенность_валика) };
+    // ── остатки (от силы не зависят): тёмный остаток L и остатки a/b
+    const ц = { x: г.центр.x + г.вниз.x*г.eyeW*0.42, y: г.центр.y + г.вниз.y*г.eyeW*0.42 };
+    let roiMax = 0; for(let i = 0; i < n; i++) if(roi[i] > roiMax) roiMax = roi[i];
+    if(!(ц.x >= 0 && ц.x < W && ц.y >= 0 && ц.y < H) || roiMax < 0.1){ глаза.push(null); continue; }
+    const diff = new Float32Array(n); for(let i = 0; i < n; i++) diff[i] = Lc[i] - пл.модель[i];
+    const тёмное = kv2Blur(diff, w, h, сиг); for(let i = 0; i < n; i++) if(тёмное[i] > 0) тёмное[i] = 0;
+    const отВека = new Float32Array(n); for(let i = 0; i < n; i++) отВека[i] = кисть[i]*kv2Smooth(v[i], KV2.цвет_от_века, KV2.цвет_полный_с - KV2.цвет_от_века);
+    const остатки = [null, null]; const chan = new Float32Array(n);
+    for(const к of [1, 2]){
+      for(let i = 0; i < n; i++) chan[i] = lab[3*i+к];
+      const м = kv2Plane(chan, roiM, w, h, true);
+      for(let i = 0; i < n; i++) diff[i] = chan[i] - м.модель[i];
+      остатки[к-1] = kv2Blur(diff, w, h, сиг);
+    }
+    // «Тени»: глубина ядра борозды этого глаза — 95-й процентиль глубины остатка внутри кисти
+    let D = 0; { const tmp = new Float32Array(n); let m = 0; for(let i = 0; i < n; i++) if(кисть[i] > 0.3) tmp[m++] = -тёмное[i]; D = kv31Перцентиль(tmp, m, KV31.перцентиль); }
+    глаза.push({ ок, n, lab, кисть, тёмное, отВека, остатки, D });
+  }
+  // ── решение по лицу
+  if(статусы.some(s => s.hard)) return итог(0, 'hard: ' + статусы.filter(s => s.hard).map(s => s.hard).join(', '));
+  if(глаза.some(g => !g)) return итог(0, 'глаз вне кадра');
+  const sПолз = kv31СилаПолзунка(ползунок);
+  let s = sПолз;
+  for(const st of статусы) for(const k in st.пределы) if(st.пределы[k] != null && st.пределы[k] < s) s = st.пределы[k];
+  if(!(s > 0)) return итог(0, sПолз <= 0 ? 'ползунок 0' : 'предел 0');
+  if(s < KV31.мин) return итог(0, 'предел ниже ' + KV31.мин);
+  let capЛица = KV31.потолок;                              // безопасный предел лица без учёта ползунка
+  for(const st of статусы) for(const k in st.пределы) if(st.пределы[k] != null && st.пределы[k] < capЛица) capЛица = st.пределы[k];
+  const поле = (g, сила, сТенями) => {                     // поле глаза при данной силе (как в microdb.применить)
+    const n = g.n, f = new Float32Array(3*n), где = new Float32Array(n);
+    const доп = (сТенями && тени > 0 && capЛица > сила && g.D > 0) ? (тени/100)*(capЛица - сила) : 0;
+    const от = KV31.ядро_от*g.D, перо = (KV31.ядро_до - KV31.ядро_от)*g.D;
+    for(let i = 0; i < n; i++){
+      const d = -g.тёмное[i]; const база = Math.min(d*сила, KV2.предел_L)*g.кисть[i];
+      let p = база; if(доп > 0){ p = Math.min(база + доп*d*kv2Smooth(d, от, перо)*g.кисть[i], KV2.предел_L); }
+      f[3*i] = p; где[i] = (база > 0.5 ? 1 : 0)*g.отВека[i];
+    }
+    const k = сила/KV2.сила_L;
+    for(const [к, силаЦв] of [[1, KV2.сила_a*k], [2, KV2.сила_b*k]]){
+      const о = g.остатки[к-1];
+      for(let i = 0; i < n; i++){ let d = -о[i]*силаЦв; d = d < -KV2.предел_ab ? -KV2.предел_ab : d > KV2.предел_ab ? KV2.предел_ab : d; f[3*i+к] = d*где[i]; }
+    }
+    return f;
+  };
+  const кандидаты = [s].concat(KV31.шаги.filter(x => x < s));
+  let принято = null, силаЛица = 0, причина = 'chroma UNSAFE';
+  for(const кандидат of кандидаты){
+    if(кандидат < KV31.мин) break;
+    const поля = глаза.map(g => поле(g, кандидат, true));
+    const проверки = глаза.map((g, i) => kv2ChromaCheck(g.lab, поля[i], g.n));
+    // доп. подъём не прошёл цвет — снимаем только его, база v3.1 остаётся
+    if(тени > 0) проверки.forEach((p, i) => { if(p.статус === 'UNSAFE'){ поля[i] = поле(глаза[i], кандидат, false); проверки[i] = kv2ChromaCheck(глаза[i].lab, поля[i], глаза[i].n); проверки[i].тениСняты = true; } });
+    if(проверки.every(p => p.статус === 'SAFE' || p.статус === 'SAFE_L_ONLY')){
+      проверки.forEach((p, i) => { статусы[i].chroma = p; });
+      принято = поля; силаЛица = кандидат; причина = кандидат === s ? 'ok' : 'chroma → ' + кандидат.toFixed(2); break;
+    }
+  }
+  if(!принято) return итог(0, причина);
+  // ── сборка: поле суммируется по глазам, B = A + (LAB2RGB(lab+поле) − LAB2RGB(lab))
+  let maxL = 0, changed = 0;
+  const x0 = Math.min(...глаза.map(g => g.ок.x0)), y0 = Math.min(...глаза.map(g => g.ок.y0));
+  const x1 = Math.max(...глаза.map(g => g.ок.x0 + g.ок.w)), y1 = Math.max(...глаза.map(g => g.ок.y0 + g.ок.h));
+  const uw = x1 - x0, uh = y1 - y0;
+  const сум = new Float32Array(3*uw*uh);
+  глаза.forEach((g, gi) => {
+    const p = принято[gi];
+    for(let y = 0; y < g.ок.h; y++) for(let x = 0; x < g.ок.w; x++){
+      const i = 3*(y*g.ок.w + x), j = 3*((y + g.ок.y0 - y0)*uw + (x + g.ок.x0 - x0));
+      сум[j] += p[i]; сум[j+1] += p[i+1]; сум[j+2] += p[i+2];
+    }
+  });
+  const img = ctx.getImageData(x0, y0, uw, uh), d = img.data, l0 = new Float32Array(3), r0 = new Float32Array(3), r1 = new Float32Array(3);
+  for(let i = 0; i < uw*uh; i++){
+    const dL = сум[3*i], da = сум[3*i+1], db = сум[3*i+2];
+    if(dL === 0 && da === 0 && db === 0) continue;
+    kv2ToLab(d[4*i]/255, d[4*i+1]/255, d[4*i+2]/255, l0, 0);
+    kv2FromLab(l0[0], l0[1], l0[2], r0, 0);
+    kv2FromLab(l0[0] + dL, l0[1] + da, l0[2] + db, r1, 0);
+    for(let c = 0; c < 3; c++){ let vv = d[4*i+c] + (r1[c] - r0[c])*255; d[4*i+c] = vv < 0 ? 0 : vv > 255 ? 255 : Math.round(vv); }
+    if(dL > maxL) maxL = dL; changed++;
+  }
+  ctx.putImageData(img, x0, y0);
+  if(opts.поля) opts.поля.push({ x0, y0, w: uw, h: uh, поле: сум });
+  return итог(силаЛица, причина, changed, maxL);
+}
+// объединённое окно обоих глаз — чтобы снять снимок «до» ровно там, куда v2 может писать
+function kv2Bbox(cv, lms){
+  const W = cv.width, H = cv.height; let x0 = W, y0 = H, x1 = 0, y1 = 0;
+  for(const г of kv2Eyes(lms, W, H)){
+    const сиг = Math.max(1.0, KV2.сигма_карты*г.eyeW);
+    const ок = kv2Window(г, W, H, ((Math.max(3, Math.round(сиг*4) | 1) - 1) >> 1) + Math.max(3, Math.trunc(KV2.перо_века*г.eyeW) | 1) + 3);
+    x0 = Math.min(x0, ок.x0); y0 = Math.min(y0, ок.y0); x1 = Math.max(x1, ок.x0 + ок.w); y1 = Math.max(y1, ок.y0 + ок.h);
+  }
+  return x1 > x0 && y1 > y0 ? { x0, y0, w: x1 - x0, h: y1 - y0 } : null;
+}
+// Вход Консилера: возвращает окно к «до» (снимок берётся при первом вызове на этих данных) и
+// применяет правку с силой ползунка (общей для обоих глаз, см. KV31).
+let kv2Последний = null;
 function bagsApply(t, cv, data){
   cv = cv || rtCanvas; data = data || bagsData;
-  if(!data) return;
-  const ctx = cv.getContext('2d');
-  for(let r of data.regs){   // r подменяется, когда зона стоит в другом свете
-    // база — ТЕКУЩЕЕ содержимое канваса, а не застывший снимок r.orig: у широких эллипсов
-    // соседних глаз боксы теперь могут пересекаться у переносицы, и если писать полным
-    // прямоугольником снимок «до», пиксели без своего эффекта (alpha=0) стирали бы обратно
-    // то, что уже нарисовала соседняя зона в области пересечения — проверено, давало чёткий
-    // прямоугольный шрам. r.orig/r.low остаются чистыми снимками только для формулы эффекта
-    const out = ctx.getImageData(r.bx, r.by, r.bw, r.bh);
-    const od = out.data, low = r.low, dm = r.darkMap, m = r.mask, bw = r.bw, bh = r.bh;
-    const bse = r.base;
-    const cR=r.cheekR, cG=r.cheekG, cB=r.cheekB, cLum=r.cheekLum;
-    if(!bse) continue;
-    // ОСТОРОЖНОСТЬ ПРИ НЕУВЕРЕННОЙ ДЕТЕКЦИИ. Чем меньше лицо в кадре и чем хуже нашёлся
-    // эталон соседней кожи, тем меньше мы знаем — и тем слабее правим. Иначе на мелком,
-    // повёрнутом или закрытом волосами лице инструмент уверенно красит наугад.
-    let доверие = 1;
-    // ЭТАЛОН ПОД ОСВЕЩЕНИЕ ЗОНЫ. Если зона и соседняя щека стоят в РАЗНОМ свете (повёрнутое
-    // лицо, солнце сбоку), тянуть к щеке нельзя — это давало оранжевую кляксу, и защита
-    // просто выключала правку целиком. Из-за этого выраженные круги на затенённой половине
-    // оставались нетронутыми (Артур поймал: «84 не меняется»). Теперь вместо отказа берём
-    // эталон ИЗ ТОЙ ЖЕ освещённости — средний уровень подложки внутри самой зоны. Тогда мы
-    // правим местный контраст дуги, а не пытаемся догнать освещённую скулу.
-    // ДОВЕРИЕ К ОСВЕЩЕНИЮ — ОДНО НА ЛИЦО, по худшему из двух глаз (считается в bagsPrepare).
-    // Свет на лицо почти всегда падает сбоку, поэтому раньше каждый глаз решал сам и один
-    // оказывался по одну сторону порога, второй по другую: замер по пятнадцати лицам — на
-    // четырёх один глаз получал доверие 1,00, а второй 0,75. Разница в четверть силы на
-    // одном лице видна, Артур поймал это глазом ещё до замера.
-    // И переход больше не ступенька. Прежде на 0,119 доверие было 1,00, а на 0,121 — сразу
-    // 0,75. Теперь оно едет плавно на отрезке 0,08–0,16, а прежний порог 0,12 остался
-    // серединой этого перехода: логика та же, ступеньки нет.
-    {
-      const щя0 = (r.щекаR+r.щекаG+r.щекаB)/3 || 1;
-      const свой = Math.abs(щя0 - (r.зонаЯ||щя0)) / щя0;
-      const пл = Math.max(0, Math.min(1, ((r.перекосЛица != null ? r.перекосЛица : свой) - 0.08)/0.08));
-      // Общий — только КОЭФФИЦИЕНТ ДОВЕРИЯ. Эталон каждый глаз выбирает себе сам, по своему
-      // перекосу: он про то, с какой кожей сравнивать это конкретное место, а не про то,
-      // насколько мы вообще доверяем освещению. Пробовал делать общим и его — здоровый глаз
-      // начинало тянуть к «своему свету» из-за соседа, и разница между глазами не падала,
-      // а росла (замер на снимке p23650: 3,6 → 7,2 уровня).
-      const k = Math.max(0, Math.min(1, (свой - 0.08)/0.08));
-      доверие *= 1 - 0.25*пл;
-      if(k > 0 && r.светR != null){
-        // ЭТАЛОН ПОД ОСВЕЩЕНИЕ ЗОНЫ. Если зона и соседняя щека стоят в РАЗНОМ свете
-        // (повёрнутое лицо, солнце сбоку), тянуть к щеке нельзя — это давало оранжевую
-        // кляксу, и защита просто выключала правку целиком. Из-за этого выраженные круги на
-        // затенённой половине оставались нетронутыми (Артур поймал: «84 не меняется»).
-        // Вместо отказа берём эталон ИЗ ТОЙ ЖЕ освещённости — средний уровень подложки
-        // внутри самой зоны, — и подмешиваем его тем сильнее, чем больше перекос. Тогда мы
-        // правим местный контраст дуги, а не пытаемся догнать освещённую скулу.
-        r = Object.assign({}, r, {
-          щекаR: r.щекаR + (r.светR - r.щекаR)*k,
-          щекаG: r.щекаG + (r.светG - r.щекаG)*k,
-          щекаB: r.щекаB + (r.светB - r.щекаB)*k,
-          вСвоёмСвете: true
-        });
-      }
-    }
-    if(r.eyeW < 34) доверие *= Math.max(0.25, r.eyeW/34);      // глаз мельче 34 px — деталей нет
-    if(r.щекаНадёжна === false) доверие *= 0.5;                 // кожу рядом нашли с трудом
-    // Сила именно ЭТОЙ зоны: общий параметр трогать нельзя, иначе второй глаз получил бы
-    // ослабление дважды (первая же правка, которую я поймал на себе до проверки).
-    const ecxЗ = r.bw*0.5, bwЗ = r.bw;
-    const силаЗоны = t * доверие;
-    if(силаЗоны < 0.01) continue;
-    for(let y=0; y<bh; y++) for(let x=0; x<bw; x++){
-      const i = (y*bw+x)*4;
-      const ageom = m[i+3]/255; if(!ageom) continue;
-      // локальная темнота (по сглаженной карте, без шума пикселей) — самое тёмное место в зоне
-      // получает эффект почти полностью, лёгкая полутень рядом — почти не тронется
-      const dLum = (dm[i]+dm[i+1]+dm[i+2])/3;
-      // Взвешивать силу по темноте больше НЕ НУЖНО и вредно. Цель теперь — поле чистой
-      // кожи (r.field), а оно там, где тени нет, совпадает с самим кадром: смешивание с
-      // ним просто ничего не меняет. Защита получается сама собой, без порогов, которые
-      // раньше то душили эффект, то выкручивались в максимум по всей зоне.
-      // Потолка на силу больше НЕТ: при полном ползунке тень убирается целиком.
-      // Раньше здесь стоял общий множитель 0.68 — им лечили «белое пятно», но
-      // пятно шло не отсюда, а от возврата текстуры ниже, и заодно ослаблялись
-      // ВСЕ тени: лёгкая (13 единиц яркости) убиралась всего на пять.
-      // Потолок 0.78: до самого тона щеки доводить нельзя — кожа под глазом
-      // естественно чуть темнее, и полное выравнивание читается как выбеленное пятно
-      // (жена сказала прямо: «выбеляет»). Прежние 0.68 душили эффект не здесь, а вместе
-      // с неверным делителем выше — теперь сила берётся оттуда, а тут только предел.
-      // Запас в 8% («под глазом кожа и правда чуть темнее») Артур забраковал на глаз:
-      // из шести вариантов, показанных бок о бок на его лице, он выбрал полное гашение
-      // тени. Естественную впадину глазницы это не трогает — она живёт в подложке.
-      // ВЕС ПО ТЕМНОТЕ САМОГО ПИКСЕЛЯ. Раньше сила зависела только от формы зоны: красили
-      // всю область одинаково, включая здоровую кожу щеки, куда зона заходит краем. На
-      // светлой коже это давало бледные облака с заметной границей — «пятнистое лицо».
-      // Теперь решает пиксель: насколько он темнее ожидаемого тона кожи рядом. Не темнее —
-      // не трогаем вовсе. Тогда граница зоны перестаёт быть видимой в принципе: на здоровой
-      // коже вес равен нулю, сколько бы зона ни захватила.
-      const яПикс = (low[i]+low[i+1]+low[i+2])/3;
-      const щПикс = (r.щекаR+r.щекаG+r.щекаB)/3;
-      const темнее = щПикс - яПикс;
-      if(темнее <= BAGS_ТЕМНОТА) continue;
-      const весТемноты = Math.min(1, (темнее - BAGS_ТЕМНОТА) /
-                                     Math.max(1, BAGS_ТЕМНОТА_ПОЛНАЯ - BAGS_ТЕМНОТА));
-      // Узкая маска борозды: только глубокая часть тени. Нужна и ослаблению рельефа,
-      // и пределу осветления — иначе предел срезает как раз то, ради чего всё делается.
-      // Пороги борозды — доли от глубины дуги ЭТОГО глаза, а не общие числа. Тогда каждый
-      // глаз получает своё: глубокая дуга правится сильнее, уже ровная кожа — почти нет.
-      const тень90 = r.тень90 || BAGS_БОРОЗДА_ПОРОГ*2;
-      const порогБ = Math.max(5, тень90*BAGS_БОРОЗДА_НАЧАЛО),
-            диапБ  = Math.max(5, тень90*BAGS_БОРОЗДА_РАЗГОН);
-      let узкая = Math.max(0, Math.min(1, (темнее - порогБ) / диапБ));
-      // ПРОДОЛЬНОЕ ЗАТУХАНИЕ. Линия у внешнего уголка глаза не должна обрываться резко:
-      // иначе на её конце видна ступенька. Гасим усиление к самому краю зоны по её оси.
-      {
-        const u = Math.abs((x - ecxЗ) / (bwЗ*0.5));         // 0 в центре зоны, 1 у края
-        // Затухание начинаем позже: раньше оно срезало внешнюю треть дуги, и маска
-        // вырождалась в капсулу у переносицы. Теперь гаснем только у самой кромки зоны.
-        if(u > 0.82) узкая *= Math.max(0, 1 - (u-0.82)/0.18);
-      }
-      // Усиление ядра ведёт ОТДЕЛЬНЫЙ ползунок, а не общая сила: иначе два регулятора
-      // тянули бы одно и то же и пользователь не понимал бы, что на что влияет.
-      const выше75 = BAGS_ТЕНИ;
-      let a = ageom * силаЗоны * весТемноты;
-      if(a < 0.004) continue;
-      // ЦВЕТ ИЛИ ТЕНЬ. Настоящий круг под глазом отличается от соседней кожи ЦВЕТОМ —
-      // синевой или краснотой. Тень от рельефа (впадина глазницы, тень мешка) имеет тот же
-      // цвет кожи, только темнее. Поэтому сравниваем цвет места с цветом соседней кожи,
-      // приведённым к ТОЙ ЖЕ яркости: совпал — это форма лица, трогать нечего.
-      // Поймано на снимке дочки: у ребёнка синяков нет вовсе, а инструмент всё равно
-      // осветлял впадину и сажал под глаз бледное пятно.
-      if(BAGS_ЦВЕТНОСТЬ > 0){
-        const я = (low[i]+low[i+1]+low[i+2])/3;
-        const щя = (r.щекаR+r.щекаG+r.щекаB)/3 || 1;
-        const k = я/щя;
-        const откл = (Math.abs(low[i]-r.щекаR*k) + Math.abs(low[i+1]-r.щекаG*k)
-                    + Math.abs(low[i+2]-r.щекаB*k))/3;
-        const цвет = Math.min(1, откл/4.5);           // 4.5 уровня расхождения = полноценная окраска
-        a *= (1 - BAGS_ЦВЕТНОСТЬ) + BAGS_ЦВЕТНОСТЬ*цвет;
-        if(a < 0.004) continue;
-      }
-      // Круг и складка живут в СРЕДНЕМ масштабе — между кожей (текстура) и освещением
-      // лица (подложка). Гасим именно эту полосу, и только там, где она ТЕМНЕЕ подложки:
-      // осветлить выше собственного уровня кожи так невозможно — набелить нечем.
-      // Блик на выпуклости мешка (полоса светлее подложки) гасим вполсилы: без этого
-      // припухлость остаётся видна, а полное выравнивание уже читается как пластик.
-      const lr=low[i], lg=low[i+1], lb=low[i+2];
-      const br=bse[i], bg2=bse[i+1], bb=bse[i+2];
-      const пр=lr-br, пг=lg-bg2, пб=lb-bb;
-      const тень = (пр+пг+пб)/3 < 0;
-      const k = тень ? (1 - a) : (1 - a*0.5);
-      // РЕЛЬЕФ ОТДЕЛЬНО ОТ ОКРАСКИ. Раньше гасилось всё, что темнее подложки, — то есть и
-      // синева, и собственная тень мешка. На лице Артура зона была темнее щеки на 8 уровней,
-      // а поднималась на 14: форма мешка сглаживалась, и вместо синяка появлялось плоское
-      // светлое пятно. Теперь тёмное делится на две части по масштабу:
-      //   широкая окраска (карта темноты минус подложка) — её гасим, это и есть круг;
-      //   рельеф (сглаженный кадр минус карта темноты) — складка и край мешка, его НЕ трогаем.
-      // Форма лица остаётся, уходит только цвет.
-      const шр=dm[i]-br, шг=dm[i+1]-bg2, шб=dm[i+2]-bb;         // широкая окраска
-      let рр=lr-dm[i], рг=lg-dm[i+1], рб=lb-dm[i+2];            // рельеф: складки и края
-      // ОСЛАБЛЕНИЕ ПОДГЛАЗНИЧНОЙ ТЕНИ (shadowLift).
-      // Круг под глазом — это не только цвет. У многих заметная часть дефекта живёт в
-      // СРЕДНЕЙ частоте: тень слёзной борозды, дугообразная полоса под веком. Сохраняя
-      // рельеф целиком (так делалось с v152, и это вылечило бледные пятна), мы оставляли
-      // эту полосу нетронутой — Артур увидел её сразу. Поэтому ослабляем ТОЛЬКО
-      // отрицательную часть рельефа, и тем сильнее, чем она глубже: мелкая штриховка кожи
-      // почти не трогается, а густая тень борозды садится заметно. Светлую часть рельефа
-      // (выпуклость мешка) не трогаем вовсе — иначе лицо теряет объём.
-      if(BAGS_ТЕНЬ > 0){
-        const тень = (рр+рг+рб)/3;
-        if(тень < 0){
-          const глубина = Math.min(1, -тень / Math.max(1, BAGS_ТЕНЬ_ГЛУБИНА));
-          // УЗКАЯ МАСКА БОРОЗДЫ. Дугообразная полоса под веком — самое тёмное место зоны.
-          // Расширять ради неё общую маску нельзя: тогда правка снова полезет на щёки.
-          // Поэтому внутри той же зоны выделяем ТОЛЬКО глубокую часть тени и усиливаем
-          // ослабление именно в ней, и только когда ползунок выкручен выше 75: на средних
-          // значениях человек хочет естественности, а не максимума.
-          const доля = Math.min(0.95, a * (BAGS_ТЕНЬ + BAGS_БОРОЗДА*узкая*выше75) * глубина);
-          рр *= (1-доля); рг *= (1-доля); рб *= (1-доля);
-        }
-      }
-      const кр = BAGS_РЕЛЬЕФ + (1-BAGS_РЕЛЬЕФ)*k;               // 0 = как было раньше
-      const nr = br + шр*k + рр*кр,
-            ng = bg2 + шг*k + рг*кр,
-            nb = bb + шб*k + рб*кр;
-      const hk = 1 - (1-BAGS_ТЕКСТУРА)*a;                      // texturePreservation: мелкая текстура
-      // ДОВОДКА К ЩЕКЕ. Гашение до подложки закрывает лишь часть пути: на замере по 17
-      // лицам отличие от соседней кожи падало с 17.8 всего до 13.7. Подложка держит в себе
-      // часть самой тени, и больше из неё не вытянуть. Поэтому вторым шагом ведём тон к
-      // ЗАМЕРЕННОЙ щеке — и только там, где место темнее её: осветлить выше кожи нельзя.
-      let dr2 = nr, dg2 = ng, db2 = nb;
-      if(BAGS_К_ЩЕКЕ > 0){
-        const свой = (nr+ng+nb)/3, щек = (r.щекаR+r.щекаG+r.щекаB)/3;
-        if(свой < щек){
-          // Подтяжка не может перескочить щёку: т ограничена единицей, а это ровно
-          // «стать как соседняя кожа». Мелкую разницу тянем слабее — там правка не нужна.
-          const т = Math.min(1, a * BAGS_К_ЩЕКЕ * Math.min(1, (щек-свой)/12));
-          dr2 = nr + (щек - свой)*т;
-          dg2 = ng + (щек - свой)*т;
-          db2 = nb + (щек - свой)*т;
-          // оттенок тоже ведём к щеке, приведённой к этой же яркости
-          const я2 = (dr2+dg2+db2)/3, kц = я2/Math.max(1,щек);
-          dr2 += (r.щекаR*kц - dr2)*т*0.6;
-          dg2 += (r.щекаG*kц - dg2)*т*0.6;
-          db2 += (r.щекаB*kц - db2)*т*0.6;
-        }
-      }
-      // НЕЙТРАЛИЗАЦИЯ ОТТЕНКА — отдельным шагом от яркости.
-      // Замер по 19 лицам показал: яркость мы выравниваем (16 уровней разницы -> 1), а
-      // синева и лиловость остаются какими были. Значит правка была по сути одноканальной,
-      // и место читалось как «осветлённое», а не как «без синяка».
-      // Приём: цвет соседней кожи приводим К ЯРКОСТИ ЭТОГО ЖЕ пикселя и тянем к нему только
-      // цветность. Яркость при этом не меняется вовсе — а раз она цела, целы и поры, и
-      // мелкие линии: текстура живёт именно в яркости. Пластика тут возникнуть не может.
-      if(BAGS_ОТТЕНОК > 0){
-        const я3 = (dr2+dg2+db2)/3, щя3 = (r.щекаR+r.щекаG+r.щекаB)/3 || 1;
-        const k3 = я3/щя3;                       // щека, приведённая к яркости этого пикселя
-        const т3 = a * BAGS_ОТТЕНОК;
-        dr2 += (r.щекаR*k3 - dr2)*т3;
-        dg2 += (r.щекаG*k3 - dg2)*т3;
-        db2 += (r.щекаB*k3 - db2)*т3;
-      }
-      // ПРЕДЕЛ ЦВЕТОВОГО СДВИГА. Осветление ограничено выше, но клякса приходит не от
-      // яркости, а от цвета: тень тянется к тёплому тону освещённой кожи и краснеет.
-      // Поэтому отдельно держим сдвиг «красный минус синий» и «зелёный минус синий»
-      // в пределах десяти уровней от исходного — этого хватает, чтобы снять синеву,
-      // и мало, чтобы перекрасить место в оранжевый.
-      {
-        const прR = 10*a, крБыло = lr-lb, крСтало = dr2-db2;
-        if(Math.abs(крСтало-крБыло) > прR){
-          const лишек = (крСтало-крБыло) - Math.sign(крСтало-крБыло)*прR;
-          dr2 -= лишек*0.5; db2 += лишек*0.5;
-        }
-        const згБыло = lg-lb, згСтало = dg2-db2;
-        if(Math.abs(згСтало-згБыло) > прR){
-          const лишек = (згСтало-згБыло) - Math.sign(згСтало-згБыло)*прR;
-          dg2 -= лишек*0.5; db2 += лишек*0.5;
-        }
-      }
-      // ПРЕДЕЛ ОСВЕТЛЕНИЯ. Синяк — это десяток-полтора уровней. Если место темнее соседней
-      // кожи на сорок, это не синяк, а ТЕНЬ ОТ СВЕТА: солнце бьёт сбоку, глазница в тени,
-      // а кольцо-эталон стоит на освещённой скуле. Без предела инструмент тянул такую тень
-      // к освещённой коже и выкатывал оранжевое пятно во всё подглазье — поймано на двух
-      // лицах из двенадцати (резкое солнце, тёмная кожа). Больше предела не поднимаем
-      // никогда: лучше недоправить, чем нарисовать кляксу.
-      {
-        // Считаем подъём от ИСХОДНОЙ сглаженной яркости, а не от промежуточной: иначе
-        // предел не видит самой большой части правки — гашения широкой окраски.
-        const было = (lr+lg+lb)/3, стало = (dr2+dg2+db2)/3;
-        // В борозде разрешаем поднять сильнее: полоса бывает глубиной под полсотни уровней,
-        // и общий предел в 16 срезал ровно ту правку, ради которой всё затевалось.
-        // На здоровой коже узкая маска равна нулю, поэтому предел там остаётся прежним.
-        // Предел считаем от РАЗНИЦЫ между этим пикселем и здоровой кожей рядом, а не
-        // фиксированной прибавкой: на слабой тени +22 избыточны, на сильной — не хватает,
-        // и ползунок «Тени» упирался в потолок, ничего не меняя (Артур: «эффект слишком
-        // слабый»). Потолок «не светлее соседней кожи» остаётся и работает после этого.
-        const запас = Math.max(0, темнее - BAGS_ТЕМНОТА);
-        // БАЗОВЫЙ ПРЕДЕЛ — ДОЛЯ ОТ СОБСТВЕННОЙ ГЛУБИНЫ ТЕНИ, а не одно число на всех.
-        // Постоянные 16 уровней означали для мелкой тени «сними почти всё», а для глубокой
-        // «сними треть»: замер по восьми лицам — мелкие круги снимались на 56–83 %, глубокие
-        // на 31–35 %, то есть инструмент слабее всего там, где нужен больше всего. Счётчики
-        // подтвердили: этот предел срезал 61–98 % всех обработанных пикселей, остальные
-        // ограничители почти не участвовали.
-        // Пол в прежних 16 оставлен намеренно: на мелкой тени доля даёт меньше 16, и такие
-        // лица должны вести себя ровно как раньше — проверено, разница 0–4 %.
-        // Потолок 40 — чтобы глубокую тень от освещения нельзя было разгладить целиком.
-        // Доля 0,75 выбрана на 25 лицах (глаз 16–82 px, яркость кожи 81–214, перекос света
-        // 0,008–0,597): ни на одном кадре она не даёт меньше прежнего, глубокие круги
-        // прибавляют 12–45 %, мелкие не меняются, выбеливания и ореола нет.
-        const базовый = Math.min(BAGS_ПРЕДЕЛ_МАКС, Math.max(BAGS_ПОДЪЁМ, запас*BAGS_ПРЕДЕЛ_ДОЛЯ));
-        const предел = (базовый + запас*0.8*узкая*выше75) * a;
-        if(стало - было > предел){
-          const лишнее = (стало - было) - предел;
-          dr2 -= лишнее; dg2 -= лишнее; db2 -= лишнее;
-        }
-      }
-      // МЕСТНЫЙ ПОТОЛОК. Общий потолок считает по средней щеке, но рядом со слёзной
-      // бороздой кожа своя: если подняться выше НЕЁ, на месте тёмной дуги появится светлая.
-      {
-        // Подложка рядом с глубокой дугой сама затемнена этой же дугой — брать её как
-        // «здоровую кожу» значит занижать предел и упираться в него на самых тёмных местах
-        // (ползунок «Тени» переставал работать). Даём запас, растущий с глубиной, но
-        // ВЫШЕ соседней щеки всё равно не пустит общий потолок ниже.
-        const щекаЯ = (r.щекаR+r.щекаG+r.щекаB)/3;
-        const местная = Math.min(щекаЯ, (br+bg2+bb)/3 + 2 + 0.45*темнее), ст = (dr2+dg2+db2)/3;
-        if(ст > местная){ const л = ст - местная; dr2 -= л; dg2 -= л; db2 -= л; }
-      }
-      // ПОТОЛОК. Подглазье не имеет права стать СВЕТЛЕЕ соседней щеки — иначе на его месте
-      // появляется бледное пятно, заметное сильнее самого синяка. Так и вышло у Артура на
-      // левом глазу: зона поднялась до 150 при щеке 144. Причина — подложка приклеена к самой
-      // светлой пробе кожи (там 156), и гашение уезжает вслед за ней. Лишнее снимаем.
-      {
-        const свой2 = (dr2+dg2+db2)/3, щек2 = (r.щекаR+r.щекаG+r.щекаB)/3;
-        if(свой2 > щек2){
-          const лишек = (свой2 - щек2) * a * BAGS_ПОТОЛОК;
-          dr2 -= лишек; dg2 -= лишек; db2 -= лишек;
-        }
-      }
-      od[i]   = clamp(dr2 + (r.orig.data[i]  -lr)*hk);
-      od[i+1] = clamp(dg2 + (r.orig.data[i+1]-lg)*hk);
-      od[i+2] = clamp(db2 + (r.orig.data[i+2]-lb)*hk);
-    }
-    ctx.putImageData(out, r.bx, r.by);
-  }
+  if(!data || !data.faces || !data.faces.length) return;
+  const lms = data.faces[0], ctx = cv.getContext('2d', { willReadFrequently:true });
+  if(!data.kv2snap){ const bb = kv2Bbox(cv, lms); if(!bb) return; data.kv2snap = { bb, img: ctx.getImageData(bb.x0, bb.y0, bb.w, bb.h) }; }
+  else ctx.putImageData(data.kv2snap.img, data.kv2snap.bb.x0, data.kv2snap.bb.y0);
+  if(!(t > 0)) return;
+  kv2Последний = kv2Apply(cv, lms, { ползунок: t*100, тени: BAGS_ТЕНИ*100 });   // сила и «Тени», см. KV31
 }
 // Повтор «теней» на любом холсте: точки лица нормированные (0..1), поэтому те же
 // зоны строятся хоть на 1400 px, хоть на оригинале — без пересчёта детектором.
@@ -11330,6 +11498,7 @@ function bagsПоказатьВсё(){
   тx.globalCompositeOperation = 'destination-in';
   тx.drawImage(bagsМаска, 0, 0);
   c.drawImage(т, 0, 0);
+  for(const op of bagsПоздние) replayOp(rtCanvas, op);
 }
 // Один отпечаток кисти: мажем в маску и тут же проявляем эффект в этом месте
 function bagsОтпечаток(x, y, R, стереть){
@@ -11413,10 +11582,41 @@ function bagsЗапомнитьОп(){
   м.getContext('2d').drawImage(bagsМаска, 0, 0);
   rtBagsOp = { t:'bags', faces:[rtFaces[rtFaceSel]], amount:v/100, тени:BAGS_ТЕНИ, кисть:м };
 }
+// ХОЛСТ КОНСИЛЕРА В ЭКСПОРТНОМ ПОРЯДКЕ. Холст редактора — накопительное превью, и повторный вход
+// брал за «исходник» холст с уже наложенной своей правкой: сила 50 второй раз давала A + ещё одна
+// коррекция (поймано на телефоне). Возвращать только окна из bagsОриг нельзя: если после Консилера под
+// глазами рисовал другой инструмент («Кожа»), его вклад пропадал бы из превью, а в файле оставался.
+// Поэтому при входе, когда в сеансе уже есть операции, которые экспорт кладёт ПОСЛЕ Консилера
+// (кожа, пудра, тон…), холст пересобирается тем же путём, что и экспорт: исходник сеанса (rtOrig) +
+// операции до Консилера (мазки), а поздние операции запоминаются и дорисовываются поверх каждого
+// результата Консилера. Так превью совпадает с файлом и по составу, и по порядку. Журналы
+// rtOps/rtUndo не трогаются. Без поздних операций всё идёт прежним быстрым путём.
+let bagsПоздние = [];
+function bagsПересобратьПревью(){
+  const ops = rtSessionOps().filter(o => o.t !== 'bags');
+  bagsПоздние = ops.filter(o => o.t !== 'heal');
+  if(!bagsПоздние.length && !bagsОриг) return;        // первый вход, поздних операций нет — как раньше
+  rtCanvas.getContext('2d').drawImage(rtOrig, 0, 0);
+  for(const op of ops) if(op.t === 'heal') replayOp(rtCanvas, op);
+}
+// Авто-режим: холст = база (bagsОриг) + Консилер + поздние операции.
+function bagsПоказатьАвто(сила){
+  const c = rtCanvas.getContext('2d');
+  if(bagsПоздние.length && bagsОриг) c.drawImage(bagsОриг, 0, 0);
+  else if(bagsData) for(const з of bagsData.regs) c.putImageData(з.orig, з.bx, з.by);
+  if(сила) bagsApply(сила);
+  for(const op of bagsПоздние) replayOp(rtCanvas, op);
+}
+// Уход из инструмента / «Применить» в режиме кисти: отпечатки рисуются без поздних операций,
+// перед выходом дорисовываем их, чтобы холст был в экспортном порядке.
+function bagsЗавершитьХолст(){
+  if(bagsРежим !== 'авто' && bagsПоздние.length) bagsПоказатьВсё();
+}
 async function bagsEnter(){
   const slider = document.getElementById('rtBags'), top = document.getElementById('rtTop');
   slider.value = 0; document.getElementById('rtBagsV').textContent = '0'; slider.disabled = true;
-  bagsData = null;
+  bagsПересобратьПревью();     // холст в экспортном порядке: без своей прошлой правки, поздние — поверх
+  bagsData = null; rtBagsOp = null;
   if(bagsBusy) return; bagsBusy = true;
   try{
     top.textContent = bagsKit ? 'Ищу лицо…' : 'Загружаю модель…';
@@ -11444,7 +11644,7 @@ async function bagsEnter(){
     bagsСброситьКисть();
     bagsОриг = bagsХолст(rtCanvas.width, rtCanvas.height);
     bagsОриг.getContext('2d').drawImage(rtCanvas, 0, 0);
-    bagsApply(силаСтарт/100);                         // показываем результат сразу
+    bagsПоказатьАвто(силаСтарт/100);                  // показываем результат сразу
     rtBagsOp = силаСтарт ? { t:'bags', faces:[rtFaces[rtFaceSel]], amount:силаСтарт/100, тени:BAGS_ТЕНИ } : null;
     rtDrawFaces(bagsPickFace);
     // На семейном кадре ребёнка держат ближе к камере, его лицо в кадре шире — и «самое
@@ -11472,9 +11672,11 @@ function bagsPickFace(){
   }
   if(bagsData){ const ctx=rtCanvas.getContext('2d');
     for(const r of bagsData.regs) ctx.putImageData(r.orig, r.bx, r.by); }
+  if(bagsПоздние.length && bagsОриг) rtCanvas.getContext('2d').drawImage(bagsОриг, 0, 0);
   bagsPrepare([rtFaces[rtFaceSel]]);
   rtDrawFaces(bagsPickFace);
-  if(v){ bagsApply(v/100); rtBagsOp = { t:'bags', faces:[rtFaces[rtFaceSel]], amount:v/100 }; }
+  bagsПоказатьАвто(v/100);
+  if(v) rtBagsOp = { t:'bags', faces:[rtFaces[rtFaceSel]], amount:v/100, тени:BAGS_ТЕНИ };
 }
 let bagsПоследняяСила = 50;      // что человек выбрал в прошлый раз — переносим на новый снимок
 document.getElementById('rtBags').oninput = e=>{
@@ -11487,9 +11689,7 @@ document.getElementById('rtBags').oninput = e=>{
     // пиксели с нулевой силой она просто пропускает — и на холсте остаётся прошлая правка.
     // Поэтому перед каждым пересчётом кладём назад чистые зоны: иначе увод ползунка в 0
     // не возвращал кадр (поймано на предполётной проверке перед публикацией).
-    if(bagsData){ const к = rtCanvas.getContext('2d');
-      for(const з of bagsData.regs) к.putImageData(з.orig, з.bx, з.by); }
-    if(v) bagsApply(v/100);
+    bagsПоказатьАвто(v/100);
   }
   else { bagsГотовитьЭффект(v/100); bagsПоказатьВсё(); }
   bagsЗапомнитьОп();
@@ -11501,9 +11701,7 @@ document.getElementById('rtBagsShadow').oninput = e=>{
   BAGS_ТЕНИ = v/100;
   const сила = +document.getElementById('rtBags').value/100;
   if(bagsРежим === 'авто'){
-    if(bagsData){ const к = rtCanvas.getContext('2d');
-      for(const з of bagsData.regs) к.putImageData(з.orig, з.bx, з.by); }
-    if(сила) bagsApply(сила);
+    bagsПоказатьАвто(сила);
   }
   else { bagsГотовитьЭффект(сила); bagsПоказатьВсё(); }
   bagsЗапомнитьОп();
@@ -11530,7 +11728,7 @@ document.querySelectorAll('#rtBagsModes .rt-kind').forEach(b=>{
       // возвращаем автоматический путь: чистый кадр и обычный расчёт по точкам лица
       rtCanvas.getContext('2d').drawImage(bagsОриг, 0, 0);
       bagsPrepare([rtFaces[rtFaceSel]]);
-      if(v) bagsApply(v/100);
+      bagsПоказатьАвто(v/100);
       rtFacesHint((rtFaces||[]).length, 'чьи тени убрать');
     } else if(был === 'авто'){
       // уходим в ручной режим: с чистого листа, эффект появится только под пальцем
@@ -13389,6 +13587,12 @@ document.getElementById('rtPanBtn').onclick = ()=>{
   rtDrawing = false; rtHideCursor();
   rtSyncPan();
 };
+// Операции текущего сеанса ретуши в том порядке, в каком их повторит экспорт.
+function rtSessionOps(){
+  const ops = [...rtOps];
+  if(rtBagsOp) ops.push(rtBagsOp); if(rtSkinOp) ops.push(...rtSkinOp); if(rtPowderOp) ops.push(rtPowderOp); if(rtToneOp) ops.push(rtToneOp); if(rtTeethOp) ops.push(rtTeethOp); if(rtAiOp) ops.push(rtAiOp); if(rtSpotsOp) ops.push(rtSpotsOp); if(rtFlareOp) ops.push(rtFlareOp); if(rtVigOp) ops.push(rtVigOp); if(rtHalOp) ops.push(rtHalOp); if(rtDblOp) ops.push(rtDblOp); if(rtDustOp) ops.push(rtDustOp); if(rtBokehOp) ops.push(rtBokehOp);
+  return ops;
+}
 rtCompareBtn.onclick = ()=>{
   if(rtCmpOn) return rtCmpOff();
   if(!rtOrig) return;
@@ -13403,8 +13607,9 @@ rtCompareBtn.onclick = ()=>{
 document.getElementById('rtCancel').onclick = closeRetouch;
 document.getElementById('rtApply').onclick = ()=>{
   rtCmpOff();          // применяем результат, а не то, что показывает шторка
+  if(rtTool === 'bags') bagsЗавершитьХолст();
   sourceCanvas.getContext('2d').drawImage(rtCanvas, 0, 0);   // bake retouch into the source
-  editOps.push(...rtOps); if(rtBagsOp) editOps.push(rtBagsOp); if(rtSkinOp) editOps.push(...rtSkinOp); if(rtPowderOp) editOps.push(rtPowderOp); if(rtToneOp) editOps.push(rtToneOp); if(rtTeethOp) editOps.push(rtTeethOp); if(rtAiOp) editOps.push(rtAiOp); if(rtSpotsOp) editOps.push(rtSpotsOp); if(rtFlareOp) editOps.push(rtFlareOp); if(rtVigOp) editOps.push(rtVigOp); if(rtHalOp) editOps.push(rtHalOp); if(rtDblOp) editOps.push(rtDblOp); if(rtDustOp) editOps.push(rtDustOp); if(rtBokehOp) editOps.push(rtBokehOp);   // те же правки повторим на оригинале
+  editOps.push(...rtSessionOps());   // те же правки повторим на оригинале
   rtOps = []; rtBagsOp = null; rtSkinOp = null; rtPowderOp = null; rtToneOp = null; rtTeethOp = null; rtAiOp = null; rtFlareOp = null; rtVigOp = null; rtHalOp = null; rtDblOp = null; rtDustOp = null;
   editedCanvas = null; makePreview(); buildChips(); buildHomeLooks(); render();
   closeRetouch(); goEditor();
