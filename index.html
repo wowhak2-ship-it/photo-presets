@@ -4725,10 +4725,39 @@ document.getElementById('adjReset').onclick = ()=>{
 // в один набор коэффициентов нельзя: «сила» — это смешивание результата с оригиналом,
 // а правки идут отдельным проходом ПОВЕРХ лука. Поэтому храним рецепт целиком и
 // прогоняем ту же цепочку, что и в редакторе — иначе сохранённое не совпало бы с виденным.
+// ЭТАП 9. Состояние зашифрованного хранилища платных наборов объявлено ЗДЕСЬ, раньше MYP:
+// MYP.all() зовут ещё до того, как выполнится блок vault ниже по файлу. Пока блок не
+// прочитал vault, платных пресетов в библиотеке просто нет (unread) — открытый JSON с
+// src:'paid' из myPresets в приложении не применяется ни при каком состоянии.
+const VAULT = { состояние:'unread', данные:null, пресеты:[], пуст:true };
+function vaultВОболочке(){
+  try{ const s = window.Presety && window.Presety.secure; return !!(s && s.available()); }catch(_){ return false; }
+}
 const MYP = {
-  all(){ try{ const v = JSON.parse(localStorage.getItem('myPresets') || '[]');
-               return Array.isArray(v) ? v : []; }catch(_){ return []; } },
-  write(l){ try{ localStorage.setItem('myPresets', JSON.stringify(l)); }catch(_){} return l; },
+  // Сырое содержимое myPresets — как лежит. В приложении оно может содержать inert платные
+  // записи (не мигрированные), которые никуда не попадают, кроме миграции.
+  raw(){ try{ const v = JSON.parse(localStorage.getItem('myPresets') || '[]');
+              return Array.isArray(v) ? v : []; }catch(_){ return []; } },
+  writeRaw(l){ try{ localStorage.setItem('myPresets', JSON.stringify(l)); }catch(_){} return l; },
+  // Библиотека, которую видит приложение.
+  //   в приложении: своё/бесплатное/неизвестное из myPresets + платное ТОЛЬКО из vault;
+  //   в браузере (моста нет): как раньше, всё из myPresets.
+  all(){
+    const сырые = this.raw();
+    if(!vaultВОболочке()) return сырые;
+    return сырые.filter(p=> срсПресета(p) !== SRC_PAID).concat(VAULT.пресеты);
+  },
+  write(l){
+    if(!vaultВОболочке()) return this.writeRaw(l);
+    // Платное в myPresets не пишется никогда. Изменения платных записей (имя, удаление)
+    // уходят в vault как overrides; inert-записи в myPresets сохраняются как были.
+    const сырые = this.raw();
+    const inert = сырые.filter(p=> срсПресета(p) === SRC_PAID);
+    const обычные = l.filter(p=> срсПресета(p) !== SRC_PAID);
+    this.writeRaw(обычные.concat(inert));
+    try{ vaultПринятьПравки(l.filter(p=> срсПресета(p) === SRC_PAID)); }catch(_){}
+    return l;
+  },
   add(name){
     // Кривая и цвета — такая же часть пресета, как плёнка и ползунки. Без них
     // фотограф не может сохранить свою работу, а значит не может её ни передать,
@@ -5802,13 +5831,16 @@ document.getElementById('mypFile').onchange = e=>{
 // набор — значит положить файл, а не пересобирать и переустанавливать приложение.
 // Последний удачный ответ держим у себя, чтобы витрина открывалась и без сети.
 const PACKS = {
-  owned(){ try{ const v = JSON.parse(localStorage.getItem('packsOwned') || '[]');
+  // В приложении «куплено» решает vault, а packsOwned — лишь подсказка для восстановления.
+  owned(){ if(vaultВОболочке()) return (VAULT.состояние === 'ok' && VAULT.данные) ? Object.keys(VAULT.данные.packs) : [];
+           return this.подсказка(); },
+  подсказка(){ try{ const v = JSON.parse(localStorage.getItem('packsOwned') || '[]');
                 return Array.isArray(v) ? v : []; }catch(_){ return []; } },
-  own(id){ if(!id) return; const l = this.owned();
+  own(id){ if(!id) return; const l = this.подсказка();
            if(!l.includes(id)){ l.push(id); try{ localStorage.setItem('packsOwned', JSON.stringify(l)); }catch(_){} } },
   // Набор снят — витрина должна снова предлагать «Установить», а не «Обновить»
   disown(id){ try{ localStorage.setItem('packsOwned',
-                     JSON.stringify(this.owned().filter(x=> x !== id))); }catch(_){} },
+                     JSON.stringify(this.подсказка().filter(x=> x !== id))); }catch(_){} },
   cached(){ try{ const v = JSON.parse(localStorage.getItem('packsCache') || 'null');
                  return v && Array.isArray(v.packs) ? v.packs : null; }catch(_){ return null; } },
   async load(){
@@ -5969,6 +6001,13 @@ const stФайлы = new Map();
 // заранее отрисованные картинки (styles/afters из каталога). Рецепт при этом на устройство
 // без права не попадает.
 function stПресеты(p){
+  // ЭТАП 9, приложение: рецепты купленного платного набора — только из vault; некупленный
+  // платный — пустой список (витрина покажет готовые картинки). Ключи лицензий здесь не
+  // используются, .enc открывается только миграцией.
+  if(vaultВОболочке() && p && p.paid){
+    const из = VAULT.пресеты.filter(x=> x.pack === p.id);
+    return Promise.resolve(из);
+  }
   if(!p.file) return Promise.resolve([]);
   if(stФайлы.has(p.file)) return stФайлы.get(p.file);
   const пр = fetch('./' + p.file, { cache:'force-cache' })
@@ -6364,13 +6403,562 @@ async function licУстановить(строка){
 // Право становится известным только после проверки подписи — до этого естьPRO() отвечает
 // «нет». Дождавшись, пересобираем кнопку сохранения: иначе у человека с PRO она осталась
 // бы с замком до перезапуска.
-licПрочитать().then(()=>{ try{ syncKeepBtn(); }catch(_){} });
+const licЗагрузка = licПрочитать().then(()=>{ try{ syncKeepBtn(); }catch(_){} });
 
 // Единственная точка правды.
 function естьPRO(){
   if(тестовыйPRO()) return true;
   return !!(лицензия && лицензия.kind === 'pro' && !licИстекла(лицензия));
 }
+// ══════════════════════════════════════════════════════════════════════════════
+// ЭТАП 9: ПЛАТНЫЕ НАБОРЫ ЖИВУТ В ЗАШИФРОВАННОМ paidVault (PRESETY-BACKEND-V1.md §2, §10)
+//
+// В приложении (есть нативный мост Presety.secure) платный рецепт применяется ТОЛЬКО из
+// расшифрованного paidVault. Открытый JSON в myPresets с src:'paid' правом не является:
+// он либо переезжает в vault миграцией (см. ниже, и только через старую подписанную
+// лицензию + .enc), либо остаётся лежать inert — не применяется, не даёт права, не
+// удаляется (данные человека не выбрасываются никогда).
+//
+// В браузере (PWA, моста нет) всё работает по старым правилам до этапов 10–11: платные
+// покупки и восстановление там недоступны («Доступно в приложении»), уже установленное
+// не трогается.
+//
+// Что лежит в vault — один JSON, целиком в одном Keystore-блобе (§10):
+//   { v:1,
+//     packs: { <packId>: { packId, source:'activate'|'pack'|'legacy-migration',
+//                          entitlementId|null, purchaseId, invoiceId, legacyLicenceId,
+//                          contentHash, receivedAt, content:{app,v,pack,presets},
+//                          overrides:{ names:{<исходное имя>:<имя человека>}, hidden:{<имя>:true} } } },
+//     purchases: { <purchaseId>: { invoiceId, packId, entitlementId, state, updatedAt } } }
+// purchases — реестр для сверки с журналом удержаний оболочки, НЕ право: набор в
+// библиотеку он не включает никогда. state ∈ confirmed | cancelled | refunded | revoked.
+// Внутри — только рецепты и метки: ни ключей, ни лицензий, ни installId.
+const VAULT_КЛЮЧ = 'paidVault';
+const VAULT_МИГРАЦИЯ = 'paidMigration';
+// Адрес backend ТОЛЬКО для текущего debug-стенда (adb reverse tcp:8000). Боевой — этап 12.
+const API_BASE = 'http://127.0.0.1:8000';
+// ПУБЛИЧНЫЙ ключ backend (Ed25519, base64url): им проверяются лицензии v2 и подписанные
+// отзывы. Сейчас — локальный dev-ключ стенда; боевой появится на этапе 14 вместе с VPS.
+const LIC_ПУБКЛЮЧ_BACKEND = 'xe6zETnuNEthD0tXd3d9uhfPNGZ9rneKcY8v4eDnaUA';
+const VAULT_ОКОНЧАТЕЛЬНЫЕ = ['purchase_not_found', 'refunded', 'product_mismatch', 'user_mismatch',
+                            'wrong_app', 'cancelled', 'expired', 'bad_request', 'install_limit', 'not_owned'];
+const VAULT_ВРЕМЕННЫЕ = ['server_error', 'rate_limited', 'network', 'offline', 'not_paid', 'replay'];
+
+function secure(){
+  try{ const s = window.Presety && window.Presety.secure; return (s && s.available()) ? s : null; }
+  catch(_){ return null; }
+}
+function vaultПустой(){ return { v:1, packs:{}, purchases:{} }; }
+function vaultЕсть(){ return VAULT.состояние === 'ok' && !!VAULT.данные; }
+function vaultНабор(packId){ return vaultЕсть() ? (VAULT.данные.packs[packId] || null) : null; }
+function vaultИдПресета(packId, i){ return 'vp_' + packId + '_' + i; }
+
+// Материализация: из content набора — пресеты для библиотеки, с именами человека и без
+// скрытых им. Рецепт берётся из content и НИКОГДА не из myPresets.
+function vaultМатериализовать(){
+  const итог = [];
+  if(!vaultЕсть()){ VAULT.пресеты = итог; return; }
+  for(const packId of Object.keys(VAULT.данные.packs)){
+    const з = VAULT.данные.packs[packId];
+    const о = з.overrides || {};
+    const имена = о.names || {}, скрыты = о.hidden || {};
+    const автор = (з.content && з.content.pack && з.content.pack.author) || byПоНабору(packId, null);
+    const список = (з.content && Array.isArray(з.content.presets)) ? з.content.presets : [];
+    список.forEach((raw, i)=>{
+      const p = sanitizePreset(raw);
+      if(!p) return;
+      const исходное = p.name;
+      if(скрыты[исходное]) return;
+      if(имена[исходное]) p.name = String(имена[исходное]).slice(0, 24) || исходное;
+      p.id = vaultИдПресета(packId, i);
+      p.orig = исходное;
+      p.date = Date.parse(з.receivedAt) || Date.now();
+      p.pack = packId; p.src = SRC_PAID; p.by = автор ? String(автор).slice(0, 48) : null; p.from = null;
+      итог.push(p);
+    });
+  }
+  VAULT.пресеты = итог;
+}
+
+// Чтение — синхронное, один раз на старте и после каждой записи. Состояния:
+//   ok | empty | key_lost | bad_blob | no_bridge — и по ним витрина показывает, что делать.
+function vaultПрочитать(){
+  const s = secure();
+  if(!s){ VAULT.состояние = 'no_bridge'; VAULT.данные = null; VAULT.пресеты = []; return VAULT.состояние; }
+  let блоб = null;
+  try{ блоб = localStorage.getItem(VAULT_КЛЮЧ); }catch(_){}
+  if(!блоб){ VAULT.данные = vaultПустой(); VAULT.состояние = 'ok'; VAULT.пуст = true; vaultМатериализовать(); return 'empty'; }
+  const r = s.decrypt(блоб);
+  if(!r || !r.ok){
+    VAULT.данные = null; VAULT.пресеты = [];
+    VAULT.состояние = (r && r.code === 'key_lost') ? 'key_lost' : 'bad_blob';
+    return VAULT.состояние;
+  }
+  try{
+    const o = JSON.parse(r.value);
+    if(o && o.v === 1 && o.packs && typeof o.packs === 'object'){
+      o.purchases = (o.purchases && typeof o.purchases === 'object') ? o.purchases : {};
+      VAULT.данные = o; VAULT.состояние = 'ok'; VAULT.пуст = false; vaultМатериализовать(); return 'ok';
+    }
+  }catch(_){}
+  VAULT.данные = null; VAULT.пресеты = []; VAULT.состояние = 'bad_blob';
+  return VAULT.состояние;
+}
+// Запись — только с проверкой «прочитал обратно ровно то, что записал». Без этого
+// подтверждения ничего не считается сохранённым: ни набор, ни запись в реестре.
+function vaultЗаписать(новый){
+  const s = secure(); if(!s) return false;
+  let текст;
+  try{ текст = JSON.stringify(новый); }catch(_){ return false; }
+  const e = s.encrypt(текст);
+  if(!e || !e.ok) return false;
+  const d = s.decrypt(e.value);
+  if(!d || !d.ok || d.value !== текст) return false;
+  try{ localStorage.setItem(VAULT_КЛЮЧ, e.value); }catch(_){ return false; }
+  let снова = null;
+  try{ снова = localStorage.getItem(VAULT_КЛЮЧ); }catch(_){}
+  if(снова !== e.value) return false;
+  VAULT.данные = новый; VAULT.состояние = 'ok'; VAULT.пуст = false;
+  vaultМатериализовать();
+  return true;
+}
+function vaultКопия(){ return JSON.parse(JSON.stringify(vaultЕсть() ? VAULT.данные : vaultПустой())); }
+// Библиотека записала список — платные записи в нём могли переименовать или убрать.
+// Рецепт при этом не меняется (его в списке и нет как источника): в vault уходят только
+// overrides — имя человека и «скрыто». Пишем vault лишь когда что-то действительно изменилось.
+function vaultПринятьПравки(платные){
+  if(!vaultЕсть()) return false;
+  const данные = vaultКопия();
+  let изменилось = false;
+  for(const packId of Object.keys(данные.packs)){
+    const з = данные.packs[packId];
+    з.overrides = з.overrides || { names:{}, hidden:{} };
+    з.overrides.names = з.overrides.names || {}; з.overrides.hidden = з.overrides.hidden || {};
+    const вСписке = new Map();
+    for(const p of платные){ if(p && typeof p.id === 'string' && p.pack === packId && p.id.indexOf('vp_') === 0) вСписке.set(p.id, p); }
+    // Что vault материализовал для этого набора (без уже скрытых) — сверяем с тем, что вернулось.
+    for(const m of VAULT.пресеты){
+      if(m.pack !== packId) continue;
+      const p = вСписке.get(m.id);
+      if(!p){ if(!з.overrides.hidden[m.orig]){ з.overrides.hidden[m.orig] = true; изменилось = true; } continue; }
+      const имя = String(p.name || '').slice(0, 24);
+      const было = з.overrides.names[m.orig] || m.orig;
+      if(имя && имя !== было){
+        if(имя === m.orig) delete з.overrides.names[m.orig]; else з.overrides.names[m.orig] = имя;
+        изменилось = true;
+      }
+    }
+  }
+  return изменилось ? vaultЗаписать(данные) : false;
+}
+function vaultОтметить(данные, purchaseId, поля){
+  if(!purchaseId) return;
+  const было = данные.purchases[purchaseId] || {};
+  данные.purchases[purchaseId] = Object.assign({}, было, поля, { updatedAt: new Date().toISOString() });
+}
+// Чек по праву: запись, вернувшаяся через /v1/pack, purchaseId не знает (в ответе его нет),
+// но реестр помнит, под каким entitlementId покупка была подтверждена.
+function vaultЧекПоПраву(данные, entitlementId){
+  if(!entitlementId || !данные || !данные.purchases) return null;
+  return Object.keys(данные.purchases).find(k=> данные.purchases[k] && данные.purchases[k].entitlementId === entitlementId) || null;
+}
+
+// ─── contentHash: ровно тот же алгоритм, что на backend (app/packs.py::канонический) ───
+// json.dumps(obj, ensure_ascii=False, separators=(",",":"), sort_keys=True) → UTF-8 → SHA-256.
+// Ограничение протокола: числа только безопасные целые. Дефолтный JSON.stringify НЕ годится
+// для объектов — он переупорядочивает integer-like ключи, поэтому сериализатор свой.
+function хэшПроверитьЧисла(o, путь){
+  путь = путь || '$';
+  if(o === null || typeof o === 'string' || typeof o === 'boolean') return null;
+  if(typeof o === 'number') return (!Number.isSafeInteger(o) || Object.is(o, -0)) ? путь : null;
+  if(Array.isArray(o)){ for(let i=0;i<o.length;i++){ const b = хэшПроверитьЧисла(o[i], путь+'['+i+']'); if(b) return b; } return null; }
+  if(typeof o === 'object'){ for(const k of Object.keys(o)){ const b = хэшПроверитьЧисла(o[k], путь+'.'+k); if(b) return b; } return null; }
+  return путь;
+}
+// В сыром тексте (расшифрованный .enc) число 1.0 ещё видно — после разбора уже нет.
+function хэшПроверитьЧислаВТексте(текст){
+  let вСтроке = false;
+  for(let i=0;i<текст.length;i++){
+    const c = текст[i];
+    if(вСтроке){ if(c === '\\') i++; else if(c === '"') вСтроке = false; continue; }
+    if(c === '"'){ вСтроке = true; continue; }
+    if(c === '-' || (c >= '0' && c <= '9')){
+      let j = i+1;
+      while(j < текст.length && /[0-9.eE+\-]/.test(текст[j])) j++;
+      const т = текст.slice(i, j);
+      if(!/^-?(0|[1-9][0-9]*)$/.test(т) || т === '-0' || !Number.isSafeInteger(Number(т))) return { token:т, at:i };
+      i = j-1;
+    }
+  }
+  return null;
+}
+function хэшПоCodePoint(a, b){
+  const ia = a[Symbol.iterator](), ib = b[Symbol.iterator]();
+  for(;;){
+    const x = ia.next(), y = ib.next();
+    if(x.done && y.done) return 0;
+    if(x.done) return -1;
+    if(y.done) return 1;
+    const cx = x.value.codePointAt(0), cy = y.value.codePointAt(0);
+    if(cx !== cy) return cx < cy ? -1 : 1;
+  }
+}
+function хэшКанонический(o){
+  if(o === null || typeof o !== 'object') return JSON.stringify(o);
+  if(Array.isArray(o)) return '[' + o.map(хэшКанонический).join(',') + ']';
+  return '{' + Object.keys(o).sort(хэшПоCodePoint).map(k=> JSON.stringify(k) + ':' + хэшКанонический(o[k])).join(',') + '}';
+}
+// → 'sha256:<hex>' | { error }. Объект уже разобран; если есть сырой текст — его проверяют раньше.
+async function contentHash(content){
+  const путь = хэшПроверитьЧисла(content);
+  if(путь) return { error:'unsupported_content_number', path:путь };
+  const байты = new TextEncoder().encode(хэшКанонический(content));
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', байты));
+  let s = ''; for(let i=0;i<d.length;i++) s += (d[i] < 16 ? '0' : '') + d[i].toString(16);
+  return 'sha256:' + s;
+}
+// Разобрать контент набора с backend/.enc и сверить хэш. → {content} | {error}
+async function vaultПроверитьКонтент(packId, content, contentHash_, сырой){
+  if(typeof сырой === 'string'){
+    const т = хэшПроверитьЧислаВТексте(сырой);
+    if(т) return { error:'unsupported_content_number', token:т.token };
+  }
+  if(!content || typeof content !== 'object' || !content.pack || content.pack.id !== packId
+     || !Array.isArray(content.presets) || !content.presets.length) return { error:'bad_content' };
+  const h = await contentHash(content);
+  if(typeof h !== 'string') return h;
+  if(typeof contentHash_ !== 'string' || h !== contentHash_) return { error:'hash_mismatch', ожидали:contentHash_, получили:h };
+  if(!content.presets.map(sanitizePreset).filter(Boolean).length) return { error:'bad_content' };
+  return { content, hash:h };
+}
+
+// ─── Подписанные отзывы backend (§3.2, §6.3) ───
+// PRESETY1.<payload>.<sig>, payload v2 kind='revoke' target='pack'. Удаляется ровно ОДИН набор,
+// и только когда подпись сошлась, а packId И entitlementId совпали с записью в vault.
+// Legacy-запись (source:'legacy-migration', entitlementId:null) отзыву не подлежит: backend
+// её покупку не знает. Всё остальное — чужой ключ, чужой набор, «примерно тот» — не отзыв.
+function stmРазобрать(строка){
+  const s = String(строка || '').trim();
+  const ч = s.split('.');
+  if(ч.length !== 3 || ч[0] !== LIC_ПРЕФИКС || !ч[1] || !ч[2]) return null;
+  let d;
+  try{ d = JSON.parse(new TextDecoder().decode(licИзB64(ч[1]))); }catch(_){ return null; }
+  if(!d || typeof d !== 'object' || d.v !== 2 || d.kind !== 'revoke') return null;
+  if(d.target !== 'pack' || typeof d.packId !== 'string' || typeof d.entitlementId !== 'string') return null;
+  return { payload:d, байты:licИзB64(ч[1]), подпись:licИзB64(ч[2]) };
+}
+async function stmПроверить(строка){
+  const з = stmРазобрать(строка);
+  if(!з) return null;
+  return (await licПодпись(з, LIC_ПУБКЛЮЧ_BACKEND)) ? з.payload : null;
+}
+// → сколько наборов отозвано. Ничего не удаляет без проверенной подписи.
+async function vaultПрименитьОтзывы(список){
+  if(!Array.isArray(список) || !список.length || !vaultЕсть()) return 0;
+  let снято = 0, данные = null; const убраны = [];
+  for(const о of список){
+    const п = await stmПроверить(о && о.statement);
+    if(!п) continue;
+    const з = (данные || VAULT.данные).packs[п.packId];
+    if(!з || з.source === 'legacy-migration' || !з.entitlementId || з.entitlementId !== п.entitlementId) continue;
+    данные = данные || vaultКопия();
+    delete данные.packs[п.packId]; убраны.push(п.packId);
+    const поля = { packId:п.packId, entitlementId:з.entitlementId, state: (п.reason === 'refund' ? 'refunded' : 'revoked') };
+    if(з.invoiceId != null) поля.invoiceId = з.invoiceId;   // известный invoiceId в реестре не затираем пустым
+    vaultОтметить(данные, з.purchaseId || vaultЧекПоПраву(данные, з.entitlementId), поля);
+    снято++;
+  }
+  if(!снято) return 0;
+  if(!vaultЗаписать(данные)) return 0;               // не записалось — ничего и не удалено
+  убраны.forEach(id=> PACKS.disown(id));
+  vaultОбновитьUI();
+  toast(снято === 1 ? 'Набор удалён: магазин подтвердил возврат средств' : 'Наборы удалены: магазин подтвердил возврат средств');
+  return снято;
+}
+function vaultОбновитьUI(){
+  try{ renderMyList(); buildChips(); buildHomeLooks(); updateHdrTitle(); }catch(_){}
+  try{ stЗабытьФайлы(); if(document.getElementById('stList') && document.getElementById('stList').children.length) renderPacks(); }catch(_){}
+}
+
+// ─── Клиент backend ───
+// Только через нативный CapacitorHttp: страница живёт на https://localhost, и обычный fetch
+// упирается в mixed content/CORS/COEP, а нативному это не мешает. В браузере клиента нет.
+// Повторы: не больше двух, только на временные ошибки, пауза 2 и 6 с; редактор сетью не
+// блокируется ни в одной ветке.
+function apiДоступен(){ return !!(secure() && window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.CapacitorHttp); }
+function apiНонс(){ const u = new Uint8Array(16); crypto.getRandomValues(u); return licВB64(u); }
+function licВB64(u){ let s=''; for(let i=0;i<u.length;i++) s += String.fromCharCode(u[i]); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+const apiПауза = ms=> new Promise(r=> setTimeout(r, ms));
+async function api(путь, тело){
+  if(!apiДоступен()) return { ok:false, code:'no_bridge' };
+  const id = secure().installId();
+  if(!id) return { ok:false, code:'no_bridge' };
+  if(navigator.onLine === false) return { ok:false, code:'offline' };
+  const H = Capacitor.Plugins.CapacitorHttp;
+  const ПАУЗЫ = [2000, 6000];
+  let последняя = { ok:false, code:'network' };
+  for(let попытка = 0; попытка <= 2; попытка++){
+    if(попытка) await apiПауза(ПАУЗЫ[попытка-1]);
+    const data = Object.assign({ nonce:apiНонс(), ts:new Date().toISOString() }, тело || {});
+    try{
+      const r = await H.request({ url:API_BASE + путь, method:'POST', data,
+                                  headers:{ 'Content-Type':'application/json', 'X-Presety-Install':id },
+                                  connectTimeout:15000, readTimeout:15000 });
+      if(r.status >= 500){ последняя = { ok:false, code:'server_error', http:r.status }; continue; }
+      if(r.status !== 200) return { ok:false, code:'http_' + r.status };
+      const o = (r.data && typeof r.data === 'object') ? r.data : null;
+      if(!o || typeof o.ok !== 'boolean') return { ok:false, code:'bad_answer' };
+      // rate_limited не повторяем: сама попытка расходует лимит (у /v1/pack он 10 в сутки).
+      if(o.ok === false && VAULT_ВРЕМЕННЫЕ.indexOf(o.code) >= 0 && o.code !== 'not_paid' && o.code !== 'offline' && o.code !== 'rate_limited'){ последняя = o; continue; }
+      return o;
+    }catch(e){
+      последняя = { ok:false, code:'network', message:String((e && e.message) || e) };
+    }
+  }
+  return последняя;
+}
+function apiОкончательная(code){ return VAULT_ОКОНЧАТЕЛЬНЫЕ.indexOf(code) >= 0; }
+
+// ─── Покупка и установка набора через backend (§6.1, §8) ───
+// Порядок: чек магазина → /v1/activate (backend сам подтверждает покупку у RuStore, второго
+// confirm из приложения НЕТ) → проверка contentHash → запись набора И реестра одним блобом
+// → и только потом UI. Если backend ответил ok, а vault не записался — покупка НЕ отменяется:
+// право на backend есть, набор вернётся через /v1/pack.
+async function vaultАктивироватьНабор(packId, чек){
+  const товар = чек && чек.productId;
+  if(!packId || !чек || !чек.purchaseId || !товар) return { ok:false, code:'bad_request' };
+  const r = await api('/v1/activate', { kind:'pack', purchaseId:String(чек.purchaseId),
+                                        invoiceId: (чек.invoiceId == null ? null : Number(чек.invoiceId)),
+                                        productId:String(товар) });
+  if(!r.ok) return r;
+  return vaultПринятьНабор(packId, r, { source:'activate', purchaseId:String(чек.purchaseId),
+                                        invoiceId: (чек.invoiceId == null ? null : Number(чек.invoiceId)) });
+}
+// /v1/pack — повторная выдача набора, который backend уже считает купленным ЭТОЙ установкой:
+// потеря ключа Keystore, порча блоба, набор пропал из vault, переустановка. Обходом права
+// это быть не может: без покупки backend честно отвечает not_owned.
+async function vaultВосстановитьНабор(packId){
+  const r = await api('/v1/pack', { packId:String(packId) });
+  if(!r.ok) return r;
+  return vaultПринятьНабор(packId, r, { source:'pack' });
+}
+const VAULT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+async function vaultПринятьНабор(packId, r, мета){
+  if(r.packId !== packId) return { ok:false, code:'pack_mismatch' };
+  // Backend-backed запись без entitlementId бесполезна: без него не сверить подписанный
+  // отзыв. Ответ без валидного id — bad_response: ни vault, ни реестр не трогаем.
+  // entitlementId:null бывает только у legacy-migration, а она сюда не заходит.
+  if(typeof r.entitlementId !== 'string' || !VAULT_UUID.test(r.entitlementId)) return { ok:false, code:'bad_response', поле:'entitlementId' };
+  const пров = await vaultПроверитьКонтент(packId, r.content, r.contentHash, null);
+  if(пров.error) return { ok:false, code:пров.error, detail:пров };
+  if(VAULT.состояние !== 'ok'){
+    // Ключа нет или блоб битый — начинаем новый vault: старый всё равно не открыть.
+    VAULT.данные = vaultПустой(); VAULT.состояние = 'ok';
+  }
+  const данные = vaultКопия();
+  const было = данные.packs[packId];
+  // Чек наследуется от прежней записи только под ТЕМ ЖЕ правом; иначе — по реестру.
+  const тоЖеПраво = !!(было && было.entitlementId === r.entitlementId);
+  const purchaseId = мета.purchaseId || (тоЖеПраво && было.purchaseId) || vaultЧекПоПраву(данные, r.entitlementId);
+  const изРеестра = (purchaseId && данные.purchases[purchaseId]) || {};
+  const запись = {
+    packId, source:мета.source, entitlementId:r.entitlementId, purchaseId,
+    invoiceId: (мета.invoiceId != null) ? мета.invoiceId
+             : (тоЖеПраво && было.invoiceId != null) ? было.invoiceId
+             : (изРеестра.invoiceId != null ? изРеестра.invoiceId : null),
+    contentHash:пров.hash, receivedAt:new Date().toISOString(), content:пров.content,
+    overrides:(было && было.overrides) ? было.overrides : { names:{}, hidden:{} }
+  };
+  данные.packs[packId] = запись;
+  if(мета.source === 'activate') vaultОтметить(данные, мета.purchaseId, { invoiceId:мета.invoiceId, packId, entitlementId:запись.entitlementId, state:'confirmed' });
+  if(!vaultЗаписать(данные)){
+    // Backend уже выдал право. Реестр тоже не записан — значит, повтор /activate при следующем
+    // старте допустим и безвреден (backend идемпотентен), а набор вернёт /v1/pack.
+    VAULT.ждётВосстановления = VAULT.ждётВосстановления || {};
+    VAULT.ждётВосстановления[packId] = true;
+    return { ok:false, code:'vault_write_failed', backendOk:true, packId };
+  }
+  PACKS.own(packId);
+  await vaultПрименитьОтзывы(r.revocations);
+  vaultОбновитьUI();
+  return { ok:true, packId, source:мета.source, entitlementId:запись.entitlementId,
+           пресетов: VAULT.пресеты.filter(p=> p.pack === packId).length };
+}
+
+// ─── Сверка с журналом удержаний оболочки (Shell HELD) ───
+// Оболочка хранит чек в состоянии HELD навсегда — backend подтверждает покупку сам, а
+// журнал об этом не узнаёт. Поэтому решает реестр в vault: чек, который там terminal
+// (confirmed/cancelled/refunded/revoked), не трогаем; остальные — ОДНА попытка за старт.
+// Окончательный отказ backend → снять удержание (backend его не подтверждал).
+async function vaultСверитьЧеки(){
+  if(!apiДоступен() || !window.Presety || !Presety.store || !Presety.store.available()) return { skipped:'no_store' };
+  let ответ;
+  try{ ответ = await Presety.store.pending(); }catch(_){ return { skipped:'pending_failed' }; }
+  const чеки = (ответ && ответ.ok && Array.isArray(ответ.pending)) ? ответ.pending : [];
+  return vaultСверитьСписок(чеки);
+}
+async function vaultСверитьСписок(чеки){
+  const итог = { всего:чеки.length, пропущено:0, активировано:0, отменено:0, отложено:0 };
+  const реестр = vaultЕсть() ? VAULT.данные.purchases : {};
+  let продукты = null;
+  for(const ч of чеки){
+    const pid = ч && ч.purchaseId;
+    if(!pid) continue;
+    if(реестр[pid]){ итог.пропущено++; continue; }               // terminal — навсегда закрыт
+    // Набор по коду товара: каталог оболочки (наш id → код RuStore).
+    if(!продукты){ try{ const p = await Presety.store.products(); продукты = (p && p.ok && p.products) || {}; }catch(_){ продукты = {}; } }
+    const packId = Object.keys(продукты).find(k=> продукты[k] === ч.productId) || null;
+    if(!packId){ итог.отложено++; continue; }
+    const r = await vaultАктивироватьНабор(packId, ч);
+    if(r.ok){ итог.активировано++; continue; }
+    if(apiОкончательная(r.code)){
+      let снято = false;
+      try{ const c = await Presety.store.cancelTwoStepPurchase(pid);
+           снято = !!(c && (c.ok || c.code === 'already_cancelled' || c.code === 'purchase_closed')); }catch(_){}
+      if(снято && vaultЕсть()){ const д = vaultКопия(); vaultОтметить(д, pid, { invoiceId:ч.invoiceId, packId, entitlementId:null, state:'cancelled' }); vaultЗаписать(д); }
+      итог.отменено++;
+    } else итог.отложено++;
+  }
+  return итог;
+}
+
+// ─── Восстановление после потери ключа / порчи блоба ───
+// Кому идти на backend, подсказывает packsOwned — это КЭШ, а не право: если backend
+// ответит not_owned, набор из подсказки убирается, и ничего не устанавливается.
+async function vaultВосстановитьВсё(){
+  if(!apiДоступен()) return { skipped:'no_bridge' };
+  const подсказка = PACKS.подсказка();
+  const итог = { пробовали:подсказка.length, вернулось:0, не_куплено:0, ошибки:[] };
+  for(const packId of подсказка){
+    if(vaultНабор(packId)) continue;
+    // Бесплатные наборы тоже лежат в packsOwned, но в vault им не место и backend их не
+    // знает: запрос ушёл бы впустую, а по not_owned набор ещё и выпал бы из подсказки.
+    const инфо = packInfo(packId);
+    if(!инфо || !инфо.paid) continue;
+    const r = await vaultВосстановитьНабор(packId);
+    if(r.ok) итог.вернулось++;
+    else if(r.code === 'not_owned'){ PACKS.disown(packId); итог.не_куплено++; }
+    else итог.ошибки.push([packId, r.code]);
+  }
+  return итог;
+}
+
+// ─── Миграция старой схемы (открытый JSON + .enc + ключи в лицензии) в vault ───
+// ПРАВО берётся только из старого криптографически подтверждённого пути: валидная
+// подписанная лицензия покупки из presetyPacks → её ключ открывает .enc этого набора →
+// расшифрованный canonical контент и есть то, что кладётся в vault. myPresets участвует
+// только в сопоставлении имён (человек мог переименовать) и в уборке после успешной записи.
+// Запись, которой нет в canonical .enc, в vault не попадает НИКОГДА — она помечается
+// unmatched_legacy, остаётся лежать в myPresets и права не даёт.
+// Идемпотентна и переживает обрыв между шагами: журнал в localStorage.paidMigration.
+function vaultЖурнал(){
+  try{ const j = JSON.parse(localStorage.getItem(VAULT_МИГРАЦИЯ) || 'null');
+       return (j && j.v === 1 && j.packs) ? j : { v:1, packs:{} }; }catch(_){ return { v:1, packs:{} }; }
+}
+function vaultЖурналПоложить(j){ try{ localStorage.setItem(VAULT_МИГРАЦИЯ, JSON.stringify(j)); }catch(_){} }
+async function vaultМигрировать(){
+  if(!secure()) return { skipped:'no_bridge' };
+  if(VAULT.состояние !== 'ok') return { skipped:VAULT.состояние };
+  const журнал = vaultЖурнал();
+  const сырые = MYP.raw();
+  const поНабору = {};
+  for(const p of сырые){ if(срсПресета(p) === SRC_PAID && p.pack){ (поНабору[p.pack] = поНабору[p.pack] || []).push(p); } }
+  // Наборы, уже лежащие в vault со статусом done, но чьи записи всё ещё в myPresets
+  // (обрыв после written), тоже надо дочистить.
+  // Плюс наборы, записанные в vault, но не дочищенные из myPresets после обрыва (written).
+  const кандидаты = new Set(Object.keys(поНабору));
+  const итог = { packs:{}, unmatched_legacy:0 };
+  for(const packId of кандидаты){
+    const в = vaultНабор(packId);
+    let canonical = null, hash = null, licId = null;
+    if(в && в.source === 'legacy-migration'){
+      canonical = в.content; hash = в.contentHash; licId = в.legacyLicenceId;   // written, уборка не дошла
+    }else{
+      const лиц = пакЛицензии.find(п=> п.лиц.keys && typeof п.лиц.keys[packId] === 'string' && п.лиц.keys[packId]);
+      if(!лиц){ журнал.packs[packId] = { state:'no_licence', at:Date.now() }; итог.packs[packId] = 'no_licence'; continue; }
+      const инфо = packInfo(packId);
+      if(!инфо || !инфо.file){ журнал.packs[packId] = { state:'no_file', at:Date.now() }; итог.packs[packId] = 'no_file'; continue; }
+      let текст;
+      try{
+        const о = await fetch('./' + инфо.file, { cache:'force-cache' });
+        if(!о.ok) throw new Error('http ' + о.status);
+        const буф = await о.arrayBuffer();
+        if(!encЭто(буф)) throw new Error('not_enc');
+        текст = await encРасшифровать(буф, лиц.лиц.keys[packId], packId);
+      }catch(e){ журнал.packs[packId] = { state:'enc_failed', error:String(e && e.message || e), at:Date.now() }; итог.packs[packId] = 'enc_failed'; continue; }
+      let json;
+      try{ json = JSON.parse(текст); }catch(_){ журнал.packs[packId] = { state:'enc_failed', error:'json', at:Date.now() }; итог.packs[packId] = 'enc_failed'; continue; }
+      const т = хэшПроверитьЧислаВТексте(текст);
+      if(т){ журнал.packs[packId] = { state:'unsupported', token:т.token, at:Date.now() }; итог.packs[packId] = 'unsupported'; continue; }
+      if(!json || !json.pack || json.pack.id !== packId || !Array.isArray(json.presets)){ журнал.packs[packId] = { state:'enc_failed', error:'shape', at:Date.now() }; итог.packs[packId] = 'enc_failed'; continue; }
+      const h = await contentHash(json);
+      if(typeof h !== 'string'){ журнал.packs[packId] = { state:'unsupported', at:Date.now() }; итог.packs[packId] = 'unsupported'; continue; }
+      canonical = json; hash = h; licId = лиц.лиц.id;
+    }
+    // Сопоставление: локальная запись → ровно один canonical пресет по orig || name.
+    const canonicalИмена = canonical.presets.map(sanitizePreset).filter(Boolean).map(p=> p.name);
+    const счёт = {}; canonicalИмена.forEach(n=> { const k = n.toLowerCase(); счёт[k] = (счёт[k] || 0) + 1; });
+    const имена = {}, скрыты = {}, unmatched = [];
+    const локальные = поНабору[packId] || [];
+    const виденные = new Set();
+    for(const p of локальные){
+      const ключ = String(p.orig || p.name || '').toLowerCase();
+      if(!ключ || счёт[ключ] !== 1){ unmatched.push({ id:p.id, name:p.name }); continue; }
+      const исходное = canonicalИмена.find(n=> n.toLowerCase() === ключ);
+      виденные.add(ключ);
+      if(p.name && p.name !== исходное) имена[исходное] = String(p.name).slice(0, 24);
+    }
+    if(unmatched.length){
+      // Стоп для этого набора: в vault такие рецепты не попадают, из myPresets не удаляются.
+      журнал.packs[packId] = { state:'unmatched_legacy', unmatched, at:Date.now() };
+      итог.packs[packId] = 'unmatched_legacy'; итог.unmatched_legacy += unmatched.length;
+      continue;
+    }
+    // Canonical пресеты, которых у человека не было (удалял поштучно), остаются скрытыми.
+    if(локальные.length) canonicalИмена.forEach(n=>{ if(!виденные.has(n.toLowerCase())) скрыты[n] = true; });
+
+    if(!(в && в.source === 'legacy-migration')){
+      const данные = vaultКопия();
+      данные.packs[packId] = { packId, source:'legacy-migration', entitlementId:null, purchaseId:null, invoiceId:null,
+                               legacyLicenceId:licId, contentHash:hash, receivedAt:new Date().toISOString(),
+                               content:canonical, overrides:{ names:имена, hidden:скрыты } };
+      журнал.packs[packId] = { state:'pending', at:Date.now() }; vaultЖурналПоложить(журнал);
+      if(!vaultЗаписать(данные)){ журнал.packs[packId] = { state:'write_failed', at:Date.now() }; итог.packs[packId] = 'write_failed'; continue; }
+      журнал.packs[packId] = { state:'written', at:Date.now() }; vaultЖурналПоложить(журнал);
+      // Проверка round-trip: перечитать блоб и сверить с canonical по каждому пресету.
+      vaultПрочитать();
+      const снова = vaultНабор(packId);
+      if(!снова || снова.contentHash !== hash || !снова.content){ журнал.packs[packId] = { state:'write_failed', at:Date.now() }; итог.packs[packId] = 'write_failed'; continue; }
+    }
+    // Уборка: платные записи ЭТОГО набора уходят из myPresets — vault прочитан и сверен.
+    MYP.writeRaw(MYP.raw().filter(p=> !(p.pack === packId && срсПресета(p) === SRC_PAID)));
+    журнал.packs[packId] = { state:'done', at:Date.now(), moved:локальные.length, hidden:Object.keys(скрыты).length, renamed:Object.keys(имена).length };
+    итог.packs[packId] = 'done';
+  }
+  vaultЖурналПоложить(журнал);
+  vaultМатериализовать();
+  vaultОбновитьUI();
+  return итог;
+}
+
+// ─── Старт ───
+// Порядок: vault читается сразу (синхронно, до первого рендера); миграция и сверка чеков —
+// после проверки лицензий и с каталогом на руках.
+try{ vaultПрочитать(); }catch(_){ VAULT.состояние = 'bad_blob'; VAULT.данные = null; VAULT.пресеты = []; }
+vaultМатериализовать();
+const vaultГотов = (async ()=>{
+  if(!secure()) return;
+  try{ await licЗагрузка; }catch(_){}
+  try{ if(!PACKS.cached()) await PACKS.load(); }catch(_){}
+  try{ VAULT.миграция = await vaultМигрировать(); }catch(e){ VAULT.миграция = { error:String(e && e.message || e) }; }
+  try{ VAULT.сверка = await vaultСверитьЧеки(); }catch(e){ VAULT.сверка = { error:String(e && e.message || e) }; }
+  // Потеря ключа / порча: тихая попытка вернуть купленное, если есть сеть. Без сети — ничего.
+  if(VAULT.состояние === 'key_lost' || VAULT.состояние === 'bad_blob'){
+    try{ VAULT.восстановление = await vaultВосстановитьВсё(); }catch(_){}
+  }
+  vaultОбновитьUI();
+})();
+
 // ─── Зашифрованный набор: контейнер PRESETY2 ───
 // PRESETY2 | версия | длина заголовка | заголовок JSON | IV(12) | шифротекст+тег
 // Заголовок открытый (по нему видно, чей это файл), но подписан тегом: подменишь в нём
@@ -6435,6 +7023,10 @@ function правоСтавитьНабор(packId){
   const p = packInfo(packId);
   if(!p) return { можно:true, навсегда:false };               // каталог не знает — прав не даём
   if(!p.paid) return { можно:true, навсегда:true };           // бесплатный — как раньше
+  // ЭТАП 9, приложение: платный набор ставится ТОЛЬКО через backend в vault. Файл, лицензия
+  // v1 и подписка права поставить его по этому пути не дают — иначе открытый JSON с pack.id
+  // снова стал бы покупкой.
+  if(vaultВОболочке()) return { можно:false, навсегда:false, причина:'Платные наборы ставятся из витрины приложения' };
   if(PACKS.owned().includes(packId)) return { можно:true, навсегда:true };
   if(licПакНаНабор(packId)) return { можно:true, навсегда:true };
   if(естьPRO()) return { можно:true, навсегда:false };        // подписка открывает, но не дарит
@@ -6453,6 +7045,10 @@ function правоСтавитьНабор(packId){
 // и блокируется вместе с родителем.
 function можноПрименить(p){
   if(срсПресета(p) !== SRC_PAID) return true;
+  // ЭТАП 9, приложение: платный рецепт применим только из vault — его записи узнаются по
+  // id, который назначает сам vault. Открытый JSON с src:'paid' в myPresets inert всегда,
+  // и ни packsOwned, ни PRO его не открывают.
+  if(vaultВОболочке()) return !!(p && typeof p.id === 'string' && p.id.indexOf('vp_') === 0 && p.pack && vaultНабор(p.pack));
   if(p && p.pack && PACKS.owned().includes(p.pack)) return true;
   return естьPRO();
 }
@@ -6461,11 +7057,29 @@ function stБесплатна(p){ return !p.paid; }
 // Доступ к набору: бесплатный, купленный отдельно или открытый подпиской. Разовая покупка
 // и PRO независимы — купивший набор пользуется им без подписки, подписчик получает все
 // PRO-наборы, не покупая каждый.
-function stКуплена(p){ return stБесплатна(p) || PACKS.owned().includes(p.id) || естьPRO(); }
+// В приложении «куплена» = лежит в vault; подписка PRO наборов через backend пока не открывает
+// (у backend нет такого права — вопрос этапа 10/16), а в браузере — как раньше.
+function stКуплена(p){
+  if(stБесплатна(p)) return true;
+  if(vaultВОболочке()) return !!vaultНабор(p.id);
+  return PACKS.owned().includes(p.id) || естьPRO();
+}
+// Купленный набор, которого нет в vault: ключ потерян, блоб битый или запись пропала.
+// Восстанавливать есть что, если vault не в порядке или реестр/подсказка помнят покупку.
+function stНуженВосстановить(p){
+  if(!vaultВОболочке() || stБесплатна(p) || vaultНабор(p.id)) return false;
+  if(VAULT.состояние === 'key_lost' || VAULT.состояние === 'bad_blob') return PACKS.подсказка().includes(p.id);
+  if(VAULT.ждётВосстановления && VAULT.ждётВосстановления[p.id]) return true;
+  const реестр = (VAULT.данные && VAULT.данные.purchases) || {};
+  return Object.keys(реестр).some(k=> реестр[k] && реестр[k].packId === p.id && реестр[k].state === 'confirmed');
+}
 function stВЛенте(p){ return MYP.all().filter(x=> x.pack === p.id).length; }
 function stЦена(p){ return stБесплатна(p) ? 'БЕСПЛАТНО' : (p.price || ''); }
 // Установка коллекции в ленту — тем же путём, что и раньше: файл → MYP.importFrom.
 async function stПоставить(p, кнопка){
+  // ЭТАП 9, приложение: платный набор живёт в vault. «Поставить» для купленного — вернуть
+  // скрытые виды; для некупленного — покупка; для купленного без контента — /v1/pack.
+  if(vaultВОболочке() && p && p.paid) return stПоставитьИзVault(p, кнопка);
   // Право от ПОДПИСКИ покупкой не считается. Иначе установка по PRO записала бы набор в
   // packsOwned, и после окончания подписки он остался бы открытым навсегда — то есть
   // одного месяца PRO хватило бы, чтобы забрать всю библиотеку насовсем.
@@ -6579,9 +7193,17 @@ function stКарточка(p, главная){
     const доступен = stКуплена(p);
     // «Купить за …» уместно, только когда есть куда вести. У коллекции, которая пока
     // открывается лишь подпиской, отдельной цены нет — и кнопка про неё и говорит.
-    купить.textContent = доступен ? 'Установить'
-                       : (p.buy ? ('Купить за ' + (p.price || '')) : 'Доступно в PRO');
-    купить.onclick = ()=> доступен ? stПоставить(p, купить) : stКупить(p);
+    if(p.paid && !доступен && !vaultВОболочке() && !window.Presety){
+      купить.textContent = 'Доступно в приложении'; купить.disabled = true;   // ЭТАП 9, браузер
+    } else if(p.paid && !доступен && stНуженВосстановить(p)){
+      купить.textContent = 'Восстановить';
+      купить.onclick = ()=> stПоставить(p, купить);
+    } else {
+      купить.textContent = доступен ? 'Установить'
+                         : (vaultВОболочке() && p.paid ? 'Купить'
+                            : (p.buy ? ('Купить за ' + (p.price || '')) : 'Доступно в PRO'));
+      купить.onclick = ()=> доступен ? stПоставить(p, купить) : stКупить(p);
+    }
     acts.appendChild(купить);
   }
   foot.appendChild(acts);
@@ -6589,7 +7211,61 @@ function stКарточка(p, главная){
   el.appendChild(tx);
   return el;
 }
-function stКупить(p){
+// ЭТАП 9, приложение: покупка через RuStore → /v1/activate → vault. Без моста (браузер)
+// платный набор недоступен — и это не ошибка, а «Доступно в приложении».
+async function stПоставитьИзVault(p, кнопка){
+  const было = кнопка ? кнопка.textContent : '';
+  if(кнопка){ кнопка.disabled = true; кнопка.textContent = 'Ставлю…'; }
+  const вернуть = ()=>{ if(кнопка){ кнопка.disabled = false; кнопка.textContent = было; } };
+  try{
+    if(vaultНабор(p.id)){
+      // Вернуть скрытые виды: снять hidden у всего набора.
+      const данные = vaultКопия();
+      данные.packs[p.id].overrides = данные.packs[p.id].overrides || { names:{}, hidden:{} };
+      данные.packs[p.id].overrides.hidden = {};
+      if(!vaultЗаписать(данные)) throw new Error('Не удалось записать хранилище наборов');
+      vaultОбновитьUI(); toast('Коллекция обновлена'); return true;
+    }
+    if(stНуженВосстановить(p)){
+      const r = await vaultВосстановитьНабор(p.id);
+      if(!r.ok) throw new Error(stОшибкаBackend(r));
+      toast('Коллекция восстановлена: видов ' + r.пресетов); return true;
+    }
+    return await stКупить(p);
+  }catch(e){
+    toast(String((e && e.message) || 'Не удалось поставить коллекцию'));
+    return false;
+  }finally{ вернуть(); }
+}
+function stОшибкаBackend(r){
+  const c = r && r.code;
+  if(c === 'offline' || c === 'network') return 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз';
+  if(c === 'server_error' || (c && c.indexOf('http_') === 0)) return 'Сервер сейчас недоступен, попробуйте позже';
+  if(c === 'not_owned') return 'Эта коллекция за вашей установкой не числится';
+  if(c === 'not_paid') return 'Платёж ещё не прошёл, попробуйте через минуту';
+  if(c === 'refunded') return 'За эту коллекцию был возврат средств';
+  if(c === 'hash_mismatch' || c === 'bad_content' || c === 'unsupported_content_number' || c === 'bad_response') return 'Коллекция пришла повреждённой — попробуйте позже';
+  if(c === 'vault_write_failed') return 'Покупка сохранена, но записать коллекцию не удалось. Нажмите «Восстановить» позже';
+  if(c === 'product_not_mapped') return 'Оплата этой коллекции ещё не открыта';
+  if(c === 'no_bridge') return 'Доступно в приложении';
+  return 'Не удалось: ' + (c || 'ошибка');
+}
+async function stКупить(p){
+  if(vaultВОболочке() && p && p.paid){
+    if(!window.Presety.store || !Presety.store.available()){ toast('Оплата в этой сборке недоступна'); return false; }
+    const чек = await Presety.store.purchase({ packId:p.id });
+    if(!чек || !чек.ok){ toast(stОшибкаBackend(чек || {})); return false; }
+    // Backend подтвердит покупку у RuStore сам; здесь только активация и запись в vault.
+    const r = await vaultАктивироватьНабор(p.id, чек);
+    if(r.ok){ toast('Коллекция куплена: видов ' + r.пресетов); return true; }
+    if(r.code === 'vault_write_failed'){ toast(stОшибкаBackend(r)); return false; }   // покупку НЕ отменяем
+    if(apiОкончательная(r.code)){
+      // Backend не подтверждал — удержание надо снять, деньги не должны зависнуть.
+      try{ await Presety.store.cancelTwoStepPurchase(чек.purchaseId); }catch(_){}
+      if(VAULT.состояние === 'ok'){ const д = vaultКопия(); vaultОтметить(д, чек.purchaseId, { invoiceId:чек.invoiceId, packId:p.id, entitlementId:null, state:'cancelled' }); vaultЗаписать(д); }
+    }
+    toast(stОшибкаBackend(r)); return false;
+  }
   if(p.buy){ window.open(p.buy, '_blank', 'noopener'); return; }
   // Отдельной цены у платного набора нет — значит открывает его подписка, и разговор про
   // «оплата не подключена» человека только путал: платить за сам набор и не предлагалось.
@@ -6775,9 +7451,19 @@ async function stОткрытьКоллекцию(p){
     const b = document.createElement('button');
     b.className = 'st-btn ghost wide'; b.style.marginTop = '9px';
     const доступна = stКуплена(p);
-    b.textContent = доступна ? 'Установить коллекцию'
-                  : (p.buy ? ('Купить за ' + (p.price || '')) : 'Доступно в PRO');
-    b.onclick = ()=> доступна ? stПоставить(p, b) : stКупить(p);
+    if(p.paid && !доступна && !vaultВОболочке() && !window.Presety){
+      // ЭТАП 9, браузер: платные наборы — только в приложении. Не ошибка и не сломанная
+      // кнопка, а честная надпись; уже установленное в браузере продолжает работать.
+      b.textContent = 'Доступно в приложении'; b.disabled = true;
+    } else if(p.paid && !доступна && stНуженВосстановить(p)){
+      b.textContent = 'Восстановить коллекцию';
+      b.onclick = ()=> stПоставить(p, b).then(()=> stОткрытьКоллекцию(p));
+    } else {
+      b.textContent = доступна ? 'Установить коллекцию'
+                    : (vaultВОболочке() && p.paid ? ('Купить' + (p.price ? ' · ' + p.price : ''))
+                       : (p.buy ? ('Купить за ' + (p.price || '')) : 'Доступно в PRO'));
+      b.onclick = ()=> (доступна ? stПоставить(p, b) : stКупить(p)).then(()=> stОткрытьКоллекцию(p));
+    }
     низ.appendChild(b);
   } else {
     // Коллекция стоит — но виды из неё можно выбрасывать поштучно, поэтому «вернуть»
