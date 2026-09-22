@@ -6415,10 +6415,63 @@ const licЗагрузка = licПрочитать().then(()=>{ try{ syncKeepBtn(
 // см. proВердикт). В браузере (PWA, моста нет) — старая v1 как прежде: новый PRO app-only.
 function естьPRO(){
   if(тестовыйPRO()) return true;
+  // ЭТАП 11: сборка не та — временно FREE. Лицензию и vault при этом не трогаем.
+  if(!целостностьОк()) return false;
   if(secure()) return proВердикт().pro;
   return legacyPRO();
 }
 function legacyPRO(){ return !!(лицензия && лицензия.kind === 'pro' && !licИстекла(лицензия)); }
+// ══════════════════════════════════════════════════════════════════════════════
+// ЭТАП 11: ВЕРДИКТ ЦЕЛОСТНОСТИ СБОРКИ (PRESETY-BACKEND-V1.md §9, §17 стр. 11)
+//
+// Оболочка на старте проверяет, чем подписан APK и не менялись ли байты index.html и
+// bridge.js. Это anti-repack БАРЬЕР, а не защита: патч нативного кода его снимает.
+//
+// Что делает ядро при несовпадении — РАНТАЙМНЫЙ ЗАПОР, и только он:
+//   · естьPRO() отвечает «нет» (effective FREE), платные vp_* не применяются;
+//   · покупка, восстановление и любые обращения к backend закрыты;
+//   · paidVault, presetyLease, myPresets, presetyPacks, packsOwned и реестр покупок
+//     НЕ меняются и НЕ удаляются; legacyRetired не ставится, отзыв не пишется,
+//     FREE в lease не записывается — запор живёт только в памяти этого запуска.
+// Поставили правильную сборку — при следующем запуске вердикт снова ok, и старые
+// lease/vault сами возвращают доступ.
+//
+// В браузере (PWA) моста нет и проверять нечего: код not_applicable, ok:true. Это НЕ
+// сбой: PWA живёт по своей legacy-модели (вариант A этапа 10).
+const INTEGRITY = { code:'unread', ok:false, данные:null };
+function целостностьПрочитать(){
+  try{
+    const r = (window.Presety && typeof Presety.integrity === 'function') ? Presety.integrity() : null;
+    if(r && typeof r.ok === 'boolean' && typeof r.code === 'string'){ INTEGRITY.данные = r; INTEGRITY.ok = r.ok; INTEGRITY.code = r.code; }
+    else if(!secure()){ INTEGRITY.данные = { ok:true, code:'not_applicable' }; INTEGRITY.ok = true; INTEGRITY.code = 'not_applicable'; }
+    else { INTEGRITY.данные = { ok:false, code:'check_failed' }; INTEGRITY.ok = false; INTEGRITY.code = 'check_failed'; }
+  }catch(_){
+    // Мост есть, а ответа нет — закрыто по умолчанию.
+    INTEGRITY.данные = { ok:false, code:'check_failed' }; INTEGRITY.ok = false; INTEGRITY.code = 'check_failed';
+  }
+  return INTEGRITY.code;
+}
+// Единственная проверка запора. В браузере всегда true.
+function целостностьОк(){
+  if(INTEGRITY.code === 'unread') целостностьПрочитать();
+  return INTEGRITY.ok !== false;
+}
+function целостностьТекст(){
+  const c = INTEGRITY.code;
+  if(c === 'asset_mismatch') return 'Файлы приложения изменены';
+  if(c === 'cert_mismatch') return 'Приложение подписано чужим ключом';
+  if(c === 'cert_unknown') return 'Сборка не заверена финальным ключом';
+  if(c === 'expected_missing') return 'Сборка собрана без эталонных отпечатков';
+  if(c === 'check_failed') return 'Проверку целостности выполнить не удалось';
+  return '';
+}
+function целостностьСообщить(){
+  const т = целостностьТекст();
+  if(т) toast(т + '. Покупки и восстановление недоступны — установите приложение из магазина');
+  return false;
+}
+try{ целостностьПрочитать(); }catch(_){}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // ЭТАП 10: PRO ПО ПОДПИСАННОЙ ЛИЦЕНЗИИ BACKEND (PRESETY-BACKEND-V1.md §3, §6.3, §7, §19)
 //
@@ -6497,7 +6550,12 @@ function leaseПрочитать(){
   try{ блоб = localStorage.getItem(LEASE_КЛЮЧ); }catch(_){}
   if(!блоб){ LEASE.состояние = 'empty'; LEASE.данные = leaseПустой(); return LEASE.состояние; }
   const r = s.decrypt(блоб);
-  if(!r || !r.ok){ LEASE.данные = null; LEASE.состояние = (r && r.code === 'key_lost') ? 'key_lost' : 'bad_blob'; return LEASE.состояние; }
+  if(!r || !r.ok){
+    LEASE.данные = null;
+    LEASE.состояние = (r && r.code === 'integrity_blocked') ? 'blocked'
+                    : (r && r.code === 'key_lost') ? 'key_lost' : 'bad_blob';
+    return LEASE.состояние;
+  }
   let o = null;
   try{ o = JSON.parse(r.value); }catch(_){}
   if(!leaseСхемаОк(o)){ LEASE.данные = null; LEASE.состояние = 'bad_blob'; return LEASE.состояние; }
@@ -6523,6 +6581,8 @@ function leaseЗаписать(новый){
 function leaseКопия(){
   if(LEASE.данные && LEASE.состояние === 'ok') return JSON.parse(JSON.stringify(LEASE.данные));
   const д = leaseПустой();
+  // При запрете целостности историю мы не знаем и ничего о ней не утверждаем: lease
+  // всё равно не записать (натив заперт), а legacyRetired — необратимая отметка.
   if(LEASE.состояние === 'key_lost' || LEASE.состояние === 'bad_blob') д.legacyRetired = true;
   return д;
 }
@@ -6642,6 +6702,7 @@ function statusНужен(now){
 }
 async function statusЗапросить(причина){
   if(!secure() || !apiДоступен()) return { skipped:'no_bridge' };
+  if(!целостностьОк()) return { skipped:'integrity_blocked' };
   if(navigator.onLine === false) return { skipped:'offline' };
   if(LEASE.вПути) return { skipped:'in_flight' };
   const now = effectiveNow();
@@ -6686,6 +6747,15 @@ async function statusПрименить(r, причина){
   try{ if(document.getElementById('packs') && document.getElementById('packs').classList.contains('open')) syncPacksLic(); }catch(_){}
   return итог;
 }
+// ЭТАП 11. Backend подтверждает покупку у RuStore сам, а журнал оболочки об этом не
+// знает и остаётся в HELD. Закрываем запись — но ТОЛЬКО после того, как локально всё
+// принято: контент в vault / лицензия в lease записаны и перечитаны. Ошибка этого
+// вызова ничего не откатывает: право уже есть, а недозакрытый чек подхватит сверка.
+function storeПодтвердить(purchaseId){
+  if(!purchaseId || !window.Presety || !Presety.store || !Presety.store.markConfirmed) return;
+  try{ Presety.store.markConfirmed(purchaseId).catch(()=>{}); }catch(_){}
+}
+
 // ── Покупка PRO в приложении: магазин → чек → /v1/activate kind=pro → лицензия → lease ──
 // Коды товаров живут в каталоге оболочки; в ядре SKU нет. Отзывы наборов из того же
 // ответа применяются попутно.
@@ -6696,11 +6766,13 @@ async function proАктивировать(чек){
   if(typeof r.licence !== 'string') return { ok:false, code:'bad_response', поле:'licence' };
   const x = await leaseПринятьЛицензию(r.licence, true);
   if(!x.ok) return { ok:false, code:x.code, detail:x.detail, backendOk:true };
+  storeПодтвердить(чек.purchaseId);          // ЭТАП 11: lease записан и перечитан — чек закрыт
   try{ await vaultПрименитьОтзывы(r.revocations); }catch(_){}
   try{ syncKeepBtn(); vaultОбновитьUI(); }catch(_){}
   return { ok:true, state:x.state, paidUntil:x.paidUntil, entitlementId:LEASE.лицензия && LEASE.лицензия.entitlementId };
 }
 async function proКупить(план){
+  if(!целостностьОк()) return целостностьСообщить();
   if(!window.Presety || !Presety.store || !Presety.store.available()){ toast('Оплата в этой сборке недоступна'); return false; }
   const чек = await Presety.store.purchase({ packId:план });
   if(!чек || !чек.ok){ toast(stОшибкаBackend(чек || {})); return false; }
@@ -6791,7 +6863,11 @@ function vaultПрочитать(){
   const r = s.decrypt(блоб);
   if(!r || !r.ok){
     VAULT.данные = null; VAULT.пресеты = [];
-    VAULT.состояние = (r && r.code === 'key_lost') ? 'key_lost' : 'bad_blob';
+    // ЭТАП 11: 'blocked' — это НЕ потеря ключа и НЕ порча блоба. Данные целы, открывать
+    // их временно нечем. Поэтому ни миграции, ни восстановления с backend, ни уборки:
+    // поставили правильную сборку — набор открылся сам.
+    VAULT.состояние = (r && r.code === 'integrity_blocked') ? 'blocked'
+                    : (r && r.code === 'key_lost') ? 'key_lost' : 'bad_blob';
     return VAULT.состояние;
   }
   try{
@@ -6998,6 +7074,8 @@ const apiПауза = ms=> new Promise(r=> setTimeout(r, ms));
 // и каждый HTTP-запрос, дошедший до сервера, съедает единицу — даже если ответ был 5xx.
 async function api(путь, тело, опции){
   if(!apiДоступен()) return { ok:false, code:'no_bridge' };
+  // ЭТАП 11: подменённой сборке backend не отвечает ничего — просто не спрашиваем.
+  if(!целостностьОк()) return { ok:false, code:'integrity_blocked', integrity:INTEGRITY.code };
   const maxAttempts = Math.max(1, Math.min(3, Number((опции && опции.maxAttempts) || 3)));
   const id = secure().installId();
   if(!id) return { ok:false, code:'no_bridge' };
@@ -7087,6 +7165,10 @@ async function vaultПринятьНабор(packId, r, мета){
     return { ok:false, code:'vault_write_failed', backendOk:true, packId };
   }
   PACKS.own(packId);
+  // ЭТАП 11: запись в журнале оболочки закрывается ТОЛЬКО здесь — когда набор уже лежит
+  // в vault и перечитан. Раньше нельзя: при сбое записи чек должен остаться HELD и
+  // попасть в сверку.
+  if(мета.source === 'activate') storeПодтвердить(мета.purchaseId);
   await vaultПрименитьОтзывы(r.revocations);
   vaultОбновитьUI();
   return { ok:true, packId, source:мета.source, entitlementId:запись.entitlementId,
@@ -7112,7 +7194,16 @@ async function vaultСверитьСписок(чеки){
   for(const ч of чеки){
     const pid = ч && ч.purchaseId;
     if(!pid) continue;
-    if(реестр[pid]){ итог.пропущено++; continue; }               // terminal — навсегда закрыт
+    if(реестр[pid]){
+      итог.пропущено++;                                          // terminal — новой покупки не будет
+      // ЭТАП 11: окно обрыва между записью vault/lease и markConfirmed. Право уже есть
+      // (реестр это и означает), а запись в журнале осталась HELD — закрываем её здесь,
+      // без обращения к магазину и без новой покупки. 'cancelled' не трогаем: там
+      // удержание уже снято, и журнал закрыт своим путём.
+      const сост = реестр[pid].state;
+      if(сост === 'confirmed' || сост === 'refunded' || сост === 'revoked'){ storeПодтвердить(pid); итог.закрыто = (итог.закрыто || 0) + 1; }
+      continue;
+    }
     // Набор по коду товара: каталог оболочки (наш id → код RuStore).
     if(!продукты){ try{ const p = await Presety.store.products(); продукты = (p && p.ok && p.products) || {}; }catch(_){ продукты = {}; } }
     const packId = Object.keys(продукты).find(k=> продукты[k] === ч.productId) || null;
@@ -7279,6 +7370,9 @@ const proГотов = (async ()=>{
   try{ syncKeepBtn(); }catch(_){}
   try{ await vaultГотов; }catch(_){}
   try{ LEASE.статус = await statusЗапросить('start'); }catch(e){ LEASE.статус = { skipped:'error', error:String(e && e.message || e) }; }
+  // ЭТАП 11: уборка журнала оболочки — только завершённые записи старше 30 дней.
+  // HELD/CHARGED не трогаются никогда: это живые деньги, их судьбу решает сверка.
+  try{ if(window.Presety && Presety.store && Presety.store.journalSweep) LEASE.уборка = await Presety.store.journalSweep(); }catch(_){}
 })();
 window.addEventListener('online', ()=>{ statusЗапросить('online').then(r=>{ LEASE.статус = r; }).catch(()=>{}); });
 
@@ -7371,6 +7465,7 @@ function можноПрименить(p){
   // ЭТАП 9, приложение: платный рецепт применим только из vault — его записи узнаются по
   // id, который назначает сам vault. Открытый JSON с src:'paid' в myPresets inert всегда,
   // и ни packsOwned, ни PRO его не открывают.
+  if(!целостностьОк()) return false;                      // ЭТАП 11: платное закрыто до правильной сборки
   if(vaultВОболочке()) return !!(p && typeof p.id === 'string' && p.id.indexOf('vp_') === 0 && p.pack && vaultНабор(p.pack));
   if(p && p.pack && PACKS.owned().includes(p.pack)) return true;
   return естьPRO();
@@ -7571,6 +7666,7 @@ function stОшибкаBackend(r){
   if(c === 'vault_write_failed') return 'Покупка сохранена, но записать коллекцию не удалось. Нажмите «Восстановить» позже';
   if(c === 'product_not_mapped') return 'Оплата этой коллекции ещё не открыта';
   if(c === 'no_bridge') return 'Доступно в приложении';
+  if(c === 'integrity_blocked') return целостностьТекст() + '. Покупки и восстановление недоступны';
   if(c === 'bad_licence') return 'Лицензия пришла повреждённой — попробуйте позже';
   if(c === 'revoked') return 'Эта подписка отозвана: магазин подтвердил возврат средств';
   if(c === 'lease_write_failed') return 'Подписка подтверждена, но записать её не удалось. Проверка повторится позже';
@@ -7578,6 +7674,7 @@ function stОшибкаBackend(r){
 }
 async function stКупить(p){
   if(vaultВОболочке() && p && p.paid){
+    if(!целостностьОк()) return целостностьСообщить();
     if(!window.Presety.store || !Presety.store.available()){ toast('Оплата в этой сборке недоступна'); return false; }
     const чек = await Presety.store.purchase({ packId:p.id });
     if(!чек || !чек.ok){ toast(stОшибкаBackend(чек || {})); return false; }
@@ -7981,6 +8078,7 @@ function syncPacksLic(){
   // Не «заменить»: покупка ничего не заменяет, она добавляется.
   btn.textContent = 'Активировать другую лицензию';
   const части = [];
+  if(!целостностьОк()) части.push(целостностьТекст() + ': покупки, восстановление и платные наборы временно недоступны. Ничего не удалено — поставьте приложение из магазина, и доступ вернётся.');
   if(secure()){
     const в = proВердикт();
     if(в.источник === 'backend') части.push('Подписка PRO действует до ' + licДень(в.paidUntil) + (в.fallback ? ' (ожидает подтверждения продления)' : '') + '.');
