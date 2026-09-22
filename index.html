@@ -6376,6 +6376,10 @@ async function licУстановить(строка){
   const s = licОчистить(строка);
   const л = await licПроверить(s);
   if(!л) return { error:'Лицензия не читается или подпись не сходится' };
+  if(л.kind === 'pro' && secure() && !legacyДопустима()){
+    // ЭТАП 10: после первого backend-права старая v1 в приложении правом не является.
+    return { error:'Подписка PRO в приложении оформляется через магазин' };
+  }
   if(л.kind === 'pro'){
     // Подписка заменяет только предыдущую подписку. packsOwned не трогаем: месяц PRO не
     // должен оставлять библиотеку навсегда, а чужие покупки — тем более пропадать.
@@ -6406,10 +6410,306 @@ async function licУстановить(строка){
 const licЗагрузка = licПрочитать().then(()=>{ try{ syncKeepBtn(); }catch(_){} });
 
 // Единственная точка правды.
+// ЭТАП 10: в приложении право PRO даёт ТОЛЬКО проверенная лицензия v2 backend из
+// presetyLease (плюс переходная legacy-v1, пока backend-право ни разу не выдавалось —
+// см. proВердикт). В браузере (PWA, моста нет) — старая v1 как прежде: новый PRO app-only.
 function естьPRO(){
   if(тестовыйPRO()) return true;
-  return !!(лицензия && лицензия.kind === 'pro' && !licИстекла(лицензия));
+  if(secure()) return proВердикт().pro;
+  return legacyPRO();
 }
+function legacyPRO(){ return !!(лицензия && лицензия.kind === 'pro' && !licИстекла(лицензия)); }
+// ══════════════════════════════════════════════════════════════════════════════
+// ЭТАП 10: PRO ПО ПОДПИСАННОЙ ЛИЦЕНЗИИ BACKEND (PRESETY-BACKEND-V1.md §3, §6.3, §7, §19)
+//
+// Право PRO в приложении = проверенная лицензия v2 backend, хранимая в presetyLease.
+// Ни флаг в localStorage, ни packsOwned, ни paidVault, ни состояние UI правом не являются.
+//
+// presetyLease — один JSON, зашифрованный тем же Keystore-ключом, что paidVault (AES-GCM,
+// блоб PV1), зеркалится оболочкой (ключ presetyLease в РАЗРЕШЕНО). Шифруем не ради тайны
+// (секретов внутри нет), а ради целостности: revoked, lastOkContactAt и legacyRetired в
+// открытом виде можно было бы подправить и вернуть отозванный PRO или продлить запас.
+//   { v:1, kind:'proLease',
+//     licence: '<PRESETY1… v2>'|null, licenceId, entitlementId, paidUntil, checkAfter,
+//     state:'active'|'grace'|'expired'|null, autoRenewing:true|false|null,
+//     revoked: null | { entitlementId, reason, at, statement },
+//     lastOkContactAt: ms, lastStatusAttemptAt: ms, legacyRetired: bool }
+// Разобранные поля — только копии для быстрых решений: при каждом чтении лицензия
+// перепроверяется заново (подпись, kid, install, даты, состояние).
+//
+// Правило (§3, ревизия 5):
+//   PRO = лицензия валидна И НЕ revoked И state ∈ {active, grace}
+//         И ( effective_now <= paid_until                                  — подписанный срок, офлайн бессрочно
+//             ИЛИ state == 'active' И auto_renewing === true               — офлайн-запас 7 дней
+//                 И lastOkContactAt <= paid_until И effective_now <= paid_until + 7 дней )
+//   effective_now = max(Date.now(), monotonicNow()) — monotonicNow НЕ серверное время, а
+//   anti-rollback: не идёт назад между запусками и reboot (этап 8).
+//   grace RuStore уже внутри paid_until → запас на него не накладывается; cancelled
+//   (auto_renewing=false), expired (HOLD/CLOSED/TERMINATED), revoked — запаса нет.
+//
+// Legacy v1 (presetyLic) в приложении — только transitional: работает, пока backend-право
+// ни разу не выдавалось (legacyRetired=false) и пока lease читается (empty|ok). key_lost /
+// bad_blob → закрыто: legacy не воскресает, право вернёт /v1/status. В PWA (моста нет)
+// v1 остаётся как было; v2 туда не принимается, /status не зовётся, lease не создаётся.
+const LEASE_КЛЮЧ = 'presetyLease';
+const LEASE_KIND = 'proLease';
+const OFFLINE_FALLBACK_MS = 7 * 24 * 3600 * 1000;
+const STATUS_МИН_ИНТЕРВАЛ_MS = 3 * 3600 * 1000;      // persisted: не чаще раза в 3 часа, restart не сбрасывает
+const STATUS_ДАВНО_MS = 7 * 24 * 3600 * 1000;        // «с последнего контакта прошло > 7 дней»
+const PRO_МАКС_СРОК_MS = 3 * 366 * 24 * 3600 * 1000; // sanity для active/grace: paid_until не дальше 3 лет от iat
+const LEASE = { состояние:'unread', данные:null, лицензия:null, готов:false, вПути:null, статус:null };
+// Таблица ключей backend по kid: ротация ключа не обнуляет старые лицензии. Ленивая
+// функция, а не константа: LIC_ПУБКЛЮЧ_BACKEND объявлен ниже по файлу.
+function licКлючиBackend(){ return { 'local-k1': LIC_ПУБКЛЮЧ_BACKEND }; }
+function effectiveNow(){
+  let t = Date.now();
+  const s = secure();
+  if(s){ try{ const m = Number(s.monotonicNow()); if(isFinite(m) && m > t) t = m; }catch(_){} }
+  return t;
+}
+function leaseПустой(){
+  return { v:1, kind:LEASE_KIND, licence:null, licenceId:null, entitlementId:null, paidUntil:null,
+           checkAfter:null, state:null, autoRenewing:null, revoked:null,
+           lastOkContactAt:0, lastStatusAttemptAt:0, legacyRetired:false };
+}
+// Строгая схема: чужой блоб (paidVault, произвольный JSON) lease не является.
+function leaseСхемаОк(o){
+  if(!o || typeof o !== 'object' || Array.isArray(o)) return false;
+  if(o.v !== 1 || o.kind !== LEASE_KIND) return false;
+  const строкаИлиNull = v=> v === null || typeof v === 'string';
+  if(!строкаИлиNull(o.licence) || !строкаИлиNull(o.licenceId) || !строкаИлиNull(o.entitlementId)) return false;
+  if(!строкаИлиNull(o.paidUntil) || !строкаИлиNull(o.checkAfter) || !строкаИлиNull(o.state)) return false;
+  if(!(o.autoRenewing === null || typeof o.autoRenewing === 'boolean')) return false;
+  if(!(o.revoked === null || (o.revoked && typeof o.revoked === 'object' && !Array.isArray(o.revoked)
+        && typeof o.revoked.entitlementId === 'string' && typeof o.revoked.statement === 'string'))) return false;
+  if(typeof o.lastOkContactAt !== 'number' || !isFinite(o.lastOkContactAt) || o.lastOkContactAt < 0) return false;
+  if(typeof o.lastStatusAttemptAt !== 'number' || !isFinite(o.lastStatusAttemptAt) || o.lastStatusAttemptAt < 0) return false;
+  if(typeof o.legacyRetired !== 'boolean') return false;
+  if(o.licence !== null && (o.licenceId === null || o.entitlementId === null || o.paidUntil === null || o.state === null)) return false;
+  return true;
+}
+// Синхронное чтение: empty (никогда не создавался) отличается от key_lost/bad_blob.
+function leaseПрочитать(){
+  const s = secure();
+  LEASE.лицензия = null;
+  if(!s){ LEASE.состояние = 'no_bridge'; LEASE.данные = null; return LEASE.состояние; }
+  let блоб = null;
+  try{ блоб = localStorage.getItem(LEASE_КЛЮЧ); }catch(_){}
+  if(!блоб){ LEASE.состояние = 'empty'; LEASE.данные = leaseПустой(); return LEASE.состояние; }
+  const r = s.decrypt(блоб);
+  if(!r || !r.ok){ LEASE.данные = null; LEASE.состояние = (r && r.code === 'key_lost') ? 'key_lost' : 'bad_blob'; return LEASE.состояние; }
+  let o = null;
+  try{ o = JSON.parse(r.value); }catch(_){}
+  if(!leaseСхемаОк(o)){ LEASE.данные = null; LEASE.состояние = 'bad_blob'; return LEASE.состояние; }
+  LEASE.данные = o; LEASE.состояние = 'ok';
+  return LEASE.состояние;
+}
+function leaseЗаписать(новый){
+  const s = secure(); if(!s || !leaseСхемаОк(новый)) return false;
+  let текст; try{ текст = JSON.stringify(новый); }catch(_){ return false; }
+  const e = s.encrypt(текст);
+  if(!e || !e.ok) return false;
+  const d = s.decrypt(e.value);
+  if(!d || !d.ok || d.value !== текст) return false;
+  try{ localStorage.setItem(LEASE_КЛЮЧ, e.value); }catch(_){ return false; }
+  let снова = null; try{ снова = localStorage.getItem(LEASE_КЛЮЧ); }catch(_){}
+  if(снова !== e.value) return false;
+  LEASE.данные = новый; LEASE.состояние = 'ok';
+  return true;
+}
+// Основа для записи. Lease не читается (key_lost/bad_blob) → начинаем новый, но с
+// legacyRetired=true: истории мы не знаем, и воскрешать v1 «по незнанию» нельзя. Право
+// вернёт /v1/status. Никогда не создававшийся (empty) — обычный пустой.
+function leaseКопия(){
+  if(LEASE.данные && LEASE.состояние === 'ok') return JSON.parse(JSON.stringify(LEASE.данные));
+  const д = leaseПустой();
+  if(LEASE.состояние === 'key_lost' || LEASE.состояние === 'bad_blob') д.legacyRetired = true;
+  return д;
+}
+// Даты лицензии в ms. → число | NaN.
+function leaseДата(v){ const t = Date.parse(String(v == null ? '' : v)); return isFinite(t) ? t : NaN; }
+// Полная проверка лицензии v2. → разобранный объект | { error }.
+// Порядок: формат → v/kind → kid известен → подпись ключом этого kid → install наш →
+// даты → состояние. Всё fail-closed.
+async function leaseПроверитьЛицензию(строка){
+  const s = String(строка || '').trim();
+  const ч = s.split('.');
+  if(ч.length !== 3 || ч[0] !== LIC_ПРЕФИКС || !ч[1] || !ч[2]) return { error:'format' };
+  let d; try{ d = JSON.parse(new TextDecoder().decode(licИзB64(ч[1]))); }catch(_){ return { error:'format' }; }
+  if(!d || typeof d !== 'object' || d.v !== 2 || d.kind !== 'pro') return { error:'kind' };
+  if(!VAULT_UUID.test(String(d.id || '')) || !VAULT_UUID.test(String(d.entitlementId || ''))) return { error:'ids' };
+  const ключ = (typeof d.kid === 'string') ? licКлючиBackend()[d.kid] : null;
+  if(!ключ) return { error:'kid' };
+  let подписьОк = false;
+  try{ подписьОк = await licПодпись({ байты:licИзB64(ч[1]), подпись:licИзB64(ч[2]) }, ключ); }catch(_){}
+  if(!подписьОк) return { error:'signature' };
+  const мой = secure() ? secure().installId() : null;
+  if(!мой || typeof d.install !== 'string' || d.install !== мой) return { error:'install' };
+  const iat = leaseДата(d.iat), paidUntil = leaseДата(d.paid_until), checkAfter = leaseДата(d.check_after);
+  if(isNaN(iat) || isNaN(paidUntil) || isNaN(checkAfter)) return { error:'dates' };
+  if(checkAfter > paidUntil) return { error:'dates' };
+  if(d.state !== 'active' && d.state !== 'grace' && d.state !== 'expired') return { error:'state' };
+  if(!(d.auto_renewing === true || d.auto_renewing === false || d.auto_renewing == null)) return { error:'state' };
+  // Sanity только для действующих: у expired backend выпускает лицензию не раньше конца
+  // права (iat >= paid_until) — это легально и само по себе даёт FREE.
+  if(d.state !== 'expired' && (paidUntil < iat || paidUntil - iat > PRO_МАКС_СРОК_MS)) return { error:'dates' };
+  return { строка:s, id:d.id, entitlementId:d.entitlementId, kid:d.kid, install:d.install, iat, paidUntil, checkAfter,
+           state:d.state, autoRenewing:(d.auto_renewing === true) };
+}
+// Старт: лицензия из lease перепроверяется; до конца проверки естьPRO() отвечает «нет».
+async function leaseПроверить(){
+  LEASE.лицензия = null;
+  if(LEASE.состояние !== 'ok' || !LEASE.данные || !LEASE.данные.licence) return null;
+  const л = await leaseПроверитьЛицензию(LEASE.данные.licence);
+  if(л.error){
+    // Лицензия в lease не прошла (сменился installId? чужой kid?) — право не даём, но
+    // и не стираем: разбираться будет /v1/status.
+    return null;
+  }
+  if(л.entitlementId !== LEASE.данные.entitlementId || л.id !== LEASE.данные.licenceId) return null;
+  LEASE.лицензия = л;
+  return л;
+}
+// Принять лицензию от backend (/activate или /status). → { ok } | { ok:false, code }.
+// Отозванное право новой лицензией не воскресает; новое право (другой entitlementId)
+// снимает старый отзыв. Первое же принятое backend-право отставляет legacy v1 навсегда.
+async function leaseПринятьЛицензию(строка, контакт){
+  if(!secure()) return { ok:false, code:'no_bridge' };
+  const л = await leaseПроверитьЛицензию(строка);
+  if(л.error) return { ok:false, code:'bad_licence', detail:л.error };
+  const д = leaseКопия();
+  if(д.revoked && д.revoked.entitlementId === л.entitlementId) return { ok:false, code:'revoked' };
+  д.licence = л.строка; д.licenceId = л.id; д.entitlementId = л.entitlementId;
+  д.paidUntil = new Date(л.paidUntil).toISOString(); д.checkAfter = new Date(л.checkAfter).toISOString();
+  д.state = л.state; д.autoRenewing = л.autoRenewing;
+  д.revoked = null; д.legacyRetired = true;
+  if(контакт) д.lastOkContactAt = effectiveNow();
+  if(!leaseЗаписать(д)) return { ok:false, code:'lease_write_failed' };
+  LEASE.лицензия = л;
+  return { ok:true, state:л.state, paidUntil:л.paidUntil };
+}
+// Подписанный отзыв PRO: тот же ключ backend (по kid), target 'pro', и entitlementId
+// ровно текущего права. Иначе — не отзыв. Принятый отзыв переживает restart/офлайн.
+async function proПринятьОтзыв(блок){
+  if(!secure() || !блок || блок.revoked !== true || typeof блок.statement !== 'string') return false;
+  const п = await stmПроверить(блок.statement, 'pro');
+  if(!п) return false;
+  const д = leaseКопия();
+  const текущий = д.entitlementId || (LEASE.лицензия && LEASE.лицензия.entitlementId) || null;
+  if(!текущий || п.entitlementId !== текущий) return false;
+  д.revoked = { entitlementId:п.entitlementId, reason:п.reason, at:String(п.at || ''), statement:String(блок.statement) };
+  д.legacyRetired = true; д.lastOkContactAt = effectiveNow();
+  if(!leaseЗаписать(д)) return false;
+  LEASE.лицензия = null;
+  toast('Подписка PRO отозвана: магазин подтвердил возврат средств');
+  return true;
+}
+// Legacy v1 допустима только как переходная совместимость.
+function legacyДопустима(){
+  if(!secure()) return true;
+  if(LEASE.состояние !== 'empty' && LEASE.состояние !== 'ok') return false;   // key_lost / bad_blob / unread → закрыто
+  return !(LEASE.данные && LEASE.данные.legacyRetired);
+}
+// Вердикт с объяснением — единственное место, где считается право PRO в приложении.
+function proВердикт(){
+  const now = effectiveNow();
+  const д = (LEASE.состояние === 'ok' && LEASE.данные) ? LEASE.данные : null;
+  if(д && д.revoked) return { pro:false, источник:'backend', причина:'revoked', paidUntil:leaseДата(д.paidUntil) };
+  const л = LEASE.лицензия;
+  if(л){
+    if(л.state === 'expired') return { pro:false, источник:'backend', причина:'expired', paidUntil:л.paidUntil };
+    if(now <= л.paidUntil) return { pro:true, источник:'backend', причина:'paid', paidUntil:л.paidUntil, fallback:false };
+    const запас = л.state === 'active' && л.autoRenewing === true
+               && (д ? д.lastOkContactAt : 0) <= л.paidUntil
+               && now <= л.paidUntil + OFFLINE_FALLBACK_MS;
+    if(запас) return { pro:true, источник:'backend', причина:'offline_fallback', paidUntil:л.paidUntil, fallback:true };
+    return { pro:false, источник:'backend', причина:'past_paid_until', paidUntil:л.paidUntil };
+  }
+  if(legacyДопустима() && legacyPRO()) return { pro:true, источник:'legacy', причина:'legacy_v1', paidUntil:лицензия.exp };
+  return { pro:false, источник:'none', причина:(LEASE.готов ? 'no_licence' : 'not_ready') };
+}
+// ── /v1/status: расписание ──
+// Условие вызова: нужно (check_after наступил ИЛИ с последнего контакта > 7 дней ИЛИ
+// живём на офлайн-запасе) И разрешено (сеть есть, persisted-порог 3 часа прошёл, запрос
+// не в пути). Порог пишется в lease ДО запроса — недоступный backend не даёт restart-loop.
+// Триггеры: старт и событие online. Панели/витрина запросов не делают.
+function statusНужен(now){
+  const д = LEASE.данные || leaseКопия(), л = LEASE.лицензия;   // key_lost/bad_blob: lease пуст → контакт нужен
+  if(л && now >= л.checkAfter) return true;
+  if(now - (д.lastOkContactAt || 0) > STATUS_ДАВНО_MS) return true;
+  const в = proВердикт();
+  return !!(в.fallback);
+}
+async function statusЗапросить(причина){
+  if(!secure() || !apiДоступен()) return { skipped:'no_bridge' };
+  if(navigator.onLine === false) return { skipped:'offline' };
+  if(LEASE.вПути) return { skipped:'in_flight' };
+  const now = effectiveNow();
+  if(!statusНужен(now)) return { skipped:'not_needed' };
+  const д = leaseКопия();
+  if(now - (д.lastStatusAttemptAt || 0) < STATUS_МИН_ИНТЕРВАЛ_MS) return { skipped:'throttled', до:д.lastStatusAttemptAt + STATUS_МИН_ИНТЕРВАЛ_MS };
+  д.lastStatusAttemptAt = now;
+  if(!leaseЗаписать(д)) return { skipped:'lease_write_failed' };
+  LEASE.вПути = (async ()=>{
+    const тело = { licenceId: (LEASE.данные && LEASE.данные.licenceId) || null,
+                   packs: vaultЕсть() ? Object.keys(VAULT.данные.packs) : [] };
+    // Ровно ОДНА HTTP-попытка: повтор — только по persisted-порогу (3 ч) или следующему
+    // разрешённому событию. network / timeout / 5xx ничего в lease не меняют: PRO решается
+    // офлайн по уже сохранённой лицензии.
+    const r = await api('/v1/status', тело, { maxAttempts:1 });
+    if(!r.ok) return { ok:false, code:r.code, причина };
+    return await statusПрименить(r, причина);
+  })();
+  try{ return await LEASE.вПути; } finally{ LEASE.вПути = null; }
+}
+// Порядок применения: (1) блок pro — лицензия ИЛИ подписанный отзыв — в lease;
+// (2) отзывы наборов — в vault/реестр; (3) один пересбор UI. Каждый шаг проверяет свою
+// подпись; ошибка одного не отменяет другой. pro:null — не отзыв: лицензия остаётся,
+// но контакт засчитан, и офлайн-запас после paid_until на этом гаснет.
+async function statusПрименить(r, причина){
+  const итог = { ok:true, причина, pro:'none', отзывов:0 };
+  if(r.pro && typeof r.pro === 'object'){
+    if(typeof r.pro.licence === 'string'){
+      const x = await leaseПринятьЛицензию(r.pro.licence, true);
+      итог.pro = x.ok ? ('licence:' + x.state) : ('licence_rejected:' + (x.detail || x.code));
+    }else if(r.pro.revoked === true){
+      итог.pro = (await proПринятьОтзыв(r.pro)) ? 'revoked' : 'revoke_rejected';
+    }
+  }
+  if(итог.pro === 'none' || итог.pro.indexOf('rejected') > 0){
+    // Контакт состоялся — фиксируем, даже если блок pro не принят.
+    const д = leaseКопия(); д.lastOkContactAt = effectiveNow(); leaseЗаписать(д);
+  }
+  try{ итог.отзывов = await vaultПрименитьОтзывы(r.revocations); }catch(_){}
+  try{ syncKeepBtn(); }catch(_){}
+  try{ vaultОбновитьUI(); }catch(_){}
+  try{ if(document.getElementById('packs') && document.getElementById('packs').classList.contains('open')) syncPacksLic(); }catch(_){}
+  return итог;
+}
+// ── Покупка PRO в приложении: магазин → чек → /v1/activate kind=pro → лицензия → lease ──
+// Коды товаров живут в каталоге оболочки; в ядре SKU нет. Отзывы наборов из того же
+// ответа применяются попутно.
+async function proАктивировать(чек){
+  if(!чек || !чек.purchaseId || !чек.productId) return { ok:false, code:'bad_request' };
+  const r = await api('/v1/activate', { kind:'pro', purchaseId:String(чек.purchaseId), productId:String(чек.productId) });
+  if(!r.ok) return r;
+  if(typeof r.licence !== 'string') return { ok:false, code:'bad_response', поле:'licence' };
+  const x = await leaseПринятьЛицензию(r.licence, true);
+  if(!x.ok) return { ok:false, code:x.code, detail:x.detail, backendOk:true };
+  try{ await vaultПрименитьОтзывы(r.revocations); }catch(_){}
+  try{ syncKeepBtn(); vaultОбновитьUI(); }catch(_){}
+  return { ok:true, state:x.state, paidUntil:x.paidUntil, entitlementId:LEASE.лицензия && LEASE.лицензия.entitlementId };
+}
+async function proКупить(план){
+  if(!window.Presety || !Presety.store || !Presety.store.available()){ toast('Оплата в этой сборке недоступна'); return false; }
+  const чек = await Presety.store.purchase({ packId:план });
+  if(!чек || !чек.ok){ toast(stОшибкаBackend(чек || {})); return false; }
+  const r = await proАктивировать(чек);
+  if(r.ok){ toast('PRO подключён до ' + licДень(r.paidUntil)); try{ renderPacks(); }catch(_){} return true; }
+  toast(r.code === 'not_paid' ? 'Платёж ещё не прошёл, попробуйте через минуту' : stОшибкаBackend(r));
+  return false;
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // ЭТАП 9: ПЛАТНЫЕ НАБОРЫ ЖИВУТ В ЗАШИФРОВАННОМ paidVault (PRESETY-BACKEND-V1.md §2, §10)
 //
@@ -6637,20 +6937,24 @@ async function vaultПроверитьКонтент(packId, content, contentHas
 // и только когда подпись сошлась, а packId И entitlementId совпали с записью в vault.
 // Legacy-запись (source:'legacy-migration', entitlementId:null) отзыву не подлежит: backend
 // её покупку не знает. Всё остальное — чужой ключ, чужой набор, «примерно тот» — не отзыв.
-function stmРазобрать(строка){
+function stmРазобрать(строка, target){
+  target = target || 'pack';
   const s = String(строка || '').trim();
   const ч = s.split('.');
   if(ч.length !== 3 || ч[0] !== LIC_ПРЕФИКС || !ч[1] || !ч[2]) return null;
   let d;
   try{ d = JSON.parse(new TextDecoder().decode(licИзB64(ч[1]))); }catch(_){ return null; }
   if(!d || typeof d !== 'object' || d.v !== 2 || d.kind !== 'revoke') return null;
-  if(d.target !== 'pack' || typeof d.packId !== 'string' || typeof d.entitlementId !== 'string') return null;
+  if(d.target !== target || !VAULT_UUID.test(String(d.entitlementId || ''))) return null;
+  if(target === 'pack' && typeof d.packId !== 'string') return null;
+  if(typeof d.kid !== 'string' || !licКлючиBackend()[d.kid]) return null;   // неизвестный ключ — не отзыв
+  if(d.reason !== 'refund' && d.reason !== 'chargeback' && d.reason !== 'manual') return null;
   return { payload:d, байты:licИзB64(ч[1]), подпись:licИзB64(ч[2]) };
 }
-async function stmПроверить(строка){
-  const з = stmРазобрать(строка);
+async function stmПроверить(строка, target){
+  const з = stmРазобрать(строка, target);
   if(!з) return null;
-  return (await licПодпись(з, LIC_ПУБКЛЮЧ_BACKEND)) ? з.payload : null;
+  return (await licПодпись(з, licКлючиBackend()[з.payload.kid])) ? з.payload : null;
 }
 // → сколько наборов отозвано. Ничего не удаляет без проверенной подписи.
 async function vaultПрименитьОтзывы(список){
@@ -6689,15 +6993,19 @@ function apiДоступен(){ return !!(secure() && window.Capacitor && Capaci
 function apiНонс(){ const u = new Uint8Array(16); crypto.getRandomValues(u); return licВB64(u); }
 function licВB64(u){ let s=''; for(let i=0;i<u.length;i++) s += String.fromCharCode(u[i]); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
 const apiПауза = ms=> new Promise(r=> setTimeout(r, ms));
-async function api(путь, тело){
+// опции.maxAttempts — сколько HTTP-попыток на один логический запрос (по умолчанию 3:
+// первая + два повтора на временные ошибки). /v1/status зовётся с 1: у него лимит 12 в сутки,
+// и каждый HTTP-запрос, дошедший до сервера, съедает единицу — даже если ответ был 5xx.
+async function api(путь, тело, опции){
   if(!apiДоступен()) return { ok:false, code:'no_bridge' };
+  const maxAttempts = Math.max(1, Math.min(3, Number((опции && опции.maxAttempts) || 3)));
   const id = secure().installId();
   if(!id) return { ok:false, code:'no_bridge' };
   if(navigator.onLine === false) return { ok:false, code:'offline' };
   const H = Capacitor.Plugins.CapacitorHttp;
   const ПАУЗЫ = [2000, 6000];
   let последняя = { ok:false, code:'network' };
-  for(let попытка = 0; попытка <= 2; попытка++){
+  for(let попытка = 0; попытка < maxAttempts; попытка++){
     if(попытка) await apiПауза(ПАУЗЫ[попытка-1]);
     const data = Object.assign({ nonce:apiНонс(), ts:new Date().toISOString() }, тело || {});
     try{
@@ -6809,7 +7117,9 @@ async function vaultСверитьСписок(чеки){
     if(!продукты){ try{ const p = await Presety.store.products(); продукты = (p && p.ok && p.products) || {}; }catch(_){ продукты = {}; } }
     const packId = Object.keys(продукты).find(k=> продукты[k] === ч.productId) || null;
     if(!packId){ итог.отложено++; continue; }
-    const r = await vaultАктивироватьНабор(packId, ч);
+    // Чек подписки (наш id 'pro' / 'pro.*') — это PRO, а не набор: ему свой путь и своя
+    // лицензия; в реестр наборов он не попадает.
+    const r = (packId === 'pro' || packId.indexOf('pro.') === 0) ? await proАктивировать(ч) : await vaultАктивироватьНабор(packId, ч);
     if(r.ok){ итог.активировано++; continue; }
     if(apiОкончательная(r.code)){
       let снято = false;
@@ -6958,6 +7268,19 @@ const vaultГотов = (async ()=>{
   }
   vaultОбновитьUI();
 })();
+// ЭТАП 10: lease читается сразу (синхронно), лицензия перепроверяется асинхронно, и только
+// потом — один фоновый /v1/status по расписанию. Редактор этого не ждёт.
+try{ leaseПрочитать(); }catch(_){ LEASE.состояние = 'bad_blob'; LEASE.данные = null; }
+const proГотов = (async ()=>{
+  if(!secure()) return;
+  try{ await licЗагрузка; }catch(_){}
+  try{ await leaseПроверить(); }catch(e){ LEASE.лицензия = null; }
+  LEASE.готов = true;
+  try{ syncKeepBtn(); }catch(_){}
+  try{ await vaultГотов; }catch(_){}
+  try{ LEASE.статус = await statusЗапросить('start'); }catch(e){ LEASE.статус = { skipped:'error', error:String(e && e.message || e) }; }
+})();
+window.addEventListener('online', ()=>{ statusЗапросить('online').then(r=>{ LEASE.статус = r; }).catch(()=>{}); });
 
 // ─── Зашифрованный набор: контейнер PRESETY2 ───
 // PRESETY2 | версия | длина заголовка | заголовок JSON | IV(12) | шифротекст+тег
@@ -7248,6 +7571,9 @@ function stОшибкаBackend(r){
   if(c === 'vault_write_failed') return 'Покупка сохранена, но записать коллекцию не удалось. Нажмите «Восстановить» позже';
   if(c === 'product_not_mapped') return 'Оплата этой коллекции ещё не открыта';
   if(c === 'no_bridge') return 'Доступно в приложении';
+  if(c === 'bad_licence') return 'Лицензия пришла повреждённой — попробуйте позже';
+  if(c === 'revoked') return 'Эта подписка отозвана: магазин подтвердил возврат средств';
+  if(c === 'lease_write_failed') return 'Подписка подтверждена, но записать её не удалось. Проверка повторится позже';
   return 'Не удалось: ' + (c || 'ошибка');
 }
 async function stКупить(p){
@@ -7588,6 +7914,7 @@ function stПланВыбрать(k){
 document.getElementById('stPlanM').onclick = ()=> stПланВыбрать('месяц');
 document.getElementById('stPlanY').onclick = ()=> stПланВыбрать('год');
 document.getElementById('stProGo').onclick = async ()=>{
+  if(secure()){ await proКупить(stПлан === 'год' ? 'pro.year' : 'pro.month'); return; }
   const list = (await PACKS.load()) || [];
   const pro = list.find(p=> p.pro && p.buy);
   if(pro && pro.buy) window.open(pro.buy, '_blank', 'noopener');
@@ -7654,7 +7981,13 @@ function syncPacksLic(){
   // Не «заменить»: покупка ничего не заменяет, она добавляется.
   btn.textContent = 'Активировать другую лицензию';
   const части = [];
-  if(лицензия){
+  if(secure()){
+    const в = proВердикт();
+    if(в.источник === 'backend') части.push('Подписка PRO действует до ' + licДень(в.paidUntil) + (в.fallback ? ' (ожидает подтверждения продления)' : '') + '.');
+    else if(в.причина === 'revoked') части.push('Подписка PRO отозвана: магазин подтвердил возврат средств.');
+    else if(в.причина === 'expired' || в.причина === 'past_paid_until') части.push('Подписка PRO закончилась ' + licДень(в.paidUntil) + '.');
+  }
+  if(лицензия && (!secure() || legacyДопустима())){
     части.push(licИстекла(лицензия)
       ? ('Подписка PRO закончилась ' + licДень(лицензия.exp) + '. Установленное осталось на месте, новые PRO-наборы и ИИ-ретушь закрыты.')
       : ('Подписка PRO действует до ' + licДень(лицензия.exp) + '.'));
