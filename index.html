@@ -11442,7 +11442,8 @@ function skinPrepare(faces, cv){
     // через одну то сглаживались, то нет — эффект сам сеял крупинки. Размываем карту
     // на 1% ширины лица: внутри кожи она так и остаётся единицей, сила там не меняется.
     const кожа = skinMap(od0, bw, bh, лицоR, лицоG, лицоB, лицоLum, Math.max(1, Math.round(faceW*0.01)));
-    zones.push({bx,by,bw,bh,mask,orig,mid,spot,low,faceW,кожа});
+    const ноздри = skinNostrils(P, bx, by, bw, bh);
+    zones.push({bx,by,bw,bh,mask,orig,mid,spot,low,faceW,кожа,ноздри});
   }
   return zones.length ? zones : null;
 }
@@ -11479,13 +11480,39 @@ function skinMap(d, w, h, лицоR, лицоG, лицоB, лицоLum, r){
   for(let p=0;p<out.length;p++) out[p] = b[p*4] / 255;
   return out;
 }
+// Ноздри на маленьком лице — бледные и размытые: по цвету и контрасту их не отличить от
+// пигментного пятна, которое «Кожа» как раз выравнивает, и сглаживание их стирало. Точки
+// лица дают здесь ТОЛЬКО кандидатную область — мягкий круг у каждой ноздри; что внутри
+// защищать, решает skinApply по самой яркости. Промах точек (у младенцев модель лица
+// ставит низ носа ниже, чем он есть) ничего не портит: защиты там просто не будет.
+const SKIN_NOSTRILS = [[97,98,99,240,75,60,79], [326,327,328,460,305,290,309]];
+function skinNostrils(P, bx, by, bw, bh){
+  const a = P(98), b = P(327);
+  if(!a || !b) return null;
+  const нос = Math.hypot(a.x-b.x, a.y-b.y);
+  const map = new Float32Array(bw*bh); let есть = false;
+  for(const набор of SKIN_NOSTRILS){
+    const pts = набор.map(P).filter(Boolean);
+    if(pts.length < 4) continue;
+    const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length - bx, cy = pts.reduce((s,p)=>s+p.y,0)/pts.length - by;
+    let r = 0; pts.forEach(p=>{ r = Math.max(r, Math.hypot(p.x-bx-cx, p.y-by-cy)); });
+    r = Math.max(r*1.3, нос*0.18);
+    for(let y=Math.max(0,Math.floor(cy-r)); y<Math.min(bh,Math.ceil(cy+r)); y++)
+      for(let x=Math.max(0,Math.floor(cx-r)); x<Math.min(bw,Math.ceil(cx+r)); x++){
+        const d = Math.hypot(x-cx, y-cy)/r; if(d >= 1) continue;
+        const u = d < 0.6 ? 1 : (1-d)/0.4, w = u*u*(3-2*u);       // мягкий край, без ступеньки
+        const p = y*bw+x; if(w > map[p]) map[p] = w; есть = true;
+      }
+  }
+  return есть ? map : null;
+}
 function skinApply(t, cv, zones){
   cv = cv || rtCanvas; zones = zones || skinData;
   if(!zones || !t) return;
   const ctx = cv.getContext('2d');
   for(const z of zones){
     const out = ctx.getImageData(z.bx, z.by, z.bw, z.bh), od = out.data;
-    const o = z.orig.data, mid = z.mid, spot = z.spot, low = z.low, m = z.mask, карта = z.кожа;
+    const o = z.orig.data, mid = z.mid, spot = z.spot, low = z.low, m = z.mask, карта = z.кожа, ноздри = z.ноздри;
     for(let i=0;i<od.length;i+=4){
       const a = m[i+3]/255; if(a < 0.02) continue;
       const кожа = карта[i>>2];                      // плавная, см. skinMap
@@ -11506,8 +11533,20 @@ function skinApply(t, cv, zones){
       // ресница так себя не ведут — они меняют яркость, а не оттенок.
       const край = Math.max(Math.abs(s0), Math.abs(s1), Math.abs(s2));
       const краснота = s0 - (s1 + s2) / 2;
-      if(край > 26 && краснота < 5) сила *= Math.max(0, 1 - (край-26)/44);
-      else if(краснота > 5) сила = Math.min(1, сила * 1.35);   // краснота — то, ради чего и идут сюда
+      // Но и у тёмной детали красный проседает меньше зелёного и синего: ноздря темнее
+      // кожи на 60–100 уровней и «краснеет» на 10 — и её гасили как прыщ, с усилением,
+      // пока она не выцветала. Воспаление почти не темнее соседей (обычно до 20), у него
+      // оттенок уходит сильнее яркости. Где яркость падает вдвое сильнее, чем растёт
+      // краснота, — это тёмная деталь лица, и её защищает край, как любую черту.
+      const тень = -(s0 + s1 + s2) / 3;
+      const тёмное = тень > 20 && тень > краснота * 2;
+      if(край > 26 && (краснота < 5 || тёмное)) сила *= Math.max(0, 1 - (край-26)/44);
+      else if(краснота > 5 && !тёмное) сила = Math.min(1, сила * 1.35);   // краснота — то, ради чего и идут сюда
+      // В области ноздри (см. skinNostrils) тёмное место, где яркость падает сильнее, чем
+      // растёт краснота, сглаживанию не отдаём — чем темнее, тем меньше. Светлая кожа рядом
+      // и покраснение в той же области обрабатываются как везде.
+      const нз = ноздри ? ноздри[i>>2] : 0;
+      if(нз > 0 && тень > 4 && тень > краснота * 2) сила *= 1 - нз * Math.min(1, (тень - 4) / 16);
       if(сила < 0.004) continue;
       const k = 1 - сила;
       od[i]   = clamp(low[i]   + l0 + s0*k + b0);
