@@ -11437,9 +11437,47 @@ function skinPrepare(faces, cv){
     for(let i=0;i<od0.length;i+=4){ if(mask[i+3]<200) continue; fr+=od0[i]; fg+=od0[i+1]; fb+=od0[i+2]; fn++; }
     if(!fn) continue;
     const лицоR=fr/fn, лицоG=fg/fn, лицоB=fb/fn, лицоLum=(лицоR+лицоG+лицоB)/3 || 1;
-    zones.push({bx,by,bw,bh,mask,orig,mid,spot,low,faceW,лицоR,лицоG,лицоB,лицоLum});
+    // Карта «кожа или нет» — ПЛАВНАЯ. Раньше решение принималось по каждому пикселю
+    // отдельно, и на границах (шапка, волосы, полутень у края щеки) соседние точки
+    // через одну то сглаживались, то нет — эффект сам сеял крупинки. Размываем карту
+    // на 1% ширины лица: внутри кожи она так и остаётся единицей, сила там не меняется.
+    const кожа = skinMap(od0, bw, bh, лицоR, лицоG, лицоB, лицоLum, Math.max(1, Math.round(faceW*0.01)));
+    zones.push({bx,by,bw,bh,mask,orig,mid,spot,low,faceW,кожа});
   }
   return zones.length ? zones : null;
+}
+// Кожа или нет, по пикселю: 1, 0.5 или 0. Сама по себе карта рябая — её размывает skinMap.
+function skinClass(R, G, B, лицоR, лицоG, лицоB, лицоLum){
+  // у кожи красный выше зелёного, зелёный выше синего, и разброс умеренный.
+  // Волосы, брошь, ткань под это не подходят — их не трогаем.
+  if(R>=G && G>=B && R-B>8 && R-B<130 && R>50) return 1;
+  if(R>G && R-B>4 && R-B<160) return 0.5;
+  // Второй заход, уже БЕЗ опоры на теплоту света: пиксель — кожа, если он совпадает
+  // со средним тоном ЭТОГО лица, приведённым к его собственной яркости. Так узнаётся
+  // и кожа на чёрно-белом кадре, и лицо под холодной лампой; волосы, оправа и ткань
+  // от тона лица отличаются сильно и сюда не попадают.
+  const lum = (R+G+B)/3;
+  if(lum > лицоLum*0.35){
+    const k = lum/лицоLum;
+    const откл = Math.abs(R-лицоR*k) + Math.abs(G-лицоG*k) + Math.abs(B-лицоB*k);
+    if(откл < 40) return 1;
+    if(откл < 60) return 0.5;
+  }
+  return 0;
+}
+function skinMap(d, w, h, лицоR, лицоG, лицоB, лицоLum, r){
+  const c = document.createElement('canvas'); c.width=w; c.height=h;
+  const q = c.getContext('2d'), img = q.createImageData(w, h), px = img.data;
+  for(let i=0;i<px.length;i+=4){
+    const v = Math.round(skinClass(d[i], d[i+1], d[i+2], лицоR, лицоG, лицоB, лицоLum) * 255);
+    px[i] = px[i+1] = px[i+2] = v; px[i+3] = 255;
+  }
+  q.putImageData(img, 0, 0);
+  const c2 = document.createElement('canvas'); c2.width=w; c2.height=h;
+  const q2 = c2.getContext('2d'); q2.filter = 'blur(' + r + 'px)'; q2.drawImage(c, 0, 0);
+  const b = q2.getImageData(0, 0, w, h).data, out = new Float32Array(w*h);
+  for(let p=0;p<out.length;p++) out[p] = b[p*4] / 255;
+  return out;
 }
 function skinApply(t, cv, zones){
   cv = cv || rtCanvas; zones = zones || skinData;
@@ -11447,28 +11485,11 @@ function skinApply(t, cv, zones){
   const ctx = cv.getContext('2d');
   for(const z of zones){
     const out = ctx.getImageData(z.bx, z.by, z.bw, z.bh), od = out.data;
-    const o = z.orig.data, mid = z.mid, spot = z.spot, low = z.low, m = z.mask;
+    const o = z.orig.data, mid = z.mid, spot = z.spot, low = z.low, m = z.mask, карта = z.кожа;
     for(let i=0;i<od.length;i+=4){
       const a = m[i+3]/255; if(a < 0.02) continue;
-      // кожа или нет: у кожи красный выше зелёного, зелёный выше синего, и разброс
-      // умеренный. Волосы, брошь, ткань под это не подходят — их не трогаем.
-      const R=o[i], G=o[i+1], B=o[i+2];
-      let кожа = (R>=G && G>=B && R-B>8 && R-B<130 && R>50) ? 1
-               : (R>G && R-B>4 && R-B<160) ? 0.5 : 0;
-      if(!кожа){
-        // Второй заход, уже БЕЗ опоры на теплоту света: пиксель — кожа, если он совпадает
-        // со средним тоном ЭТОГО лица, приведённым к его собственной яркости. Так узнаётся
-        // и кожа на чёрно-белом кадре, и лицо под холодной лампой; волосы, оправа и ткань
-        // от тона лица отличаются сильно и сюда не попадают.
-        const lum = (R+G+B)/3;
-        if(lum > z.лицоLum*0.35){
-          const k = lum/z.лицоLum;
-          const откл = Math.abs(R-z.лицоR*k) + Math.abs(G-z.лицоG*k) + Math.abs(B-z.лицоB*k);
-          if(откл < 40) кожа = 1;
-          else if(откл < 60) кожа = 0.5;
-        }
-      }
-      if(!кожа) continue;
+      const кожа = карта[i>>2];                      // плавная, см. skinMap
+      if(кожа < 0.004) continue;
       let сила = a * кожа * t;
       // ЧЕТЫРЕ полосы, а не три. Раньше я глушил всё от пор до 8% ширины лица — а в этой
       // полосе живут не только пятна, но и естественная лепка кожи: как ложится свет на
