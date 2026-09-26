@@ -5861,7 +5861,7 @@ document.getElementById('mypFile').onchange = e=>{
 // Последний удачный ответ держим у себя, чтобы витрина открывалась и без сети.
 const PACKS = {
   // В приложении «куплено» решает vault, а packsOwned — лишь подсказка для восстановления.
-  owned(){ if(vaultВОболочке()) return (VAULT.состояние === 'ok' && VAULT.данные) ? Object.keys(VAULT.данные.packs) : [];
+  owned(){ if(vaultВОболочке()) return vaultКупленные();   // legacy-pro — не покупка
            return this.подсказка(); },
   подсказка(){ try{ const v = JSON.parse(localStorage.getItem('packsOwned') || '[]');
                 return Array.isArray(v) ? v : []; }catch(_){ return []; } },
@@ -6034,7 +6034,8 @@ function stПресеты(p){
   // платный — пустой список (витрина покажет готовые картинки). Ключи лицензий здесь не
   // используются, .enc открывается только миграцией.
   if(vaultВОболочке() && p && p.paid){
-    const из = VAULT.пресеты.filter(x=> x.pack === p.id);
+    // legacy-pro с истёкшей лицензией рецептов наружу не отдаёт (примерка — тоже применение).
+    const из = vaultНаборДействует(p.id) ? VAULT.пресеты.filter(x=> x.pack === p.id) : [];
     return Promise.resolve(из);
   }
   if(!p.file) return Promise.resolve([]);
@@ -6405,10 +6406,8 @@ async function licУстановить(строка){
   const s = licОчистить(строка);
   const л = await licПроверить(s);
   if(!л) return { error:'Лицензия не читается или подпись не сходится' };
-  if(л.kind === 'pro' && secure() && !legacyДопустима()){
-    // ЭТАП 10: после первого backend-права старая v1 в приложении правом не является.
-    return { error:'Подписка PRO в приложении оформляется через магазин' };
-  }
+  // Переходный период: подписанная v1 принимается и в приложении, даже если backend-право
+  // уже выдавалось. Право из неё считает proВердикт — наравне с backend, не вместо него.
   if(л.kind === 'pro'){
     // Подписка заменяет только предыдущую подписку. packsOwned не трогаем: месяц PRO не
     // должен оставлять библиотеку навсегда, а чужие покупки — тем более пропадать.
@@ -6439,9 +6438,9 @@ async function licУстановить(строка){
 const licЗагрузка = licПрочитать().then(()=>{ try{ syncKeepBtn(); }catch(_){} });
 
 // Единственная точка правды.
-// ЭТАП 10: в приложении право PRO даёт ТОЛЬКО проверенная лицензия v2 backend из
-// presetyLease (плюс переходная legacy-v1, пока backend-право ни разу не выдавалось —
-// см. proВердикт). В браузере (PWA, моста нет) — старая v1 как прежде: новый PRO app-only.
+// Переходная схема: в приложении PRO = проверенная лицензия v2 backend из presetyLease ИЛИ
+// проверенная legacy-v1 (подпись, формат, срок) — см. proВердикт. Проверка целостности
+// стоит выше обоих. В браузере (PWA, моста нет) — старая v1 как прежде.
 function естьPRO(){
   if(тестовыйPRO()) return true;
   // ЭТАП 11: сборка не та — временно FREE. Лицензию и vault при этом не трогаем.
@@ -6529,9 +6528,9 @@ try{ целостностьПрочитать(); }catch(_){}
 //   grace RuStore уже внутри paid_until → запас на него не накладывается; cancelled
 //   (auto_renewing=false), expired (HOLD/CLOSED/TERMINATED), revoked — запаса нет.
 //
-// Legacy v1 (presetyLic) в приложении — только transitional: работает, пока backend-право
-// ни разу не выдавалось (legacyRetired=false) и пока lease читается (empty|ok). key_lost /
-// bad_blob → закрыто: legacy не воскресает, право вернёт /v1/status. В PWA (моста нет)
+// Legacy v1 (presetyLic) в приложении — переходный период: годная v1 даёт PRO наравне с
+// backend-правом, независимо от legacyRetired и состояния lease (см. proВердикт). Флаг
+// legacyRetired по-прежнему пишется — для будущего решения о выводе v1. В PWA (моста нет)
 // v1 остаётся как было; v2 туда не принимается, /status не зовётся, lease не создаётся.
 const LEASE_КЛЮЧ = 'presetyLease';
 const LEASE_KIND = 'proLease';
@@ -6661,7 +6660,7 @@ async function leaseПроверить(){
 }
 // Принять лицензию от backend (/activate или /status). → { ok } | { ok:false, code }.
 // Отозванное право новой лицензией не воскресает; новое право (другой entitlementId)
-// снимает старый отзыв. Первое же принятое backend-право отставляет legacy v1 навсегда.
+// снимает старый отзыв. Принятое backend-право отмечает legacyRetired (сейчас v1 это не отключает).
 async function leaseПринятьЛицензию(строка, контакт){
   if(!secure()) return { ok:false, code:'no_bridge' };
   const л = await leaseПроверитьЛицензию(строка);
@@ -6693,14 +6692,27 @@ async function proПринятьОтзыв(блок){
   toast('Подписка PRO отозвана: магазин подтвердил возврат средств');
   return true;
 }
-// Legacy v1 допустима только как переходная совместимость.
+// Правило будущего вывода v1 (legacyRetired / нечитаемый lease). Сейчас право PRO и
+// установку ключа НЕ ограничивает — оставлено, чтобы решение о выводе было одной строкой.
 function legacyДопустима(){
   if(!secure()) return true;
   if(LEASE.состояние !== 'empty' && LEASE.состояние !== 'ok') return false;   // key_lost / bad_blob / unread → закрыто
   return !(LEASE.данные && LEASE.данные.legacyRetired);
 }
 // Вердикт с объяснением — единственное место, где считается право PRO в приложении.
+// Переходная схема: сначала backend; если он права не даёт (нет, истёк, отозван, lease не
+// читается) — годная legacy-v1. Отказ backend отдельную v1 не аннулирует, и legacyRetired
+// здесь запретом не служит (флаг по-прежнему пишется в lease — на будущее).
 function proВердикт(){
+  const в = backendВердикт();
+  if(в.pro) return в;
+  if(legacyPRO()) return { pro:true, источник:'legacy', причина:'legacy_v1', paidUntil:лицензия.exp };
+  // Обоих нет: причина backend, если он что-то знает; иначе — истёкшая v1, если она есть.
+  if(в.источник === 'none' && лицензия && licИстекла(лицензия)) return { pro:false, источник:'legacy', причина:'legacy_expired', paidUntil:лицензия.exp };
+  return в;
+}
+// Вердикт одного backend-права (presetyLease), без legacy-v1.
+function backendВердикт(){
   const now = effectiveNow();
   const д = (LEASE.состояние === 'ok' && LEASE.данные) ? LEASE.данные : null;
   if(д && д.revoked) return { pro:false, источник:'backend', причина:'revoked', paidUntil:leaseДата(д.paidUntil) };
@@ -6714,7 +6726,6 @@ function proВердикт(){
     if(запас) return { pro:true, источник:'backend', причина:'offline_fallback', paidUntil:л.paidUntil, fallback:true };
     return { pro:false, источник:'backend', причина:'past_paid_until', paidUntil:л.paidUntil };
   }
-  if(legacyДопустима() && legacyPRO()) return { pro:true, источник:'legacy', причина:'legacy_v1', paidUntil:лицензия.exp };
   return { pro:false, источник:'none', причина:(LEASE.готов ? 'no_licence' : 'not_ready') };
 }
 // ── /v1/status: расписание ──
@@ -6742,7 +6753,7 @@ async function statusЗапросить(причина){
   if(!leaseЗаписать(д)) return { skipped:'lease_write_failed' };
   LEASE.вПути = (async ()=>{
     const тело = { licenceId: (LEASE.данные && LEASE.данные.licenceId) || null,
-                   packs: vaultЕсть() ? Object.keys(VAULT.данные.packs) : [] };
+                   packs: vaultКупленные() };   // legacy-pro backend не знает — это не покупка
     // Ровно ОДНА HTTP-попытка: повтор — только по persisted-порогу (3 ч) или следующему
     // разрешённому событию. network / timeout / 5xx ничего в lease не меняют: PRO решается
     // офлайн по уже сохранённой лицензии.
@@ -6853,6 +6864,59 @@ function vaultПустой(){ return { v:1, packs:{}, purchases:{} }; }
 function vaultЕсть(){ return VAULT.состояние === 'ok' && !!VAULT.данные; }
 function vaultНабор(packId){ return vaultЕсть() ? (VAULT.данные.packs[packId] || null) : null; }
 function vaultИдПресета(packId, i){ return 'vp_' + packId + '_' + i; }
+
+// ─── Совместимость: наборы по действующей legacy-лицензии PRO v1 ───
+// До этапа 9 подписка v1 открывала платный набор, если в ней лежит ключ ИМЕННО этого
+// набора (licКлючНабора), — и не как покупку: кончилась подписка — набор под замком.
+// Здесь то же правило, но рецепт хранится в vault (Keystore: переживает сброс WebView и
+// офлайн) отдельным источником source:'legacy-pro'. Покупкой он не считается НИГДЕ: не
+// входит в PACKS.owned(), не уходит в /v1/status, не мешает восстановлению покупок, и
+// применять его можно, только пока действует подписанная v1 с ключом этого набора.
+// Backend-PRO наборов по-прежнему не открывает.
+const VAULT_LEGACY_PRO = 'legacy-pro';
+function vaultЛегасиЗапись(з){ return !!(з && з.source === VAULT_LEGACY_PRO); }
+// Настоящая покупка (activate / pack / legacy-migration) — бессрочно.
+function vaultКуплен(packId){ const з = vaultНабор(packId); return !!(з && !vaultЛегасиЗапись(з)); }
+function vaultКупленные(){ return vaultЕсть() ? Object.keys(VAULT.данные.packs).filter(id=> !vaultЛегасиЗапись(VAULT.данные.packs[id])) : []; }
+// Набор открыт действующей legacy-v1 PRO: подпись и срок проверены, ключ этого набора в ней есть.
+function legacyProНабор(packId){ return !!packId && целостностьОк() && legacyPRO() && !!licКлючНабора(packId); }
+// Запись vault применима: покупка — всегда; legacy-pro — пока действует legacy-лицензия.
+function vaultНаборДействует(packId){
+  const з = vaultНабор(packId);
+  return !!з && (vaultЛегасиЗапись(з) ? legacyProНабор(packId) : true);
+}
+// Установить (или обновить) набор по legacy-лицензии: локальный .enc из сборки → ключ из
+// лицензии → те же проверки контента, что у миграции → запись legacy-pro. Покупку не трогает.
+async function vaultПоставитьЛегаси(p){
+  const packId = p && p.id;
+  if(!legacyProНабор(packId)) return { ok:false, error:'Для этой коллекции нужна действующая лицензия PRO' };
+  if(vaultКуплен(packId)) return { ok:true, куплен:true };
+  if(VAULT.состояние !== 'ok') return { ok:false, error:'Хранилище наборов сейчас недоступно' };
+  if(!p.file) return { ok:false, error:'У этой коллекции нет файла для установки' };
+  let буф;
+  try{ const о = await fetch('./' + p.file, { cache:'force-cache' }); if(!о.ok) throw 0; буф = await о.arrayBuffer(); }
+  catch(_){ return { ok:false, error:'Файл коллекции не загрузился' }; }
+  if(!encЭто(буф)) return { ok:false, error:'Файл коллекции не зашифрован' };
+  let текст;
+  try{ текст = await encРасшифровать(буф, licКлючНабора(packId), packId); }
+  catch(e){ return { ok:false, error:String((e && e.message) || e) }; }
+  if(хэшПроверитьЧислаВТексте(текст)) return { ok:false, error:'Формат коллекции не поддерживается' };
+  let json = null;
+  try{ json = JSON.parse(текст); }catch(_){}
+  if(!json || !json.pack || json.pack.id !== packId || !Array.isArray(json.presets)
+     || !json.presets.map(sanitizePreset).filter(Boolean).length) return { ok:false, error:'Коллекция повреждена' };
+  const h = await contentHash(json);
+  if(typeof h !== 'string') return { ok:false, error:'Формат коллекции не поддерживается' };
+  const данные = vaultКопия();
+  const было = данные.packs[packId];
+  данные.packs[packId] = { packId, source:VAULT_LEGACY_PRO, entitlementId:null, purchaseId:null, invoiceId:null,
+                           legacyLicenceId:(лицензия && лицензия.id) || null, contentHash:h,
+                           receivedAt:new Date().toISOString(), content:json,
+                           overrides:{ names:(было && было.overrides && было.overrides.names) || {}, hidden:{} } };
+  if(!vaultЗаписать(данные)) return { ok:false, error:'Не удалось записать хранилище наборов' };
+  vaultОбновитьUI();
+  return { ok:true, пресетов: VAULT.пресеты.filter(x=> x.pack === packId).length };
+}
 
 // Материализация: из content набора — пресеты для библиотеки, с именами человека и без
 // скрытых им. Рецепт берётся из content и НИКОГДА не из myPresets.
@@ -7260,7 +7324,7 @@ async function vaultВосстановитьВсё(){
   const подсказка = PACKS.подсказка();
   const итог = { пробовали:подсказка.length, вернулось:0, не_куплено:0, ошибки:[] };
   for(const packId of подсказка){
-    if(vaultНабор(packId)) continue;
+    if(vaultКуплен(packId)) continue;          // legacy-pro покупку не заменяет — восстанавливаем
     // Бесплатные наборы тоже лежат в packsOwned, но в vault им не место и backend их не
     // знает: запрос ушёл бы впустую, а по not_owned набор ещё и выпал бы из подсказки.
     const инфо = packInfo(packId);
@@ -7495,7 +7559,7 @@ function можноПрименить(p){
   // id, который назначает сам vault. Открытый JSON с src:'paid' в myPresets inert всегда,
   // и ни packsOwned, ни PRO его не открывают.
   if(!целостностьОк()) return false;                      // ЭТАП 11: платное закрыто до правильной сборки
-  if(vaultВОболочке()) return !!(p && typeof p.id === 'string' && p.id.indexOf('vp_') === 0 && p.pack && vaultНабор(p.pack));
+  if(vaultВОболочке()) return !!(p && typeof p.id === 'string' && p.id.indexOf('vp_') === 0 && p.pack && vaultНаборДействует(p.pack));
   if(p && p.pack && PACKS.owned().includes(p.pack)) return true;
   return естьPRO();
 }
@@ -7508,13 +7572,15 @@ function stБесплатна(p){ return !p.paid; }
 // (у backend нет такого права — вопрос этапа 10/16), а в браузере — как раньше.
 function stКуплена(p){
   if(stБесплатна(p)) return true;
-  if(vaultВОболочке()) return !!vaultНабор(p.id);
+  if(vaultВОболочке()) return vaultКуплен(p.id) || legacyProНабор(p.id);
   return PACKS.owned().includes(p.id) || естьPRO();
 }
+// Доступ к платному набору в приложении даёт legacy-лицензия PRO, а не покупка — так и пишем.
+function stПоЛицензииPRO(p){ return vaultВОболочке() && !stБесплатна(p) && !vaultКуплен(p.id) && legacyProНабор(p.id); }
 // Купленный набор, которого нет в vault: ключ потерян, блоб битый или запись пропала.
 // Восстанавливать есть что, если vault не в порядке или реестр/подсказка помнят покупку.
 function stНуженВосстановить(p){
-  if(!vaultВОболочке() || stБесплатна(p) || vaultНабор(p.id)) return false;
+  if(!vaultВОболочке() || stБесплатна(p) || vaultКуплен(p.id)) return false;
   if(VAULT.состояние === 'key_lost' || VAULT.состояние === 'bad_blob') return PACKS.подсказка().includes(p.id);
   if(VAULT.ждётВосстановления && VAULT.ждётВосстановления[p.id]) return true;
   const реестр = (VAULT.данные && VAULT.данные.purchases) || {};
@@ -7615,7 +7681,7 @@ function stКарточка(p, главная){
   const foot = document.createElement('div'); foot.className = 'st-foot';
   const вЛенте = stВЛенте(p), куплена = stКуплена(p);
   if(куплена && вЛенте){
-    const ok = document.createElement('span'); ok.className = 'st-owned'; ok.textContent = '✓ КУПЛЕНО';
+    const ok = document.createElement('span'); ok.className = 'st-owned'; ok.textContent = stПоЛицензииPRO(p) ? '✓ ПО ЛИЦЕНЗИИ PRO' : '✓ КУПЛЕНО';
     foot.appendChild(ok);
   } else {
     const pr = document.createElement('span');
@@ -7665,13 +7731,20 @@ async function stПоставитьИзVault(p, кнопка){
   if(кнопка){ кнопка.disabled = true; кнопка.textContent = 'Ставлю…'; }
   const вернуть = ()=>{ if(кнопка){ кнопка.disabled = false; кнопка.textContent = было; } };
   try{
-    if(vaultНабор(p.id)){
+    if(vaultКуплен(p.id)){
       // Вернуть скрытые виды: снять hidden у всего набора.
       const данные = vaultКопия();
       данные.packs[p.id].overrides = данные.packs[p.id].overrides || { names:{}, hidden:{} };
       данные.packs[p.id].overrides.hidden = {};
       if(!vaultЗаписать(данные)) throw new Error('Не удалось записать хранилище наборов');
       vaultОбновитьUI(); toast('Коллекция обновлена'); return true;
+    }
+    // Не куплен, но ключ этого набора есть в действующей legacy-лицензии PRO — ставим
+    // (или обновляем) как legacy-pro, не как покупку.
+    if(legacyProНабор(p.id)){
+      const r = await vaultПоставитьЛегаси(p);
+      if(!r.ok) throw new Error(r.error);
+      toast('Коллекция установлена по лицензии PRO: видов ' + r.пресетов); return true;
     }
     if(stНуженВосстановить(p)){
       const r = await vaultВосстановитьНабор(p.id);
@@ -7797,7 +7870,7 @@ function stМои(list){
     n.textContent = p.name || 'Коллекция';
     const c = document.createElement('span');
     c.style.cssText = 'font-family:var(--mono); font-size:10px; letter-spacing:.14em; color:var(--dim);';
-    c.textContent = 'КУПЛЕНО';
+    c.textContent = stПоЛицензииPRO(p) ? 'PRO' : 'КУПЛЕНО';
     r.append(g, n, c);
     r.onclick = ()=> stОткрытьКоллекцию(p);
     host.appendChild(r);
@@ -8109,12 +8182,12 @@ function syncPacksLic(){
   const части = [];
   if(!целостностьОк()) части.push(целостностьТекст() + ': покупки, восстановление и платные наборы временно недоступны. Ничего не удалено — поставьте приложение из магазина, и доступ вернётся.');
   if(secure()){
-    const в = proВердикт();
-    if(в.источник === 'backend') части.push('Подписка PRO действует до ' + licДень(в.paidUntil) + (в.fallback ? ' (ожидает подтверждения продления)' : '') + '.');
+    const в = backendВердикт();        // строка про backend-подписку — только про неё; v1 ниже своей строкой
+    if(в.pro) части.push('Подписка PRO действует до ' + licДень(в.paidUntil) + (в.fallback ? ' (ожидает подтверждения продления)' : '') + '.');
     else if(в.причина === 'revoked') части.push('Подписка PRO отозвана: магазин подтвердил возврат средств.');
     else if(в.причина === 'expired' || в.причина === 'past_paid_until') части.push('Подписка PRO закончилась ' + licДень(в.paidUntil) + '.');
   }
-  if(лицензия && (!secure() || legacyДопустима())){
+  if(лицензия){
     части.push(licИстекла(лицензия)
       ? ('Подписка PRO закончилась ' + licДень(лицензия.exp) + '. Установленное осталось на месте, новые PRO-наборы и ИИ-ретушь закрыты.')
       : ('Подписка PRO действует до ' + licДень(лицензия.exp) + '.'));
