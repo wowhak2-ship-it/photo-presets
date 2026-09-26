@@ -1946,7 +1946,7 @@
     </button>
     <button class="ht" data-go="skin">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.9 0 7 3.1 7 7v3.4c0 4.2-3.1 7.6-7 7.6s-7-3.4-7-7.6V10c0-3.9 3.1-7 7-7z"/><path d="M9.2 10.4h.01M14.8 10.4h.01M12 14.6h.01"/></svg>
-      <b>Кожа</b><i>сгладить тон</i>
+      <b>Смуф</b><i>сгладить тон</i>
     </button>
     <button class="ht" data-go="teeth">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 9.8c2.6-1.9 5.2-2.8 7.8-2.8s5.2.9 7.8 2.8c-1.1 4.8-4 7.2-7.8 7.2s-6.7-2.4-7.8-7.2z"/><path d="M5.7 11.2h12.6"/><path d="M9.6 11.2v3.6M14.4 11.2v3.6"/></svg>
@@ -2408,6 +2408,10 @@
         <span class="set-name">Конфиденциальность</span>
         <span class="set-val"><i>›</i></span>
       </button>
+      <button class="set-row" id="rowLicenses">
+        <span class="set-name">Лицензии сторонних компонентов</span>
+        <span class="set-val"><i>›</i></span>
+      </button>
       <div class="set-row static">
         <span class="set-name">Версия</span>
         <span class="set-ver" id="setVer">—</span>
@@ -2652,7 +2656,7 @@
       <div class="rt-tints" id="rtTints" style="display:none"></div>
       <div class="rt-srow" id="rtPowderRow" style="display:none"><span>Сила</span><input type="range" id="rtPowder" min="0" max="100" value="0" disabled><b id="rtPowderV">0</b></div>
       <div class="rt-srow" id="rtToneRow" style="display:none"><span>Сила</span><input type="range" id="rtTone" min="0" max="100" value="0" disabled><b id="rtToneV">0</b></div>
-      <div class="rt-srow" id="rtSkinRow" style="display:none"><span>Кожа</span><input type="range" id="rtSkin" min="0" max="100" value="0" disabled><b id="rtSkinV">0</b></div>
+      <div class="rt-srow" id="rtSkinRow" style="display:none"><span>Смуф</span><input type="range" id="rtSkin" min="0" max="100" value="0" disabled><b id="rtSkinV">0</b></div>
       <div class="rt-srow" id="rtSpotsRow" style="display:none"><span>Сколько</span><input type="range" id="rtSpots" min="0" max="100" value="0" disabled><b id="rtSpotsV">0</b></div>
       <div class="rt-srow" id="rtAiRow" style="display:none"><span>Сила</span><input type="range" id="rtAi" min="0" max="100" value="0" disabled><b id="rtAiV">0</b></div>
       <div class="rt-srow" id="rtTeethRow" style="display:none"><span>Сила</span><input type="range" id="rtTeeth" min="0" max="100" value="0" disabled><b id="rtTeethV">0</b></div>
@@ -3527,7 +3531,14 @@ function buildFullSource(){
   if(!fullSource) return sourceCanvas;
   let c = fullSource, cloned = false;
   const own = ()=>{ if(!cloned){ c = cloneCanvas(c); cloned = true; } return c; };
-  for(const op of editOps){
+  for(let i = 0; i < editOps.length; i++){
+    const op = editOps[i];
+    if(op.t === 'skin' && op.партия != null){       // партия «Смуфа» — целиком, как на превью
+      const группа = [op];
+      while(i+1 < editOps.length && editOps[i+1].t === 'skin' && editOps[i+1].партия === op.партия) группа.push(editOps[++i]);
+      smufПовторитьПартию(own(), группа);
+      continue;
+    }
     if(op.t === 'crop'){
       const rot = rotateCanvas(c, op.deg);
       const rx = Math.max(0, Math.round(op.x*rot.width)), ry = Math.max(0, Math.round(op.y*rot.height));
@@ -3540,6 +3551,24 @@ function buildFullSource(){
   }
   return c;   // без правок это сам оригинал — читаем из него, но не пишем в него
 }
+// Партия «Смуфа» (см. smufПоказать): зоны всех её лиц — с одного и того же холста, до
+// наложения любого из них, накладываются по порядку.
+function smufПовторитьПартию(cv, группа){
+  if(группа.some(o=> o.algoVersion !== SMUF_V1)){ for(const o of группа) replayOp(cv, o); return; }
+  const зоны = группа.map(o=> o.amount && o.faces && o.faces.length ? skinPrepare(o.faces, cv, o.maskMode || SMUF_LEGACY, o.others) : null);
+  группа.forEach((o, j)=>{ if(зоны[j]) skinApply(o.amount, cv, зоны[j]); });
+}
+// Список операций подряд — с партиями «Смуфа», как в экспорте
+function replayOps(cv, ops){
+  for(let i = 0; i < ops.length; i++){
+    const op = ops[i];
+    if(op.t === 'skin' && op.партия != null){
+      const группа = [op];
+      while(i+1 < ops.length && ops[i+1].t === 'skin' && ops[i+1].партия === op.партия) группа.push(ops[++i]);
+      smufПовторитьПартию(cv, группа);
+    } else replayOp(cv, op);
+  }
+}
 // Одна операция журнала на любом холсте (кроме crop — он меняет сам холст). Этим же путём
 // экспорт повторяет правки на оригинале, а редактор — пересобирает превью сеанса ретуши.
 function replayOp(cv, op){
@@ -3550,7 +3579,7 @@ function replayOp(cv, op){
   } else if(op.t === 'bags'){
     bagsRun(cv, op.faces, op.amount, op.кисть, op.тени);
   } else if(op.t === 'skin'){
-    skinRun(cv, op.faces, op.amount);
+    skinRun(cv, op.faces, op.amount, op.maskMode, op.others, op.algoVersion);
   } else if(op.t === 'dbl'){
     dblRun(cv, op);
   } else if(op.t === 'dust'){
@@ -8174,6 +8203,7 @@ document.getElementById('packsShare').onclick = async ()=>{
   sharePresets(н.list, н.slug, н.pack);
 };
 document.getElementById('rowPrivacy').onclick = ()=> window.open('./privacy.html', '_blank', 'noopener');
+document.getElementById('rowLicenses').onclick = ()=> window.open('./licenses.html', '_blank', 'noopener');
 
 document.getElementById('openSettings').onclick = ()=>{
   document.getElementById('settings').classList.add('open');
@@ -8418,11 +8448,21 @@ async function expBlob(cb){
   show(0);
   const done = ()=>{ expBusy = false; save.disabled = share.disabled = false;
                      save.textContent = saveT; share.textContent = shareT; };
+  // Операции «Смуфа», созданные по модели кожи, повторяются ТОЙ ЖЕ моделью: подменить маску
+  // запасной значило бы сохранить не то, что было на экране. Модель поднимаем заранее — в
+  // приложении она своя, на сайте лежит в памяти устройства. Не поднялась — говорим прямо
+  // и не сохраняем.
+  const смуфОшибка = ()=>{ done();
+    cdlgOpen('Для «Смуфа» нужна его модель, а загрузить её сейчас не получилось. Подключитесь к интернету и сохраните ещё раз — снимок будет ровно таким, как на экране.',
+             'Понятно', false, '', '', false, 'НЕ СОХРАНЕНО', true); };
+  if(!(await smufГотовКПовтору(editOps))){ смуфОшибка(); return; }
   let c = null, base = null;
   try{
     base = buildFullSource();
     c = await buildExportAsync(expMax, base, show);
   } catch(err){
+    // без модели «Смуфа» рабочую копию не отдаём: это была бы тихая подмена результата
+    if(err && err.message === SMUF_НЕТ_МОДЕЛИ){ смуфОшибка(); return; }
     // не хватило памяти на оригинал — отдаём рабочую копию, чтобы человек не остался без файла
     try{ c = await buildExportAsync(expMax, sourceCanvas, show); }
     catch(e2){ done(); return; }
@@ -10472,7 +10512,7 @@ function rtSetTool(tool){
   document.getElementById('rtTints').style.display = bokeh?'flex':'none';
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
-    spots ? 'Точки' : bags ? 'Консилер' : skin ? 'Кожа' : teeth ? 'Зубы' : ai ? 'Ретушь' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка' : vig ? 'Виньетка' : hal ? 'Свечение' : dbl ? 'Двойная' : dust ? 'Потёртости'
+    spots ? 'Точки' : bags ? 'Консилер' : skin ? 'Смуф' : teeth ? 'Зубы' : ai ? 'Ретушь' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка' : vig ? 'Виньетка' : hal ? 'Свечение' : dbl ? 'Двойная' : dust ? 'Потёртости'
          : tool==='paint' ? 'Замазать' : 'Ретушь';
   // ряд с «Отменить» — только там, где есть что отменять, то есть у кисти и штампа
   // «Отменить» нужна и в консилере, но только с кистью: в автоматическом режиме отменять
@@ -11370,12 +11410,10 @@ function bokehRun(cv, mask, amount, shape){
 // Вместе с пятнами уходят поры, а без пор кожа перестаёт быть кожей — глаз это
 // считывает мгновенно, даже не понимая, что именно не так.
 //
-// Здесь снимок раскладывается на ТРИ полосы, и трогается только средняя:
-//   низкая  — форма лица и свет на нём (крупнее ~4% ширины лица) → не трогаем,
-//             иначе поплывёт объём и лицо станет плоским;
-//   средняя — неровности тона, пятна, покраснения → ГЛУШИМ, ради этого всё и делается;
-//   высокая — поры и волоски (тоньше ~0.6% ширины лица) → возвращаем ЦЕЛИКОМ,
-//             это и есть то, чего лишены «пластиковые» фильтры.
+// Здесь кожа ведётся к ГЛАДКОЙ ПОВЕРХНОСТИ, а не размывается (см. skinSurface): внутри
+// ровного участка тон выравнивается — пятна, веснушки, покраснения, цветной шум, — а
+// контуры лица, даже мягкие, остаются на месте. Поры (мелкая яркостная текстура)
+// возвращаются почти целиком — это и есть то, чего лишены «пластиковые» фильтры.
 const SKIN_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,
                    400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
 const SKIN_HOLES = [
@@ -11384,7 +11422,575 @@ const SKIN_HOLES = [
   [61,146,91,181,84,17,314,405,321,375,291,409,270,269,267,0,37,39,40,185], // губы
   [70,63,105,66,107], [336,296,334,293,300]                              // брови
 ];
-function skinPrepare(faces, cv){
+// Вырезы «Смуфа». Глаза и губы — те же, а брови — ПОЛНЫМ контуром (верхний край и нижний):
+// одной верхней линии хватало, пока её прикрывало широкое перо овала, а с узким пером бровь
+// оставалась без защиты и сглаживалась. SKIN_HOLES не трогаем — по нему работают «Пудра» и «Тональный».
+const SMUF_HOLES = [SKIN_HOLES[0], SKIN_HOLES[1], SKIN_HOLES[2],
+  [70,63,105,66,107,55,65,52,53,46], [336,296,334,293,300,276,283,282,295,285]];
+// У КАЖДОЙ ОПЕРАЦИИ skin ДВА ПОЛЯ, оба записываются при создании и больше не меняются:
+//   algoVersion — чем сглаживать: 'skin-v188' (старая «Кожа», см. skinPrepareV188) или
+//                 'smuf-v1' (исправленный Новый 1+, подложка по коже, G1-final);
+//   maskMode    — где сглаживать (только для smuf-v1): 'mp-v1' — кожа по сети MediaPipe
+//                 SelfieMulticlass ровно той модели, что в SMUF_МОДЕЛИ['mp-v1'] (см. smufMask);
+//                 'legacy-v188' — прежняя маска: овал модели лица минус глаза, губы и брови.
+// Экспорт и любой другой повтор обязаны воспроизвести ровно то, что человек видел на превью:
+// ни алгоритм, ни маска тихо не подменяются. Нет модели для 'mp-v1' — повтор останавливается
+// с понятной ошибкой (SMUF_НЕТ_МОДЕЛИ), а не идёт по запасной маске.
+// Операция без полей создана «Кожей» v188: 'skin-v188' целиком.
+const SKIN_V188 = 'skin-v188', SMUF_V1 = 'smuf-v1';
+const SMUF_MP_V1 = 'mp-v1', SMUF_LEGACY = 'legacy-v188', SMUF_НЕТ_МОДЕЛИ = 'smuf-model-missing';
+function skinPrepare(faces, cv, maskMode, others){
+  cv = cv || rtCanvas;
+  const mp = maskMode === SMUF_MP_V1;
+  if(mp && !smufSeg) throw new Error(SMUF_НЕТ_МОДЕЛИ);
+  const W = cv.width, H = cv.height, zones = [];
+  for(const lms of (faces||[])){
+    if(!lms || !lms[SKIN_OVAL[0]]) continue;
+    const P = i => lms[i] ? {x:lms[i].x*W, y:lms[i].y*H} : null;
+    const oval = SKIN_OVAL.map(P).filter(Boolean);
+    if(oval.length < 8) continue;
+    let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+    oval.forEach(p=>{ x0=Math.min(x0,p.x); y0=Math.min(y0,p.y); x1=Math.max(x1,p.x); y1=Math.max(y1,p.y); });
+    const faceW = x1-x0;
+    if(faceW < 40) continue;                       // лицо мельче — сглаживать нечего
+    const pad = Math.round(faceW*0.10);
+    // Кожа по MediaPipe выходит за контур модели лица — вверх до линии волос и вниз к шее,
+    // поэтому её рамка выше и длиннее. У прежней маски всё внутри контура — рамка как в v188.
+    const bx = Math.max(0, Math.round(x0-pad));
+    const by = Math.max(0, Math.round(y0-pad-(mp ? faceW*0.22 : 0)));
+    const bw = Math.min(W-bx, Math.round(x1-x0+pad*2));
+    const bh = Math.min(H-by, mp ? Math.round(y1+faceW*0.35-by) : Math.round(y1-y0+pad*2));
+    if(bw < 8 || bh < 8) continue;
+
+    const orig = cv.getContext('2d').getImageData(bx,by,bw,bh);
+    const od0 = orig.data;
+    const размыть = (r)=>{ const c=document.createElement('canvas'); c.width=bw; c.height=bh;
+      const q=c.getContext('2d'); q.filter='blur('+r+'px)';
+      q.drawImage(cv, bx,by,bw,bh, 0,0,bw,bh); return q.getImageData(0,0,bw,bh).data; };
+    // Размытия по всему кадру нужны маске, чтобы найти тёмную часть ноздри. Для самой
+    // обработки их потом заменят размытия ТОЛЬКО по коже (см. smufSkinOnly).
+    const mid  = размыть(Math.max(1, Math.round(faceW*0.006)));  // граница пор
+    const spot = размыть(Math.max(3, Math.round(faceW*0.030)));  // граница пятен
+    const ноздри = skinNostrils(P, bx, by, bw, bh);
+    let mask, кожа;
+    if(mp){
+      // Кожу уже отобрала сеть: отдельная карта «кожа или нет» здесь не нужна
+      mask = new Uint8ClampedArray(bw*bh*4);
+      кожа = new Float32Array(bw*bh).fill(1);
+      smufMask(cv, lms, others, {bx,by,bw,bh,mid,spot,ноздри}, mask);
+    } else {
+      // маска v188: овал лица минус глаза, губы и брови; перо мягкое, чтобы не было границы
+      const mc = document.createElement('canvas'); mc.width=bw; mc.height=bh;
+      const mx = mc.getContext('2d');
+      mx.filter = 'blur(' + Math.max(2, Math.round(faceW*0.035)) + 'px)';
+      mx.fillStyle = '#fff'; mx.beginPath();
+      oval.forEach((p,i)=> i ? mx.lineTo(p.x-bx, p.y-by) : mx.moveTo(p.x-bx, p.y-by));
+      mx.closePath(); mx.fill();
+      mx.globalCompositeOperation = 'destination-out';
+      for(const hole of SKIN_HOLES){
+        const pts = hole.map(P).filter(Boolean);
+        if(pts.length < 3) continue;
+        const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length, cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
+        mx.beginPath();
+        pts.forEach((p,i)=>{ const x=cx+(p.x-cx)*1.5, y=cy+(p.y-cy)*1.5;   // с запасом: ресницы и края губ тоже не трогаем
+                             i ? mx.lineTo(x-bx, y-by) : mx.moveTo(x-bx, y-by); });
+        mx.closePath(); mx.fill();
+      }
+      mx.globalCompositeOperation = 'source-over';
+      mask = mx.getImageData(0,0,bw,bh).data;
+      // Средний тон ЭТОГО лица — эталон, по которому потом узнаём кожу. Без него отбор
+      // шёл по абсолютному «красного больше синего», а это свойство не кожи, а ТЁПЛОГО
+      // СВЕТА: на чёрно-белом кадре разницы нет вовсе, на холодной лампе её не набирает
+      // взрослое лицо (детское, розовее, набирает) — и инструмент молча ничего не делал.
+      let fr=0,fg=0,fb=0,fn=0;
+      for(let i=0;i<od0.length;i+=4){ if(mask[i+3]<200) continue; fr+=od0[i]; fg+=od0[i+1]; fb+=od0[i+2]; fn++; }
+      if(!fn) continue;
+      const лицоR=fr/fn, лицоG=fg/fn, лицоB=fb/fn, лицоLum=(лицоR+лицоG+лицоB)/3 || 1;
+      // Карта «кожа или нет» — ПЛАВНАЯ: по отдельному пикселю соседние точки через одну
+      // то сглаживались, то нет, и эффект сам сеял крупинки на границах.
+      кожа = skinMap(od0, bw, bh, лицоR, лицоG, лицоB, лицоLum, Math.max(1, Math.round(faceW*0.01)));
+    }
+    const z = {bx,by,bw,bh,mask,orig,mid,spot,faceW,кожа,ноздри};
+    smufSkinOnly(z, faceW);                                   // mid, spot и карта прыщей — по коже этой маски
+    z.гладь = smufGrain(skinSurface(od0, bw, bh, faceW), z, faceW);
+    zones.push(z);
+  }
+  return zones.length ? zones : null;
+}
+// Соседние лица кадра для разделения кожи между ними — только то, что для этого нужно:
+// центр и размер овала каждого соседа в долях кадра. Кладётся в операцию, чтобы экспорт
+// делил соприкасающиеся лица ровно так же, как превью, без нового поиска лиц.
+function smufСоседи(faces, i){
+  return (faces||[]).filter((f,j)=> j !== i && f && f[SKIN_OVAL[0]]).map(f=>{
+    let a0=1e9,a1=-1e9,b0=1e9,b1=-1e9;
+    for(const k of SKIN_OVAL){ const p=f[k]; if(!p) continue; a0=Math.min(a0,p.x); a1=Math.max(a1,p.x); b0=Math.min(b0,p.y); b1=Math.max(b1,p.y); }
+    return {x:(a0+a1)/2, y:(b0+b1)/2, w:a1-a0, h:b1-b0};
+  });
+}
+// Вырезы черт: [запас, перо] в долях ширины лица. Контур «раздувается» на запас (штрих
+// вокруг заливки), а не растягивается от центра: бровь тонкая, и растяжение её почти не
+// расширяло бы. У ноздри вырезается только её тёмная часть (см. smufMask).
+const SMUF_ВЫРЕЗ = { бровь:[0.015,0.008], глаз:[0.025,0.008], губы:[0.01,0.006], ноздря:[0.008,0.005] };
+// Многоугольники → двоичная карта (1 — внутри), раздутые на d пикселей
+function smufFill(polys, W, H, d){
+  const c=document.createElement('canvas'); c.width=W; c.height=H; const q=c.getContext('2d');
+  q.fillStyle='#fff'; q.strokeStyle='#fff'; q.lineJoin='round'; q.lineCap='round'; q.lineWidth=Math.max(0.5,2*d);
+  for(const pts of polys){ q.beginPath(); pts.forEach((p,i)=> i?q.lineTo(p.x,p.y):q.moveTo(p.x,p.y)); q.closePath(); q.fill(); if(d>0) q.stroke(); }
+  const px=q.getImageData(0,0,W,H).data; const out=new Float32Array(W*H);
+  for(let p=0;p<W*H;p++) out[p]=px[p*4+3]>127?1:0;
+  return out;
+}
+// Круглое размытие карты 0…1 (квадратное дало бы ноздре углы)
+function smufRoundBlur(a, W, H, r){
+  const c=document.createElement('canvas'); c.width=W; c.height=H; const id=c.getContext('2d').createImageData(W,H);
+  for(let p=0;p<W*H;p++){ const v=Math.round(a[p]*255); id.data[p*4]=id.data[p*4+1]=id.data[p*4+2]=v; id.data[p*4+3]=255; }
+  c.getContext('2d').putImageData(id,0,0);
+  const c2=document.createElement('canvas'); c2.width=W; c2.height=H; const q=c2.getContext('2d');
+  q.filter='blur('+r+'px)'; q.drawImage(c,0,0);
+  const d=q.getImageData(0,0,W,H).data; const out=new Float32Array(W*H);
+  for(let p=0;p<W*H;p++) out[p]=d[p*4]/255;
+  return out;
+}
+// Почти гауссово размытие: три прохода среднего по квадрату, R — сигма в пикселях
+function smufGblur(a, W, H, R){
+  const r=Math.max(1,Math.round(R/1.7));
+  return boxMean(boxMean(boxMean(a,W,H,r),W,H,r),W,H,r);
+}
+// МАСКА КОЖИ ПО СЕТИ. Сеть видит квадрат вокруг лица (1,6 его размера, не больше 1024 точек)
+// и для каждой точки даёт уверенности шести классов: фон, волосы, кожа тела, кожа лица,
+// одежда, прочее. Кожей считаем «кожу лица» плюс «кожу тела» рядом с овалом (край щеки у
+// уха сеть относит к телу), волосы, одежда, фон и прочее — отсекаются. Переход — собственная
+// граница сети, без эрозии: иначе край лица оставался бы необработанным.
+// Класс «кожа лица» — это кожа ВСЕХ лиц кадра, поэтому точка отдаётся тому лицу, чей овал
+// ближе (в долях его ширины и высоты), и маска плавно гаснет к краю рамки обработки —
+// иначе у соприкасающихся лиц по рамке шёл бы прямой шов.
+function smufMask(cv, face, others, z, mask){
+  const IW=cv.width, IH=cv.height;
+  const P=i=>({x:face[i].x*IW, y:face[i].y*IH}); const oval=SKIN_OVAL.map(P);
+  const ocx=oval.reduce((s,p)=>s+p.x,0)/oval.length, ocy=oval.reduce((s,p)=>s+p.y,0)/oval.length;
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9; oval.forEach(p=>{x0=Math.min(x0,p.x);x1=Math.max(x1,p.x);y0=Math.min(y0,p.y);y1=Math.max(y1,p.y);});
+  const faceW=x1-x0;
+  const side=Math.round(Math.max(faceW, y1-y0)*1.6);
+  const cx0=Math.max(0,Math.round(ocx-side/2)), cy0=Math.max(0,Math.round(ocy-side*0.55));
+  const CW=Math.min(IW-cx0, side), CH=Math.min(IH-cy0, side), N=CW*CH;
+  const k=Math.min(1,1024/Math.max(CW,CH));
+  const segIn=document.createElement('canvas'); segIn.width=Math.round(CW*k); segIn.height=Math.round(CH*k);
+  segIn.getContext('2d').drawImage(cv,cx0,cy0,CW,CH,0,0,segIn.width,segIn.height);
+  const res=smufSeg.segment(segIn);
+  const conf=res.confidenceMasks.map(m=>m.getAsFloat32Array()); res.close();
+  if(conf.length < 6) throw new Error(SMUF_НЕТ_МОДЕЛИ);
+  const SW=segIn.width, SH=segIn.height;
+  const up=(a)=>{ const out=new Float32Array(N);
+    for(let y=0;y<CH;y++){ const fy=Math.min(SH-1,y*k), y0i=Math.floor(fy), y1i=Math.min(SH-1,y0i+1), wy=fy-y0i;
+      for(let x=0;x<CW;x++){ const fx=Math.min(SW-1,x*k), x0i=Math.floor(fx), x1i=Math.min(SW-1,x0i+1), wx=fx-x0i;
+        out[y*CW+x]=(a[y0i*SW+x0i]*(1-wx)+a[y0i*SW+x1i]*wx)*(1-wy)+(a[y1i*SW+x0i]*(1-wx)+a[y1i*SW+x1i]*wx)*wy; } }
+    return out; };
+  const C=conf.map(up);
+  // вырезы черт
+  const Pc=i=>({x:face[i].x*IW-cx0, y:face[i].y*IH-cy0}); const poly=h=>h.map(Pc);
+  const ex=(polys,[m,b])=>{ const bb=Math.max(1,Math.round(faceW*b)); return boxMean(smufFill(polys,CW,CH,faceW*m+2*bb),CW,CH,bb); };
+  const Eb=ex([poly(SMUF_HOLES[3]),poly(SMUF_HOLES[4])],SMUF_ВЫРЕЗ.бровь);
+  const Ee=ex([poly(SMUF_HOLES[0]),poly(SMUF_HOLES[1])],SMUF_ВЫРЕЗ.глаз);
+  const El=ex([poly(SMUF_HOLES[2])],SMUF_ВЫРЕЗ.губы);
+  // ноздря — только тёмная деталь внутри её круга (яркость падает сильнее, чем растёт краснота)
+  const нозд=new Float32Array(N);
+  for(let y=0;y<CH;y++) for(let x=0;x<CW;x++){
+    const gx=cx0+x-z.bx, gy=cy0+y-z.by; if(gx<0||gy<0||gx>=z.bw||gy>=z.bh) continue;
+    const zp=gy*z.bw+gx, i=zp*4;
+    const s0=z.mid[i]-z.spot[i], s1=z.mid[i+1]-z.spot[i+1], s2=z.mid[i+2]-z.spot[i+2];
+    const кр=s0-(s1+s2)/2, т=-(s0+s1+s2)/3; const нз=z.ноздри?z.ноздри[zp]:0;
+    if(нз>0.3 && т>6 && т>кр*2) нозд[y*CW+x]=1;
+  }
+  const nb=Math.max(1,Math.round(faceW*SMUF_ВЫРЕЗ.ноздря[1])), nd=Math.max(1,Math.round(faceW*SMUF_ВЫРЕЗ.ноздря[0])+2*nb);
+  const nD=smufRoundBlur(нозд,CW,CH,nd/2); const nBin=new Float32Array(N); for(let p=0;p<N;p++) nBin[p]=nD[p]>0.03?1:0;
+  const En0=smufRoundBlur(nBin,CW,CH,nb/2);
+  // «кожа тела» засчитывается только рядом с овалом (+4 %, мягкий край 2 %): шея ниже — не лицо
+  const ovalC=oval.map(p=>({x:p.x-cx0,y:p.y-cy0})); const oc=ovalC.reduce((s,p)=>({x:s.x+p.x/ovalC.length,y:s.y+p.y/ovalC.length}),{x:0,y:0}); const dz=faceW*0.04;
+  const zone=boxMean(smufFill([ovalC.map(p=>{ const dx=p.x-oc.x, dy=p.y-oc.y, dd=Math.hypot(dx,dy)||1; return {x:p.x+dx/dd*dz, y:p.y+dy/dd*dz}; })],CW,CH,0),CW,CH,Math.max(1,Math.round(faceW*0.02)));
+  // чья точка: этого лица или соседа
+  const ells=(others||[]).map(e=>({x:e.x*IW-cx0, y:e.y*IH-cy0, w:e.w*IW, h:e.h*IH}));
+  const me=(()=>{ let a0=1e9,a1=-1e9,b0=1e9,b1=-1e9; ovalC.forEach(p=>{a0=Math.min(a0,p.x);a1=Math.max(a1,p.x);b0=Math.min(b0,p.y);b1=Math.max(b1,p.y);}); return {x:(a0+a1)/2,y:(b0+b1)/2,w:a1-a0,h:b1-b0}; })();
+  const ed=(e,x,y)=>Math.hypot((x-e.x)/e.w,(y-e.y)/e.h);
+  const ownW=(x,y)=>{ let v=1; const dm=ed(me,x,y); for(const e of ells){ const t=(ed(e,x,y)-dm)/0.08+0.5; v*=Math.min(1,Math.max(0,t)); } return v; };
+  // к краю рамки обработки маска гаснет (кроме края самого кадра) — прямого шва по рамке нет
+  const fb=Math.max(2,Math.round(faceW*0.015));
+  const edgeF=(x,y)=>{ const gx=cx0+x, gy=cy0+y; let d=1e9;
+    if(z.bx>0) d=Math.min(d,gx-z.bx); if(z.by>0) d=Math.min(d,gy-z.by);
+    if(z.bx+z.bw<IW) d=Math.min(d,z.bx+z.bw-1-gx); if(z.by+z.bh<IH) d=Math.min(d,z.by+z.bh-1-gy);
+    return Math.min(1,Math.max(0,d/fb)); };
+  const M=new Float32Array(N);
+  for(let p=0;p<N;p++){
+    const lim=ownW(p%CW,(p/CW)|0)*edgeF(p%CW,(p/CW)|0);
+    const S=(C[3][p]+C[2][p]*zone[p])*lim;
+    const forbid=Math.max(C[0][p],C[1][p],C[4][p],C[5][p]);
+    let m=Math.min(1,Math.max(0,(S-0.35)/0.3));
+    if(forbid>0.6) m=0; else if(forbid>0.4) m*=(0.6-forbid)/0.2;
+    const E=Math.max(Eb[p],Ee[p],El[p],Math.min(1,En0[p]*2));
+    M[p]=m*(1-E);
+  }
+  for(let y=0;y<z.bh;y++) for(let x=0;x<z.bw;x++){
+    const cx=z.bx+x-cx0, cy=z.by+y-cy0; let m=0;
+    if(cx>=0&&cy>=0&&cx<CW&&cy<CH) m=M[cy*CW+cx];
+    mask[(y*z.bw+x)*4+3]=Math.round(m*255);
+  }
+}
+// ПОДЛОЖКА ДЛЯ ПРЫЩЕЙ И ПОКРАСНЕНИЙ — ТОЛЬКО ПО КОЖЕ. Ветка «прыщ» заменяет пиксель
+// размытым слоем в 3 % лица; размытый по всему кадру, у края лица он захватывал волосы:
+// «кожа минус тёмные волосы» выглядела краснотой, край щеки считался прыщом и темнел
+// (бок щеки −21 уровень, поймано на снимке мамы с дочкой). Теперь размытия идут только по
+// точкам маски. У самого силуэта ветка «прыщ» плавно выключается: там цветной отсвет
+// (красный мяч у щеки) иначе выравнивался под тон щеки и кромка светлела.
+function smufSkinOnly(z, faceW){
+  const W=z.bw, H=z.bh, N=W*H;
+  const w=new Float32Array(N); for(let p=0;p<N;p++) w[p]=z.mask[p*4+3]/255;
+  const o=z.orig.data;
+  const mk=(sig)=>{ const R=1.7*sig; const out=new Uint8ClampedArray(N*4); const b=smufGblur(w,W,H,R); const ch=new Float32Array(N);
+    for(let c=0;c<3;c++){ for(let p=0;p<N;p++) ch[p]=o[p*4+c]*w[p]; const a=smufGblur(ch,W,H,R);
+      for(let p=0;p<N;p++) out[p*4+c]= b[p]>0.02 ? a[p]/b[p] : o[p*4+c]; }
+    for(let p=0;p<N;p++) out[p*4+3]=255;
+    return out; };
+  z.mid=mk(Math.max(1,Math.round(faceW*0.006)));
+  z.spot=mk(Math.max(3,Math.round(faceW*0.030)));
+  z.прыщи=skinBlemishMap(z.mid,z.spot,W,H,faceW);
+  const g=smufGblur(w,W,H,faceW*0.02);
+  for(let p=0;p<N;p++){ let t=Math.min(1,Math.max(0,(g[p]-0.75)/(0.97-0.75))); t=t*t*(3-2*t); z.прыщи[p]*=t; }
+}
+// МЕЛКОЕ ЗЕРНО (G1-final). Поверх гладкой поверхности остаётся шум матрицы и JPEG — россыпь
+// точек в 1–2 пикселя. На лицах в 200–400 точек поры того же размера, поэтому отделить их
+// по размеру нельзя; отделяем ПО СИЛЕ: зерно — слабые случайные точки, пора — более
+// глубокая. Уровень шума меряется по самой коже (медиана модуля × 1,4826), слабое гасится
+// мягким порогом v·t²/(v²+t²), а из убранного дважды вычитается всё, что попало в полосу
+// пор (0,3–0,6 % лица), — поры остаются как в «Новом 1+».
+const SMUF_ЗЕРНО = { масштаб:0.002, порог:0.7, доля:0.8, проходы:2 };
+function smufGrain(g, z, faceW){
+  const W=z.bw, H=z.bh, N=W*H;
+  const w=new Float32Array(N); for(let p=0;p<N;p++) w[p]=z.mask[p*4+3]/255;
+  const gb=(a,s)=>smufGblur(a,W,H,Math.max(1.7,faceW*s*1.7));
+  const Yg=new Float32Array(N); for(let p=0;p<N;p++) Yg[p]=0.299*g[p*3]+0.587*g[p*3+1]+0.114*g[p*3+2];
+  const d0=gb(w,SMUF_ЗЕРНО.масштаб), t=new Float32Array(N); for(let p=0;p<N;p++) t[p]=Yg[p]*w[p];
+  const b=gb(t,SMUF_ЗЕРНО.масштаб), band=new Float32Array(N);
+  for(let p=0;p<N;p++) band[p]= d0[p]>1e-3 ? Yg[p]-b[p]/d0[p] : 0;
+  // уровень шума — по коже, каждая вторая точка
+  let n=0; for(let p=0;p<N;p+=2) if(w[p]>0.9) n++;
+  const av=new Float32Array(n); n=0; for(let p=0;p<N;p+=2) if(w[p]>0.9) av[n++]=Math.abs(band[p]);
+  av.sort();
+  const sn=1.4826*(av[av.length>>1] || 1), tg=SMUF_ЗЕРНО.порог*sn, tt=tg*tg, kr=SMUF_ЗЕРНО.доля;
+  const dY=new Float32Array(N); for(let p=0;p<N;p++){ const v=band[p]; dY[p]=-kr*v*tt/(v*v+tt); }
+  // убранное не должно задевать полосу пор: вычитаем его проекцию на неё
+  const D0=gb(w,0.003), D1=gb(w,0.006), tw=new Float32Array(N);
+  for(let it=0; it<SMUF_ЗЕРНО.проходы; it++){
+    for(let p=0;p<N;p++) tw[p]=dY[p]*w[p];
+    const a=gb(tw,0.003); for(let p=0;p<N;p++) a[p]= D0[p]>1e-3 ? a[p]/D0[p] : 0;
+    const c=gb(tw,0.006); for(let p=0;p<N;p++) c[p]= D1[p]>1e-3 ? c[p]/D1[p] : 0;
+    for(let p=0;p<N;p++) dY[p]-=a[p]-c[p];
+  }
+  const out=new Float32Array(N*3);
+  for(let p=0;p<N;p++){ const dy=dY[p]; out[p*3]=g[p*3]+dy; out[p*3+1]=g[p*3+1]+dy; out[p*3+2]=g[p*3+2]+dy; }
+  return out;
+}
+// ─── Модель кожи «Смуфа»: MediaPipe SelfieMulticlass 256×256 (Google, Apache 2.0, 16,4 МБ) ───
+// РЕЖИМ МАСКИ = ТОЧНАЯ МОДЕЛЬ, НАВСЕГДА. 'mp-v1' — это ровно этот файл, байт в байт (SHA-256
+// ниже), и никакой другой: иначе старая правка при повторе дала бы другой снимок. Правила:
+//   · файл лежит под своим отпечатком в имени и НИКОГДА не заменяется и не удаляется, пока в
+//     приложении есть режим, который на него ссылается;
+//   · новая модель — это новый файл и новый режим ('mp-v2'), а не замена старого;
+//   · отпечаток проверяется у КАЖДОЙ копии до того, как она попадёт в хранилище и до того, как
+//     пойдёт в дело: не сошёлся — копия не используется вовсе;
+//   · запасной адрес Google допустим только потому, что проверку проходят и его байты.
+// В приложении файл лежит внутри APK (папка model) — работает без сети с первого запуска. На
+// сайте качается по требованию с нашего же адреса, один раз, и живёт в своём хранилище
+// photo-presets-smuf под нашим адресом; служебный воркер его не трогает — копия одна.
+const SMUF_МОДЕЛИ = {
+  'mp-v1': {
+    файл:   './model/selfie_multiclass_256x256-c6748b12.tflite',
+    google: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite',
+    sha256: 'c6748b1253a99067ef71f7e26ca71096cd449baefa8f101900ea23016507e0e0',
+  },
+};
+const SMUF_ХРАНИЛИЩЕ = 'photo-presets-smuf';
+// Выключатель: false — новые операции «Смуфа» создаются по прежней маске (legacy-v188).
+// Уже созданные операции mp-v1 от него не зависят — они всегда повторяются своей моделью.
+const SMUF_MP = true;
+let smufSeg = null, smufSegP = null;
+async function smufSha(буф){
+  const h = await crypto.subtle.digest('SHA-256', буф);
+  return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+// Скачать файл целиком, сообщая долю принятого
+async function smufСкачать(адрес, шаг){
+  const resp = await fetch(адрес);
+  if(!resp.ok) throw new Error('модель не скачалась: ' + resp.status);
+  const всего = +resp.headers.get('content-length') || 0;
+  const reader = resp.body && resp.body.getReader ? resp.body.getReader() : null;
+  if(!reader) return await resp.arrayBuffer();
+  if(шаг) шаг(0);
+  const куски = []; let принято = 0;
+  for(;;){
+    const {done, value} = await reader.read();
+    if(done) break;
+    куски.push(value); принято += value.length;
+    if(шаг && всего) шаг(принято/всего);
+  }
+  return await new Blob(куски).arrayBuffer();
+}
+// Байты модели режима mp-v1 — только сверенные по отпечатку
+async function smufModelFile(шаг){
+  const м = SMUF_МОДЕЛИ[SMUF_MP_V1];
+  if(!(window.crypto && crypto.subtle)) throw new Error(SMUF_НЕТ_МОДЕЛИ);   // сверить нечем — не используем
+  const годен = async б => !!б && (await smufSha(б)) === м.sha256;
+  if(вОболочке()){
+    // внутри APK: свой файл, без хранилища (копия в CacheStorage была бы вторыми 16 МБ)
+    const б = await smufСкачать(м.файл, шаг);
+    if(await годен(б)) return б;
+    throw new Error(SMUF_НЕТ_МОДЕЛИ);
+  }
+  let c = null; try{ c = await caches.open(SMUF_ХРАНИЛИЩЕ); }catch(_){}
+  if(c){
+    const есть = await c.match(м.файл);
+    if(есть){
+      const б = await есть.arrayBuffer();
+      if(await годен(б)) return б;
+      console.warn('Смуф: сохранённая копия модели не сошлась по отпечатку — удаляю');
+      try{ await c.delete(м.файл); }catch(_){}
+    }
+  }
+  for(const адрес of [м.файл, м.google]){
+    let б = null;
+    try{ б = await smufСкачать(адрес, шаг); }catch(_){ continue; }
+    if(!(await годен(б))){ console.warn('Смуф: файл модели не сошёлся по отпечатку, не используется', адрес); continue; }
+    // в хранилище — только сверенная копия и всегда под нашим адресом
+    if(c){ try{ await c.put(м.файл, new Response(б)); }catch(e){ console.warn('Смуф: модель не сохранилась в память устройства', e); } }
+    return б;
+  }
+  throw new Error(SMUF_НЕТ_МОДЕЛИ);
+}
+// Сегментатор поднимается один раз на сеанс; одновременные вызовы ждут одну загрузку.
+async function smufSegLoad(шаг){
+  if(smufSeg) return smufSeg;
+  if(!smufSegP) smufSegP = (async ()=>{
+    const vision = await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`);
+    const files = await vision.FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`);
+    const буф = await smufModelFile(шаг);
+    const opts = d => ({ baseOptions:{ modelAssetBuffer:new Uint8Array(буф), delegate:d },
+                         runningMode:'IMAGE', outputCategoryMask:false, outputConfidenceMasks:true });
+    let s;
+    try{ s = await vision.ImageSegmenter.createFromOptions(files, opts('GPU')); }
+    catch(_){ s = await vision.ImageSegmenter.createFromOptions(files, opts('CPU')); }
+    smufSeg = s; return s;
+  })();
+  try{ return await smufSegP; }
+  catch(e){ smufSegP = null; throw e; }
+}
+// Нужна ли этим операциям модель «Смуфа»
+function smufНужнаМодель(ops){
+  return (ops||[]).some(o=> o && o.t === 'skin' && o.algoVersion === SMUF_V1 && o.maskMode === SMUF_MP_V1);
+}
+// Перед любым повтором журнала: если операциям нужна модель, поднять её. false — модели нет,
+// повторять нельзя (и журнал при этом не трогаем).
+async function smufГотовКПовтору(ops){
+  if(!smufНужнаМодель(ops) || smufSeg) return true;
+  try{ await smufSegLoad(); return true; }catch(_){ return false; }
+}
+// Для НОВОЙ операции: успела ли модель кожи. Ждём, пока загрузка идёт; если 20 с нет ни
+// одного признака жизни или она сорвалась — эта операция пойдёт по прежней маске, а загрузка
+// спокойно продолжится в фоне для следующего раза. Технических ошибок человек не видит.
+function smufЖдать(шаг){
+  if(!SMUF_MP) return Promise.resolve(false);
+  if(smufSeg) return Promise.resolve(true);
+  let последний = Date.now();
+  const загрузка = smufSegLoad(p=>{ последний = Date.now(); if(шаг) шаг(p); })
+    .then(()=>true, e=>{ console.warn('Смуф: модель кожи недоступна — прежняя маска', e); return false; });
+  const застой = new Promise(res=>{
+    const t = setInterval(()=>{ if(Date.now() - последний > 20000){ clearInterval(t); res(false); } }, 1000);
+    загрузка.then(()=>clearInterval(t));
+  });
+  return Promise.race([загрузка, застой]);
+}
+// Кожа или нет, по пикселю: 1, 0.5 или 0. Сама по себе карта рябая — её размывает skinMap.
+function skinClass(R, G, B, лицоR, лицоG, лицоB, лицоLum){
+  // у кожи красный выше зелёного, зелёный выше синего, и разброс умеренный.
+  // Волосы, брошь, ткань под это не подходят — их не трогаем.
+  if(R>=G && G>=B && R-B>8 && R-B<130 && R>50) return 1;
+  if(R>G && R-B>4 && R-B<160) return 0.5;
+  // Второй заход, уже БЕЗ опоры на теплоту света: пиксель — кожа, если он совпадает
+  // со средним тоном ЭТОГО лица, приведённым к его собственной яркости. Так узнаётся
+  // и кожа на чёрно-белом кадре, и лицо под холодной лампой; волосы, оправа и ткань
+  // от тона лица отличаются сильно и сюда не попадают.
+  const lum = (R+G+B)/3;
+  if(lum > лицоLum*0.35){
+    const k = lum/лицоLum;
+    const откл = Math.abs(R-лицоR*k) + Math.abs(G-лицоG*k) + Math.abs(B-лицоB*k);
+    if(откл < 40) return 1;
+    if(откл < 60) return 0.5;
+  }
+  return 0;
+}
+function skinMap(d, w, h, лицоR, лицоG, лицоB, лицоLum, r){
+  const c = document.createElement('canvas'); c.width=w; c.height=h;
+  const q = c.getContext('2d'), img = q.createImageData(w, h), px = img.data;
+  for(let i=0;i<px.length;i+=4){
+    const v = Math.round(skinClass(d[i], d[i+1], d[i+2], лицоR, лицоG, лицоB, лицоLum) * 255);
+    px[i] = px[i+1] = px[i+2] = v; px[i+3] = 255;
+  }
+  q.putImageData(img, 0, 0);
+  const c2 = document.createElement('canvas'); c2.width=w; c2.height=h;
+  const q2 = c2.getContext('2d'); q2.filter = 'blur(' + r + 'px)'; q2.drawImage(c, 0, 0);
+  const b = q2.getImageData(0, 0, w, h).data, out = new Float32Array(w*h);
+  for(let p=0;p<out.length;p++) out[p] = b[p*4] / 255;
+  return out;
+}
+// Ноздри на маленьком лице — бледные и размытые: по цвету и контрасту их не отличить от
+// пигментного пятна, которое «Кожа» как раз выравнивает, и сглаживание их стирало. Точки
+// лица дают здесь ТОЛЬКО кандидатную область — мягкий круг у каждой ноздри; что внутри
+// защищать, решает skinApply по самой яркости. Промах точек (у младенцев модель лица
+// ставит низ носа ниже, чем он есть) ничего не портит: защиты там просто не будет.
+const SKIN_NOSTRILS = [[97,98,99,240,75,60,79], [326,327,328,460,305,290,309]];
+function skinNostrils(P, bx, by, bw, bh){
+  const a = P(98), b = P(327);
+  if(!a || !b) return null;
+  const нос = Math.hypot(a.x-b.x, a.y-b.y);
+  const map = new Float32Array(bw*bh); let есть = false;
+  for(const набор of SKIN_NOSTRILS){
+    const pts = набор.map(P).filter(Boolean);
+    if(pts.length < 4) continue;
+    const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length - bx, cy = pts.reduce((s,p)=>s+p.y,0)/pts.length - by;
+    let r = 0; pts.forEach(p=>{ r = Math.max(r, Math.hypot(p.x-bx-cx, p.y-by-cy)); });
+    r = Math.max(r*1.3, нос*0.18);
+    for(let y=Math.max(0,Math.floor(cy-r)); y<Math.min(bh,Math.ceil(cy+r)); y++)
+      for(let x=Math.max(0,Math.floor(cx-r)); x<Math.min(bw,Math.ceil(cx+r)); x++){
+        const d = Math.hypot(x-cx, y-cy)/r; if(d >= 1) continue;
+        const u = d < 0.6 ? 1 : (1-d)/0.4, w = u*u*(3-2*u);       // мягкий край, без ступеньки
+        const p = y*bw+x; if(w > map[p]) map[p] = w; есть = true;
+      }
+  }
+  return есть ? map : null;
+}
+// Гладкая поверхность кожи — то, к чему ведёт ползунок на 100 %. Раньше «Кожа» вычитала
+// целую полосу размеров (от пор до 3% лица) и вместе с пятнами стирала мягкие контуры:
+// крыло носа, носогубную складку, веко — лицо уходило в «мыло». А мелкий слой, который
+// оставался целиком, на снимке с телефона почти весь состоит из шума матрицы и JPEG —
+// он проступал поверх выглаженной кожи россыпью цветных точек.
+// Теперь ЯРКОСТЬ и ЦВЕТ ведутся порознь.
+// Яркость — сглаживание с сохранением контуров (guided filter): в окне, где яркость почти
+// не меняется, пиксель уходит к среднему — веснушка и пятно исчезают; где меняется заметно
+// (дисперсия больше eps), он остаётся как был — контур цел, даже мягкий. Мелкую яркостную
+// текстуру (поры) возвращаем на 80 %.
+// Цвет (отклонение канала от яркости) просто усредняется по ~1% лица: пиксель к пикселю
+// цвет кожи не меняется — это шум, а не поры, и именно он давал «грязную» цветную рябь.
+function skinSurface(o, W, H, faceW){
+  const N = W*H, r = Math.max(2, Math.round(faceW*0.02)), rf = Math.max(1, Math.round(faceW*0.006));
+  const rc = Math.max(1, Math.round(faceW*0.01)), eps = 0.0025;
+  const Y = new Float32Array(N), YY = new Float32Array(N);
+  for(let p=0;p<N;p++){ Y[p] = (0.299*o[p*4] + 0.587*o[p*4+1] + 0.114*o[p*4+2]) / 255; YY[p] = Y[p]*Y[p]; }
+  const mY = boxMean(Y, W, H, r), vY = boxMean(YY, W, H, r), fineY = boxMean(Y, W, H, rf);
+  const A = new Float32Array(N), B = new Float32Array(N);
+  for(let p=0;p<N;p++){ const v = vY[p] - mY[p]*mY[p], a = v / (v + eps); A[p] = a; B[p] = mY[p] - a*mY[p]; }
+  const mA = boxMean(A, W, H, r), mB = boxMean(B, W, H, r);
+  const out = new Float32Array(N*3), C = new Float32Array(N);
+  for(let c=0;c<3;c++){
+    for(let p=0;p<N;p++) C[p] = o[p*4+c]/255 - Y[p];
+    const Cs = boxMean(C, W, H, rc);
+    // Поры возвращаем ровно там, где фильтр их снял (1 − mA): на контуре он яркость
+    // не трогал, и добавка сверху давала бы лишнюю резкость — ореолы на ресницах и прядях.
+    for(let p=0;p<N;p++) out[p*3+c] = (mA[p]*Y[p] + mB[p] + (Y[p] - fineY[p])*0.8*(1 - mA[p]) + Cs[p]) * 255;
+  }
+  return out;
+}
+// Где на лице прыщ или покраснение: 0…1. Решение по полосе пятен то же, что в skinApply
+// (краснота есть, и это не тёмная деталь), но карта ПЛАВНАЯ — по отдельному пикселю
+// соседние точки прыгали бы между двумя целями и эффект сам сеял бы крупинки.
+function skinBlemishMap(mid, spot, W, H, faceW){
+  const N = W*H, w = new Float32Array(N);
+  for(let p=0;p<N;p++){
+    const i = p*4;
+    const s0 = mid[i]-spot[i], s1 = mid[i+1]-spot[i+1], s2 = mid[i+2]-spot[i+2];
+    const краснота = s0 - (s1 + s2) / 2, тень = -(s0 + s1 + s2) / 3;
+    if(тень > 20 && тень > краснота * 2) continue;          // тёмная деталь — не прыщ
+    w[p] = Math.min(1, Math.max(0, (краснота - 3) / 6));
+  }
+  // Сглаживание размазывает вес маленького прыща по соседям, и в центре он не доходил
+  // до единицы — гасился слабее прежнего. Поднимаем обратно, не возвращая ступенек.
+  const s = boxMean(w, W, H, Math.max(1, Math.round(faceW*0.008)));
+  for(let p=0;p<N;p++) s[p] = Math.min(1, s[p]*2);
+  return s;
+}
+// Среднее по квадрату (2r+1)² через интегральную картинку; у края окно просто короче.
+function boxMean(a, W, H, r){
+  const S = new Float64Array((W+1)*(H+1));
+  for(let y=0;y<H;y++){ let row = 0; for(let x=0;x<W;x++){ row += a[y*W+x]; S[(y+1)*(W+1)+x+1] = S[y*(W+1)+x+1] + row; } }
+  const out = new Float32Array(W*H);
+  for(let y=0;y<H;y++){
+    const y0 = Math.max(0, y-r), y1 = Math.min(H-1, y+r);
+    for(let x=0;x<W;x++){
+      const x0 = Math.max(0, x-r), x1 = Math.min(W-1, x+r);
+      out[y*W+x] = (S[(y1+1)*(W+1)+x1+1] - S[y0*(W+1)+x1+1] - S[(y1+1)*(W+1)+x0] + S[y0*(W+1)+x0]) / ((x1-x0+1)*(y1-y0+1));
+    }
+  }
+  return out;
+}
+function skinApply(t, cv, zones){
+  cv = cv || rtCanvas; zones = zones || skinData;
+  if(!zones || !t) return;
+  const ctx = cv.getContext('2d');
+  for(const z of zones){
+    const out = ctx.getImageData(z.bx, z.by, z.bw, z.bh), od = out.data;
+    const o = z.orig.data, mid = z.mid, spot = z.spot, m = z.mask, карта = z.кожа, ноздри = z.ноздри, гладь = z.гладь, прыщи = z.прыщи;
+    for(let i=0;i<od.length;i+=4){
+      const a = m[i+3]/255; if(a < 0.02) continue;
+      const кожа = карта[i>>2];                      // плавная, см. skinMap
+      if(кожа < 0.004) continue;
+      let сила = a * кожа * t;
+      // Что под пикселем, узнаём по полосе пятен — от пор до 3% лица. Сама она из кадра
+      // больше не вычитается (см. skinSurface), только решает, сколько сглаживания здесь можно.
+      const s0 = mid[i] -spot[i],  s1 = mid[i+1]-spot[i+1], s2 = mid[i+2]-spot[i+2]; // пятна
+      // Контрастное пятно — обычно настоящий край (крыло носа, прядь, ресница), его
+      // трогать нельзя. Но высыпания тоже контрастные, и защита щадила их наравне с
+      // чертами лица — на коже с прыщами эффект падал вчетверо. Различаем по ЦВЕТУ:
+      // воспаление уходит в красный сильнее, чем в зелёный и синий, а край носа или
+      // ресница так себя не ведут — они меняют яркость, а не оттенок.
+      const край = Math.max(Math.abs(s0), Math.abs(s1), Math.abs(s2));
+      const краснота = s0 - (s1 + s2) / 2;
+      // Но и у тёмной детали красный проседает меньше зелёного и синего: ноздря темнее
+      // кожи на 60–100 уровней и «краснеет» на 10 — и её гасили как прыщ, с усилением,
+      // пока она не выцветала. Воспаление почти не темнее соседей (обычно до 20), у него
+      // оттенок уходит сильнее яркости. Где яркость падает вдвое сильнее, чем растёт
+      // краснота, — это тёмная деталь лица, и её защищает край, как любую черту.
+      const тень = -(s0 + s1 + s2) / 3;
+      const тёмное = тень > 20 && тень > краснота * 2;
+      if(край > 26 && (краснота < 5 || тёмное)) сила *= Math.max(0, 1 - (край-26)/44);
+      else if(краснота > 5 && !тёмное) сила = Math.min(1, сила * 1.35);   // краснота — то, ради чего и идут сюда
+      // В области ноздри (см. skinNostrils) тёмное место, где яркость падает сильнее, чем
+      // растёт краснота, сглаживанию не отдаём — чем темнее, тем меньше. Светлая кожа рядом
+      // и покраснение в той же области обрабатываются как везде.
+      const нз = ноздри ? ноздри[i>>2] : 0;
+      if(нз > 0 && тень > 4 && тень > краснота * 2) сила *= 1 - нз * Math.min(1, (тень - 4) / 16);
+      if(сила < 0.004) continue;
+      const j = (i>>2)*3;                            // пиксель в гладкой поверхности
+      let g0 = гладь[j], g1 = гладь[j+1], g2 = гладь[j+2];
+      // Прыщ для гладкой поверхности — «контур»: у него есть и выпуклость, и яркость, и
+      // фильтр, щадящий контуры, его почти не трогает. Поэтому там, где сама полоса пятен
+      // говорит «покраснение» (и это не тёмная деталь), цель другая — слой БЕЗ пятен (spot)
+      // плюс те же поры, только яркостные. Вес — из плавной карты (см. skinBlemishMap):
+      // ровная кожа, нос, веки и складки, где красноты нет, идут прежней дорогой.
+      const пр = прыщи[i>>2];
+      if(пр > 0){
+        const поры = (o[i] - mid[i] + o[i+1] - mid[i+1] + o[i+2] - mid[i+2]) / 3 * 0.8;
+        g0 += (spot[i]   + поры - g0) * пр;
+        g1 += (spot[i+1] + поры - g1) * пр;
+        g2 += (spot[i+2] + поры - g2) * пр;
+      }
+      od[i]   = clamp(o[i]   + (g0 - o[i])   * сила);
+      od[i+1] = clamp(o[i+1] + (g1 - o[i+1]) * сила);
+      od[i+2] = clamp(o[i+2] + (g2 - o[i+2]) * сила);
+    }
+    ctx.putImageData(out, z.bx, z.by);
+  }
+}
+// ─── СТАРАЯ «КОЖА» v188 — ТОЛЬКО ДЛЯ ПОВТОРА СТАРЫХ ОПЕРАЦИЙ ───
+// Операция skin без algoVersion создана «Кожей» v188 и обязана повторяться ровно ею: своя маска,
+// своя раскладка на полосы (поры | пятна | лепка), свой расчёт. Код перенесён из 13fd70b без
+// единой правки — меняется только имя. Новый «Смуф» (algoVersion 'smuf-v1') сюда не заходит.
+function skinPrepareV188(faces, cv){
   cv = cv || rtCanvas;
   const W = cv.width, H = cv.height, zones = [];
   for(const lms of (faces||[])){
@@ -11447,66 +12053,8 @@ function skinPrepare(faces, cv){
   }
   return zones.length ? zones : null;
 }
-// Кожа или нет, по пикселю: 1, 0.5 или 0. Сама по себе карта рябая — её размывает skinMap.
-function skinClass(R, G, B, лицоR, лицоG, лицоB, лицоLum){
-  // у кожи красный выше зелёного, зелёный выше синего, и разброс умеренный.
-  // Волосы, брошь, ткань под это не подходят — их не трогаем.
-  if(R>=G && G>=B && R-B>8 && R-B<130 && R>50) return 1;
-  if(R>G && R-B>4 && R-B<160) return 0.5;
-  // Второй заход, уже БЕЗ опоры на теплоту света: пиксель — кожа, если он совпадает
-  // со средним тоном ЭТОГО лица, приведённым к его собственной яркости. Так узнаётся
-  // и кожа на чёрно-белом кадре, и лицо под холодной лампой; волосы, оправа и ткань
-  // от тона лица отличаются сильно и сюда не попадают.
-  const lum = (R+G+B)/3;
-  if(lum > лицоLum*0.35){
-    const k = lum/лицоLum;
-    const откл = Math.abs(R-лицоR*k) + Math.abs(G-лицоG*k) + Math.abs(B-лицоB*k);
-    if(откл < 40) return 1;
-    if(откл < 60) return 0.5;
-  }
-  return 0;
-}
-function skinMap(d, w, h, лицоR, лицоG, лицоB, лицоLum, r){
-  const c = document.createElement('canvas'); c.width=w; c.height=h;
-  const q = c.getContext('2d'), img = q.createImageData(w, h), px = img.data;
-  for(let i=0;i<px.length;i+=4){
-    const v = Math.round(skinClass(d[i], d[i+1], d[i+2], лицоR, лицоG, лицоB, лицоLum) * 255);
-    px[i] = px[i+1] = px[i+2] = v; px[i+3] = 255;
-  }
-  q.putImageData(img, 0, 0);
-  const c2 = document.createElement('canvas'); c2.width=w; c2.height=h;
-  const q2 = c2.getContext('2d'); q2.filter = 'blur(' + r + 'px)'; q2.drawImage(c, 0, 0);
-  const b = q2.getImageData(0, 0, w, h).data, out = new Float32Array(w*h);
-  for(let p=0;p<out.length;p++) out[p] = b[p*4] / 255;
-  return out;
-}
-// Ноздри на маленьком лице — бледные и размытые: по цвету и контрасту их не отличить от
-// пигментного пятна, которое «Кожа» как раз выравнивает, и сглаживание их стирало. Точки
-// лица дают здесь ТОЛЬКО кандидатную область — мягкий круг у каждой ноздри; что внутри
-// защищать, решает skinApply по самой яркости. Промах точек (у младенцев модель лица
-// ставит низ носа ниже, чем он есть) ничего не портит: защиты там просто не будет.
-const SKIN_NOSTRILS = [[97,98,99,240,75,60,79], [326,327,328,460,305,290,309]];
-function skinNostrils(P, bx, by, bw, bh){
-  const a = P(98), b = P(327);
-  if(!a || !b) return null;
-  const нос = Math.hypot(a.x-b.x, a.y-b.y);
-  const map = new Float32Array(bw*bh); let есть = false;
-  for(const набор of SKIN_NOSTRILS){
-    const pts = набор.map(P).filter(Boolean);
-    if(pts.length < 4) continue;
-    const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length - bx, cy = pts.reduce((s,p)=>s+p.y,0)/pts.length - by;
-    let r = 0; pts.forEach(p=>{ r = Math.max(r, Math.hypot(p.x-bx-cx, p.y-by-cy)); });
-    r = Math.max(r*1.3, нос*0.18);
-    for(let y=Math.max(0,Math.floor(cy-r)); y<Math.min(bh,Math.ceil(cy+r)); y++)
-      for(let x=Math.max(0,Math.floor(cx-r)); x<Math.min(bw,Math.ceil(cx+r)); x++){
-        const d = Math.hypot(x-cx, y-cy)/r; if(d >= 1) continue;
-        const u = d < 0.6 ? 1 : (1-d)/0.4, w = u*u*(3-2*u);       // мягкий край, без ступеньки
-        const p = y*bw+x; if(w > map[p]) map[p] = w; есть = true;
-      }
-  }
-  return есть ? map : null;
-}
-function skinApply(t, cv, zones){
+
+function skinApplyV188(t, cv, zones){
   cv = cv || rtCanvas; zones = zones || skinData;
   if(!zones || !t) return;
   const ctx = cv.getContext('2d');
@@ -11556,9 +12104,15 @@ function skinApply(t, cv, zones){
     ctx.putImageData(out, z.bx, z.by);
   }
 }
-function skinRun(cv, faces, amount){
+// Повтор одной операции — тем же алгоритмом, в той же маске и с теми же соседями, что на превью
+function skinRun(cv, faces, amount, maskMode, others, algoVersion){
   if(!faces || !faces.length || !amount) return;
-  const z = skinPrepare(faces, cv);
+  if((algoVersion || SKIN_V188) === SKIN_V188){
+    const z = skinPrepareV188(faces, cv);
+    if(z) skinApplyV188(amount, cv, z);
+    return;
+  }
+  const z = skinPrepare(faces, cv, maskMode || SMUF_LEGACY, others);
   if(z) skinApply(amount, cv, z);
 }
 
@@ -12675,7 +13229,7 @@ function bagsПоказатьВсё(){
   тx.globalCompositeOperation = 'destination-in';
   тx.drawImage(bagsМаска, 0, 0);
   c.drawImage(т, 0, 0);
-  for(const op of bagsПоздние) replayOp(rtCanvas, op);
+  replayOps(rtCanvas, bagsПоздние);
 }
 // Один отпечаток кисти: мажем в маску и тут же проявляем эффект в этом месте
 function bagsОтпечаток(x, y, R, стереть){
@@ -12782,7 +13336,7 @@ function bagsПоказатьАвто(сила){
   if(bagsПоздние.length && bagsОриг) c.drawImage(bagsОриг, 0, 0);
   else if(bagsData) for(const з of bagsData.regs) c.putImageData(з.orig, з.bx, з.by);
   if(сила) bagsApply(сила);
-  for(const op of bagsПоздние) replayOp(rtCanvas, op);
+  replayOps(rtCanvas, bagsПоздние);
 }
 // Уход из инструмента / «Применить» в режиме кисти: отпечатки рисуются без поздних операций,
 // перед выходом дорисовываем их, чтобы холст был в экспортном порядке.
@@ -12792,6 +13346,18 @@ function bagsЗавершитьХолст(){
 async function bagsEnter(){
   const slider = document.getElementById('rtBags'), top = document.getElementById('rtTop');
   slider.value = 0; document.getElementById('rtBagsV').textContent = '0'; slider.disabled = true;
+  // Консилер дорисовывает поверх себя поздние операции сеанса, в том числе «Смуф». Если его
+  // правке нужна модель, а её нет — не повторяем её запасной маской: пытаемся поднять модель,
+  // не вышло — честно говорим, и ничего в журнале не меняем. Появится модель — зайти снова.
+  if(smufНужнаМодель(rtSessionOps()) && !smufSeg){
+    top.textContent = 'Загружаю модель Смуфа…';
+    if(!(await smufГотовКПовтору(rtSessionOps()))){
+      if(rtTool === 'bags') top.textContent = 'Для правки «Смуфа» нужна его модель — подключитесь к интернету';
+      return;
+    }
+    if(rtTool !== 'bags') return;
+    top.textContent = 'Консилер';
+  }
   bagsПересобратьПревью();     // холст в экспортном порядке: без своей прошлой правки, поздние — поверх
   bagsData = null; rtBagsOp = null;
   if(bagsBusy) return; bagsBusy = true;
@@ -14120,7 +14686,18 @@ document.getElementById('rtSprinkle').oninput = e=>{
   bokehDraw();
 };
 
-// ─── «Кожа» ───
+// ─── «Смуф» (внутреннее имя — skin) ───
+// Режим маски для НОВЫХ операций этого захода в инструмент: 'mp-v1', если модель кожи успела,
+// иначе 'legacy-v188'. У каждого лица он запоминается вместе с его зонами и уходит в операцию.
+let smufРежим = SMUF_LEGACY;
+// ВСЕ ЛИЦА ОДНОГО ЗАХОДА — ОДНА ПАРТИЯ. Зоны каждого лица готовятся с одного и того же холста
+// (снимок при входе), а накладываются по порядку лиц; экспорт делает ровно то же (см.
+// smufПовторитьПартию). Раньше второе лицо готовилось то с чистого холста, то с уже
+// сглаженным соседом, а возврат одного лица к исходнику стирал сглаживание другого в своей
+// рамке — на стыке соприкасающихся лиц превью и файл расходились.
+// Операции прошлых заходов в этом сеансе ретуши (smufПрежние) остаются в журнале как были:
+// их след уже на холсте, и экспорт обязан их повторить.
+let smufБаза = null, smufПартия = 0, smufПрежние = [];
 async function skinEnter(){
   const slider = document.getElementById('rtSkin'), top = document.getElementById('rtTop');
   slider.value = 0; document.getElementById('rtSkinV').textContent = '0'; slider.disabled = true;
@@ -14128,18 +14705,30 @@ async function skinEnter(){
   if(bagsBusy) return; bagsBusy = true;
   try{
     top.textContent = bagsKit ? 'Ищу лицо…' : 'Загружаю модель…';
+    // Модель кожи грузится ПАРАЛЛЕЛЬНО с поиском лица и интерфейс не держит: на сайте в
+    // первый раз показываем процент, в приложении файл свой и поднимается за доли секунды.
+    let грузится = false;
+    const mpГотов = smufЖдать(p=>{ if(rtTool === 'skin' && p >= 0){ грузится = true;
+                                     top.textContent = 'Загружаю Смуф… ' + Math.round(p*100) + ' %'; } });
     const kit = await loadFaceKit();
     if(rtTool !== 'skin'){ bagsBusy = false; return; }
-    top.textContent = 'Ищу лицо…';
+    if(!грузится) top.textContent = 'Ищу лицо…';
     const faces = лицаНайти(kit, rtCanvas);
     rtFaces = faces;
     rtFaceSel = faces.length ? biggestFace(faces, rtCanvas.width, rtCanvas.height) : 0;
     for(const k in skinFace) delete skinFace[k];
-    skinData = faces.length ? skinPrepare([faces[rtFaceSel]]) : null;
+    smufПрежние = rtSkinOp ? rtSkinOp.slice() : [];
+    smufПартия++;
+    smufБаза = document.createElement('canvas'); smufБаза.width = rtCanvas.width; smufБаза.height = rtCanvas.height;
+    smufБаза.getContext('2d').drawImage(rtCanvas, 0, 0);
+    if(!faces.length){ top.textContent = 'Лицо не найдено'; bagsBusy = false; return; }
+    if(!грузится) top.textContent = 'Готовлю Смуф…';
+    smufРежим = (await mpГотов) ? SMUF_MP_V1 : SMUF_LEGACY;
+    if(rtTool !== 'skin'){ bagsBusy = false; return; }
+    skinData = smufЛицо(rtFaceSel).зоны;
     if(!skinData){ top.textContent = 'Лицо не найдено'; bagsBusy = false; return; }
-    skinFace[rtFaceSel] = { сила:0, зоны:skinData };
     if(rtTool !== 'skin'){ bagsBusy = false; return; }    // то же: инструмент уже другой
-    top.textContent = 'Кожа';
+    top.textContent = 'Смуф';
     slider.disabled = false;
     rtDrawFaces(skinPickFace);
     rtFacesHint(faces.length, 'чью кожу сглаживать');
@@ -14148,22 +14737,34 @@ async function skinEnter(){
   }
   bagsBusy = false;
 }
-function skinRestore(){                       // вернуть ТЕКУЩЕЕ лицо к тому, что было до сглаживания
-  if(!skinData) return;
+// Зоны лица i в режиме этого захода; режим и соседи запоминаются вместе с зонами
+function smufЛицо(i){
+  const соседи = smufСоседи(rtFaces, i);
+  const зоны = skinPrepare([rtFaces[i]], smufБаза, smufРежим, соседи);
+  skinFace[i] = { сила:0, зоны, режим:smufРежим, соседи };
+  return skinFace[i];
+}
+// Показать партию: под всеми её лицами — снимок при входе (все z.orig сняты с него), поверх —
+// каждое лицо со своей силой, по порядку. Так же её повторит экспорт.
+function smufПоказать(){
   const ctx = rtCanvas.getContext('2d');
-  for(const z of skinData) ctx.putImageData(z.orig, z.bx, z.by);
+  const лица = Object.keys(skinFace).filter(k=> skinFace[k].зоны);
+  for(const k of лица) for(const z of skinFace[k].зоны) ctx.putImageData(z.orig, z.bx, z.by);
+  for(const k of лица) if(skinFace[k].сила > 0) skinApply(skinFace[k].сила/100, rtCanvas, skinFace[k].зоны);
 }
 // У КАЖДОГО лица своя настройка. На семейной съёмке сглаживать надо всем, и почти
 // всегда по-разному; раньше переход к соседу снимал правку с предыдущего — человек
 // терял работу одним касанием. Зоны тоже держим на лицо: пересобирать их заново при
 // каждом переключении и долго, и незачем.
-const skinFace = {};                           // индекс лица → { сила, зоны }
+const skinFace = {};                           // индекс лица → { сила, зоны, режим, соседи }
 function skinFaceAmount(i){ return skinFace[i] ? skinFace[i].сила : 0; }
-// В историю кадра уходят ВСЕ лица, которым что-то выставлено
+// В историю кадра уходят ВСЕ лица, которым что-то выставлено — с режимом маски и соседями,
+// в которых их видели на превью: экспорт повторит ровно это
 function skinCollectOps(){
-  rtSkinOp = Object.keys(skinFace)
+  rtSkinOp = smufПрежние.concat(Object.keys(skinFace)
     .filter(k=> skinFace[k].сила > 0 && rtFaces[k])
-    .map(k=> ({ t:'skin', faces:[rtFaces[k]], amount:skinFace[k].сила/100 }));
+    .map(k=> ({ t:'skin', faces:[rtFaces[k]], amount:skinFace[k].сила/100, algoVersion:SMUF_V1,
+                maskMode:skinFace[k].режим || SMUF_LEGACY, others:skinFace[k].соседи || [], партия:smufПартия })));
   if(!rtSkinOp.length) rtSkinOp = null;
 }
 function skinPickFace(){
@@ -14175,13 +14776,10 @@ function skinPickFace(){
   const v = +document.getElementById('rtSkin').value;
   const s = skinFace[rtFaceSel];
   if(s && s.зоны) skinData = s.зоны;
-  else { skinData = skinPrepare([rtFaces[rtFaceSel]]);
-         skinFace[rtFaceSel] = { сила:0, зоны:skinData }; }
+  else skinData = smufЛицо(rtFaceSel).зоны;
   if(v && skinData){
-    skinRestore();                             // база — исходные пиксели ЭТОГО лица
-    skinApply(v/100);
     skinFace[rtFaceSel].сила = v;
-    skinFace[rtFaceSel].зоны = skinData;
+    smufПоказать();
     skinCollectOps();
   }
   document.getElementById('rtSkinV').textContent = v;
@@ -14191,13 +14789,12 @@ document.getElementById('rtSkin').oninput = e=>{
   rtCmpOff();
   const v = +e.target.value;
   document.getElementById('rtSkinV').textContent = v;
-  // база — всегда исходный кадр ЭТОГО лица: иначе сглаживание накладывалось бы само
-  // на себя при каждом движении ползунка и за пару секунд дало бы пластик
-  skinRestore();
-  skinApply(v/100);
-  if(!skinFace[rtFaceSel]) skinFace[rtFaceSel] = { зоны:skinData };
+  // база — всегда снимок при входе: иначе сглаживание накладывалось бы само на себя при
+  // каждом движении ползунка и за пару секунд дало бы пластик
+  if(!skinFace[rtFaceSel]) skinFace[rtFaceSel] = { зоны:skinData, режим:smufРежим, соседи:smufСоседи(rtFaces, rtFaceSel) };
   skinFace[rtFaceSel].сила = v;
   skinFace[rtFaceSel].зоны = skinData;
+  smufПоказать();
   skinCollectOps();
   rtDrawFaces(skinPickFace);
 };
