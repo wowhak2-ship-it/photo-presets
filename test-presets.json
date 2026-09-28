@@ -1,0 +1,269 @@
+{
+ "schemaVersion": 1,
+ "revision": 1,
+ "updatedAt": "2026-09-29",
+ "presets": [
+  {
+   "id": "test-warm-v1",
+   "name": "Тёплый TEST",
+   "temp": 5,
+   "tint": -1,
+   "contrast": 0.04,
+   "fade": 0,
+   "shadowsLift": 0.06,
+   "highlightsRoll": 0.12,
+   "shSplit": [
+    2,
+    1,
+    -1
+   ],
+   "hiSplit": [
+    8,
+    5,
+    -4
+   ],
+   "vibrance": 0.03,
+   "vibFloor": 0.08,
+   "saturation": 0.97,
+   "vignette": 0.04,
+   "grain": 0.02,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      8
+     ],
+     [
+      60,
+      60
+     ],
+     [
+      128,
+      130
+     ],
+     [
+      200,
+      204
+     ],
+     [
+      255,
+      246
+     ]
+    ],
+    "r": [
+     [
+      0,
+      4
+     ],
+     [
+      128,
+      131
+     ],
+     [
+      255,
+      252
+     ]
+    ],
+    "b": [
+     [
+      0,
+      10
+     ],
+     [
+      128,
+      125
+     ],
+     [
+      255,
+      250
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -6
+    },
+    "orange": {
+     "hue": -3,
+     "sat": -12,
+     "lum": 6
+    },
+    "yellow": {
+     "hue": -8,
+     "sat": -20,
+     "lum": 2
+    },
+    "green": {
+     "hue": -10,
+     "sat": -28,
+     "lum": -4
+    },
+    "aqua": {
+     "sat": -22
+    },
+    "blue": {
+     "sat": -18
+    }
+   }
+  },
+  {
+   "id": "test-beige-v1",
+   "name": "Бежевый TEST",
+   "temp": 3,
+   "tint": -1,
+   "contrast": 0.02,
+   "fade": 0.01,
+   "shadowsLift": 0.06,
+   "highlightsRoll": 0.1,
+   "shSplit": [
+    3,
+    2,
+    0
+   ],
+   "hiSplit": [
+    5,
+    4,
+    -2
+   ],
+   "vibrance": 0.03,
+   "vibFloor": 0.08,
+   "saturation": 0.88,
+   "vignette": 0.03,
+   "grain": 0.02,
+   "adaptDR": true,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      10
+     ],
+     [
+      64,
+      66
+     ],
+     [
+      128,
+      133
+     ],
+     [
+      200,
+      206
+     ],
+     [
+      255,
+      246
+     ]
+    ],
+    "b": [
+     [
+      0,
+      10
+     ],
+     [
+      128,
+      126
+     ],
+     [
+      255,
+      242
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -10
+    },
+    "orange": {
+     "hue": -3,
+     "sat": -6,
+     "lum": 8
+    },
+    "yellow": {
+     "hue": -6,
+     "sat": -22,
+     "lum": 6
+    },
+    "green": {
+     "hue": -8,
+     "sat": -35,
+     "lum": 4
+    },
+    "aqua": {
+     "sat": -35
+    },
+    "blue": {
+     "sat": -35,
+     "lum": 6
+    }
+   }
+  },
+  {
+   "id": "test-natural-v1",
+   "name": "Натуральный TEST",
+   "temp": 3,
+   "tint": 0,
+   "contrast": 0.04,
+   "fade": 0,
+   "shadowsLift": 0.03,
+   "highlightsRoll": 0.06,
+   "shSplit": [
+    0,
+    0,
+    0
+   ],
+   "hiSplit": [
+    3,
+    2,
+    -2
+   ],
+   "vibrance": 0.04,
+   "vibFloor": 0.08,
+   "saturation": 0.97,
+   "vignette": 0,
+   "grain": 0,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      4
+     ],
+     [
+      64,
+      62
+     ],
+     [
+      128,
+      129
+     ],
+     [
+      192,
+      196
+     ],
+     [
+      255,
+      250
+     ]
+    ]
+   },
+   "hsl": {
+    "orange": {
+     "sat": -5,
+     "lum": 4
+    },
+    "yellow": {
+     "sat": -8
+    },
+    "green": {
+     "hue": -4,
+     "sat": -10
+    },
+    "aqua": {
+     "sat": -8
+    },
+    "blue": {
+     "sat": -6
+    }
+   }
+  }
+ ]
+}
