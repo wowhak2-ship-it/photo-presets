@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 2,
- "updatedAt": "2026-09-28T21:28",
+ "revision": 3,
+ "updatedAt": "2026-09-29T20:26",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -262,6 +262,241 @@
     },
     "blue": {
      "sat": -6
+    }
+   }
+  },
+  {
+   "id": "test-moody-family-v1",
+   "name": "Moody Family TEST",
+   "temp": 3,
+   "tint": -1,
+   "contrast": 0.06,
+   "fade": 0.02,
+   "shadowsLift": 0.04,
+   "highlightsRoll": 0.14,
+   "shSplit": [
+    -2,
+    0,
+    3
+   ],
+   "hiSplit": [
+    6,
+    4,
+    -2
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.08,
+   "saturation": 0.92,
+   "vignette": 0.1,
+   "grain": 0.04,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      10
+     ],
+     [
+      48,
+      40
+     ],
+     [
+      128,
+      114
+     ],
+     [
+      200,
+      194
+     ],
+     [
+      255,
+      242
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -4
+    },
+    "orange": {
+     "sat": -6,
+     "lum": 6
+    },
+    "yellow": {
+     "hue": -6,
+     "sat": -35,
+     "lum": -8
+    },
+    "green": {
+     "hue": -10,
+     "sat": -45,
+     "lum": -14
+    },
+    "aqua": {
+     "sat": -35,
+     "lum": -8
+    },
+    "blue": {
+     "sat": -24,
+     "lum": -6
+    }
+   }
+  },
+  {
+   "id": "test-golden-family-v1",
+   "name": "Golden Family TEST",
+   "temp": 6,
+   "tint": -1,
+   "contrast": 0.02,
+   "fade": 0.01,
+   "shadowsLift": 0.06,
+   "highlightsRoll": 0.15,
+   "shSplit": [
+    3,
+    2,
+    -1
+   ],
+   "hiSplit": [
+    12,
+    8,
+    -4
+   ],
+   "vibrance": 0.02,
+   "vibFloor": 0.08,
+   "saturation": 0.98,
+   "vignette": 0.04,
+   "grain": 0.03,
+   "bloom": 0.04,
+   "bloomWarm": true,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      6
+     ],
+     [
+      64,
+      68
+     ],
+     [
+      128,
+      136
+     ],
+     [
+      200,
+      206
+     ],
+     [
+      255,
+      246
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -6
+    },
+    "orange": {
+     "hue": -3,
+     "sat": -14,
+     "lum": 8
+    },
+    "yellow": {
+     "hue": -4,
+     "sat": -22,
+     "lum": 4
+    },
+    "green": {
+     "hue": -8,
+     "sat": -25,
+     "lum": 2
+    },
+    "aqua": {
+     "sat": -24
+    },
+    "blue": {
+     "sat": -20,
+     "lum": 4
+    }
+   }
+  },
+  {
+   "id": "test-moody-portrait-v1",
+   "name": "Moody Portrait TEST",
+   "temp": 3,
+   "tint": 0,
+   "contrast": 0.08,
+   "fade": 0.01,
+   "shadowsLift": 0.03,
+   "highlightsRoll": 0.12,
+   "shSplit": [
+    0,
+    0,
+    2
+   ],
+   "hiSplit": [
+    4,
+    2,
+    -2
+   ],
+   "vibrance": 0.02,
+   "vibFloor": 0.08,
+   "saturation": 0.94,
+   "vignette": 0.18,
+   "grain": 0.03,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      6
+     ],
+     [
+      56,
+      44
+     ],
+     [
+      128,
+      120
+     ],
+     [
+      200,
+      200
+     ],
+     [
+      255,
+      244
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "hue": -2,
+     "sat": 12,
+     "lum": -6
+    },
+    "orange": {
+     "hue": -2,
+     "sat": -8,
+     "lum": 6
+    },
+    "yellow": {
+     "sat": -30,
+     "lum": -6
+    },
+    "green": {
+     "hue": -12,
+     "sat": -45,
+     "lum": -16
+    },
+    "aqua": {
+     "sat": -35,
+     "lum": -10
+    },
+    "blue": {
+     "sat": -30,
+     "lum": -8
+    },
+    "magenta": {
+     "sat": 6
     }
    }
   }
