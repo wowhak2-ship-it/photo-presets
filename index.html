@@ -1687,7 +1687,7 @@
   .ht.htn i{font-size:11px;}
   /* Планшет: две карточки в ряд, третий ряд занимают компактные кнопки. */
   @media (min-width:700px){
-    .home-hero{grid-template-columns:repeat(2, 1fr); gap:14px;}
+    .home-hero{grid-template-columns:repeat(3, 1fr); gap:14px;}   /* три главных кожи — одним рядом */
     .home-nav{grid-template-columns:repeat(2, 1fr);}
     .ht.hti b{font-size:16px;}
     .home-tools{grid-template-columns:repeat(4, 1fr); gap:10px;}
@@ -1778,14 +1778,25 @@
      второй карточки приходилось листать. */
   @media (max-width:768px){
     #home{padding-left:16px; padding-right:16px;}
-    .home-hero{grid-template-columns:1fr; gap:11px;}
-    .ht.hti .hti-ph{aspect-ratio:auto; height:180px;}
-    .ht.hti b{font-size:15px;}
-    .home-tools{grid-template-columns:repeat(2, 1fr); gap:9px;}
-    /* 84 px — это и «компактно», и палец попадает: меньше 44 px тут не бывает ничего. */
-    .home-tools .ht{min-height:84px; padding:12px 12px 11px; border-radius:12px;}
-    .home-tools .ht b{font-size:12.5px;}
-    .home-tools .ht i{font-size:10px;}
+    /* Прототип 2: три главных инструмента кожи — стоячими кадрами в один ряд, а не
+       стеной во всю ширину. Значок в кадре прячем: на трети ширины он съедает подпись. */
+    .home-hero{grid-template-columns:repeat(3, minmax(0,1fr)); gap:9px;}
+    .ht.hti .hti-ph{aspect-ratio:auto; height:150px;}
+    .ht.hti svg{display:none;}
+    /* «После» и разделитель догружаются позже подписи и ложились поверх неё: на трети
+       ширины подпись длиннее левой половины. Подпись и затемнение — над кадром. */
+    .ht.hti .hti-sh{z-index:1;} .ht.hti .hti-tx{z-index:2;}
+    .hti-tx{left:9px; right:8px; bottom:9px;}
+    .ht.hti b{font-size:13px;}
+    .ht.hti i{font-size:10px; line-height:1.25;}
+    .hti-div i{width:24px; height:24px; margin:-12px 0 0 -12px; line-height:22px; font-size:9px;}
+    /* Группы — компактной сеткой по три: всё видно разом, без стены карточек.
+       76 px — и компактно, и палец попадает (меньше 44 px тут не бывает ничего). */
+    .home-tools{grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px;}
+    .home-tools .ht{min-height:76px; padding:11px 10px 10px; border-radius:12px;}
+    .home-tools .ht svg{width:19px; height:19px; margin-bottom:5px;}
+    .home-tools .ht b{font-size:12px;}
+    .home-tools .ht i{font-size:9.5px;}
     .home-nav{grid-template-columns:1fr;}
     .ht.htn{min-height:64px;}
     .home-sect{padding:12px 0 8px;}
@@ -1793,6 +1804,7 @@
        поэтому доводим и шестерёнку, и пару «выбрать фото / снять». */
     #home .icon-btn{width:44px; height:44px;}
     .home-actions .ghost-btn, .home-actions .solid-btn{min-height:46px;}
+    .ghost-btn.hph-btn{min-height:44px;}
   }
 
   .home-actions{display:flex; gap:10px; align-items:center; padding:4px 0 12px;}
@@ -1807,6 +1819,70 @@
   .solid-btn{padding:14px 22px; border-radius:999px; border:0; background:var(--gold);
     color:var(--gold-ink); font-size:11px; font-weight:700; letter-spacing:.14em; cursor:pointer;}
   .ghost-btn:active,.solid-btn:active{transform:scale(.97);}
+
+  /* ─── Главная, прототип иерархии: кадр → ПРЕСЕТЫ → инструменты ───
+     Строка кадра — вторичная: маленькая миниатюра и две контурные кнопки. Золото на
+     экране остаётся только у пресетов, чтобы глаз шёл туда первым. */
+  /* flex-shrink:0 — #home это прокручиваемая flex-колонка: блок с overflow:hidden/auto
+     в ней иначе сжимается до нуля (минимальная высота у таких элементов нулевая). */
+  .home-photo, .home-presets, .home-styles{flex-shrink:0;}
+  .home-photo{display:flex; align-items:center; gap:10px; min-width:0;}
+  .home-photo .ht-thumb{border-radius:3px;}
+  .hph-tx{flex:1 1 auto; min-width:0; display:flex; flex-direction:column;}
+  .hph-tx b{font-size:12.5px; font-weight:600; color:var(--dim); white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;}
+  .ghost-btn.hph-btn{flex:0 0 auto; padding:0 14px; min-height:40px; font-size:10px;
+    letter-spacing:.14em; color:var(--dim); white-space:nowrap;}
+  /* Блок «Пресеты» — главный элемент экрана: крупный кадр в плёнке, золотая рамка
+     и единственная сплошная золотая кнопка. Спокойно, без баннерной яркости. */
+  .home-presets{display:block; width:100%; padding:0; margin:2px 0 0; text-align:left;
+    border-radius:18px; overflow:hidden; cursor:pointer; color:var(--text);
+    border:1px solid rgba(224,162,74,.42); background:#15110B;
+    box-shadow:0 0 0 1px rgba(224,162,74,.08), 0 18px 40px -18px rgba(224,162,74,.28);}
+  .home-presets:active{transform:scale(.99);}
+  .hp-frame{position:relative; display:block; width:100%; height:230px; overflow:hidden; background:var(--panel);}
+  .hp-frame canvas{position:absolute; inset:0; width:100%; height:100%; display:block;}
+  #hpAfter{clip-path:inset(0 0 0 50%);}
+  .hp-div{position:absolute; top:0; bottom:0; left:50%; width:1.5px; margin-left:-.75px;
+    background:var(--gold); box-shadow:0 0 10px rgba(0,0,0,.55);}
+  /* Имя плёнки — как маркировка по краю негатива: моноширинно, мелко, золотом. */
+  .hp-mark{position:absolute; right:10px; top:10px; padding:4px 8px; border-radius:3px;
+    font-family:var(--mono); font-size:9.5px; letter-spacing:.16em; color:var(--gold);
+    background:rgba(10,9,8,.62); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);}
+  .hp-mark:empty{display:none;}
+  .hp-tx{display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:14px 16px 16px;}
+  .hp-eye{font-family:var(--mono); font-size:10px; letter-spacing:.28em; color:var(--gold);}
+  .hp-tx b{font-size:19px; font-weight:600; line-height:1.25; letter-spacing:-.01em;}
+  /* flex + center: надпись по центру по вертикали при любой высоте кнопки (с одним
+     padding она садилась к верху — строка ниже минимальной высоты 48 px). */
+  .hp-go{margin-top:6px; align-self:stretch; display:flex; align-items:center; justify-content:center;
+    text-align:center; padding:0 18px; min-height:48px; line-height:1.2;
+    border-radius:999px; background:var(--gold); color:var(--gold-ink);
+    font-size:11.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;}
+  /* «Попробовать стиль»: лента своих же плёнок. Прокручивается сама лента, а не
+     страница, поэтому вбок экран не таскается. */
+  .home-styles{display:flex; gap:9px; overflow-x:auto; overscroll-behavior-x:contain;
+    scrollbar-width:none; margin:0 -16px; padding:0 16px 4px; scroll-padding:0 16px;}
+  .home-styles::-webkit-scrollbar{display:none;}
+  .hs-card{flex:0 0 76px; display:flex; flex-direction:column; gap:6px; padding:0; border:0;
+    background:transparent; color:var(--text); cursor:pointer; text-align:left;}
+  .hs-card canvas, .hs-all{display:block; width:76px; height:100px; border-radius:6px;
+    box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;}
+  .hs-card span{font-size:10.5px; line-height:1.2; color:var(--dim); white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;}
+  .hs-all{display:flex; align-items:center; justify-content:center; border:1px solid var(--line);
+    font-family:var(--mono); font-size:10px; letter-spacing:.14em; color:var(--gold);}
+  .hs-card:active{transform:scale(.96);}
+  @media (prefers-reduced-motion:reduce){ .home-presets:active, .hs-card:active{transform:none;} }
+  @media (min-width:700px){ .hp-frame{height:300px;} .home-styles{margin:0; padding:0 0 4px;} }
+  /* Узкий телефон: подпись «Ваш кадр» не влезает рядом с двумя кнопками — убираем её
+     (миниатюра и так показывает кадр), кнопки делят строку. */
+  @media (max-width:350px){ .hph-tx{display:none;} .ghost-btn.hph-btn{flex:1 1 0; padding:0 8px;}
+    /* Главные карточки кожи шириной ~90 px: «автоматическая» одним словом не влезает —
+       оставляем только названия. */
+    .ht.hti i{display:none;}
+    /* Compact tiles ~91 px wide: «Кадрировать» at 12px (80 px) ran into the tile edge. */
+    .home-tools .ht{padding-left:7px; padding-right:7px;} .home-tools .ht b{font-size:11px;} }
 
   /* iOS install hint (только Safari на iPhone/iPad, вне установленного приложения) */
   .ios-hint{display:flex; align-items:center; gap:12px; padding:12px 12px;
@@ -1892,20 +1968,37 @@
     <button class="ih-x" id="iosHintX" aria-label="Скрыть">✕</button>
   </div>
 
-  <!-- Контактный лист переехал за карточку «Пресеты». С двумя десятками видов он
-       занимал целый экран, и до инструментов приходилось долистывать. -->
-  <button class="ht ht-wide" id="homeLooksBtn">
-    <!-- Кадр прямо в карточке: после переезда листа на свой экран главная перестала
-         показывать, какое фото вообще открыто. -->
+  <!-- ИЕРАРХИЯ ГЛАВНОЙ (прототип): кадр → пресеты → инструменты. Главная ценность
+       приложения — пресеты, поэтому крупный блок и единственная золотая кнопка экрана
+       у них. Смена фото и съёмка — вторичные действия, компактной строкой над ним. -->
+  <div class="home-photo">
+    <!-- Кадр прямо в строке: главная должна показывать, какое фото сейчас открыто. -->
     <span class="ht-thumb"><canvas id="homeThumb"></canvas></span>
-    <span class="ht-tx"><b>Пресеты</b><i id="homeLooksN">все виды на вашем кадре</i></span>
-    <svg class="ht-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    <span class="hph-tx"><b>Ваш кадр</b></span>
+    <button class="ghost-btn hph-btn" id="homePick">ДРУГОЕ ФОТО</button>
+    <button class="ghost-btn hph-btn" id="homeCam">СНЯТЬ</button>
+  </div>
+
+  <!-- Контактный лист живёт за этим блоком (openLooks). Сам блок — ваш кадр крупно:
+       левая половина как есть, правая — в настоящей плёнке, тем же движком, что лента. -->
+  <button class="home-presets" id="homeLooksBtn">
+    <span class="hp-frame" id="hpFrame">
+      <canvas id="hpBefore"></canvas>
+      <canvas id="hpAfter"></canvas>
+      <span class="hp-div"></span>
+      <span class="hp-mark" id="hpMark"></span>
+    </span>
+    <span class="hp-tx">
+      <span class="hp-eye">ПРЕСЕТЫ</span>
+      <b id="homeLooksN">Готовые стили для вашего кадра</b>
+      <span class="hp-go">Открыть пресеты</span>
+    </span>
   </button>
 
-  <div class="home-actions">
-    <button class="ghost-btn" id="homePick">ВЫБРАТЬ ДРУГОЕ ФОТО</button>
-    <button class="solid-btn" id="homeCam">СНЯТЬ</button>
-  </div>
+  <!-- Быстрый вход: несколько встроенных плёнок на вашем кадре. Нажатие — тот же путь,
+       что у кадра контактного листа: выбрать вид и открыть редактор. -->
+  <div class="home-sect"><b>Попробовать стиль</b><i>на вашем кадре</i></div>
+  <div class="home-styles" id="homeStyles"></div>
 
   <!-- Инструменты живут ЗДЕСЬ, а не в редакторе. Пока они прятались в панели
        под фото, фотограф их просто не находил: чтобы добраться до ретуши, надо
@@ -1913,9 +2006,11 @@
        сразу, что приложение умеет, и каждая ведёт прямо в дело. -->
   <!-- Шесть главных инструментов переезжают сюда из общего списка: сами кнопки те же
        (обработчик висит на [data-go]), меняется только подача — кадром, а не значком. -->
-  <div class="home-sect"><b>Выберите инструмент</b><i>шесть главных</i></div>
+  <!-- ИНСТРУМЕНТЫ ПО ЗАДАЧАМ (прототип 2, по предложению фотографа): три группы.
+       В «Коже и ретуши» три главных — кадром, остальные компактной сеткой. Кнопки
+       те же (обработчик висит на [data-go]), раскладывает их разложитьГруппы(). -->
+  <div class="home-sect"><b>Кожа и ретушь</b><i>лицо и кожа</i></div>
   <div class="home-hero" id="homeHero"></div>
-  <div class="home-sect"><b>Ещё инструменты</b></div>
 
   <div class="home-tools" id="homeTools">
     <button class="ht" data-go="retouch">
@@ -1930,7 +2025,7 @@
          пальца — иначе он сам закрывает то место, которое замазываешь. -->
     <button class="ht" data-go="paint">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="16.6" cy="7.4" r="3.6"/><path d="M13.9 9.8C11.1 12.5 8.4 14.3 4.6 15.5"/><path d="M4.6 15.5l-1 3.9 3.9-1"/></svg>
-      <b>Замазать</b><i>шрамы и полосы</i>
+      <b>Коррекция</b><i>шрамы и полосы</i>
     </button>
     <button class="ht" data-go="shadows">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5s3.6-5 9-5 9 5 9 5-3.6 5-9 5-9-5-9-5z"/><circle cx="12" cy="10.5" r="2.3" fill="currentColor" stroke="none"/><path d="M7 17.6c1.8 1.5 8.2 1.5 10 0"/></svg>
@@ -1954,11 +2049,11 @@
     </button>
     <button class="ht" data-go="spots">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.6"/><circle cx="9.2" cy="9.4" r="1.25" fill="currentColor" stroke="none"/><circle cx="14.6" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="11" cy="15" r="1.15" fill="currentColor" stroke="none"/><path d="M17.4 5.2l1.9-1.9M19.3 5.2l-1.9-1.9"/></svg>
-      <b>Точки</b><i>ИИ найдёт и уберёт</i>
+      <b>Автоочистка</b><i>ИИ найдёт и уберёт</i>
     </button>
     <button class="ht" data-go="ai">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2c4.6 0 7.4 3.1 7.4 7.6 0 4.9-3.3 9.6-7.4 9.6S4.6 15.7 4.6 10.8c0-4.5 2.8-7.6 7.4-7.6z"/><path d="M8.9 11.4c.9-.8 2-.8 2.9 0M15.1 11.4c-.6-.5-1.3-.7-2-.5"/><path d="M17.6 4.2l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5z" fill="currentColor" stroke="none"/></svg>
-      <b>Ретушь</b><i>автоматическая</i>
+      <b>ИИ-ретушь</b><i>автоматическая</i>
     </button>
     <button class="ht" data-go="bokeh">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="10" r="4.2"/><circle cx="16" cy="7" r="2.6"/><circle cx="15.5" cy="15" r="3.4"/></svg>
@@ -1990,7 +2085,7 @@
     </button>
     <button class="ht" data-go="crop">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v13.2a1.8 1.8 0 0 0 1.8 1.8h13.2"/><path d="M2.5 6.5h13.2a1.8 1.8 0 0 1 1.8 1.8v13.2"/></svg>
-      <b>Кадр</b><i>обрезать</i>
+      <b>Кадрировать</b><i>обрезать</i>
     </button>
     <button class="ht" data-go="collage">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.4"/><rect x="13" y="3" width="8" height="8" rx="1.4"/><rect x="3" y="13" width="8" height="8" rx="1.4"/><rect x="13" y="13" width="8" height="8" rx="1.4"/></svg>
@@ -2012,6 +2107,11 @@
 
   <!-- Сюда переезжают «Наборы» и «Вся съёмка»: это переходы в другие экраны, а не
        инструменты над кадром, и в общей плитке они читались как ещё две кнопки. -->
+  <div class="home-sect"><b>Эффекты и стиль</b><i>атмосфера плёнки</i></div>
+  <div class="home-tools home-group" id="homeToolsFx"></div>
+  <div class="home-sect"><b>Кадр и создание</b><i>форма и свои виды</i></div>
+  <div class="home-tools home-group" id="homeToolsMake"></div>
+
   <div class="home-nav" id="homeNav"></div>
 
 </section>
@@ -2525,7 +2625,7 @@
     </button>
     <!-- В «Кадре» сравнения нет намеренно: цвет здесь не меняется, а «до» — это
          снимок за рамкой, он и так виден на экране целиком. -->
-    <span class="crop-top">Кадр</span>
+    <span class="crop-top">Кадрировать</span>
     <button class="ov-act gold" id="cropApply">Применить</button>
   </div>
   <div class="crop-area" id="cropArea">
@@ -3446,7 +3546,178 @@ const LOOKS = [
   { name:"Ч/Б", temp:0, tint:0, contrast:0.10, fade:0.06, shadowsLift:0.08, highlightsRoll:0.10,
     shSplit:[0,0,0], hiSplit:[0,0,0], vibrance:0, saturation:0, vignette:0.16, grain:0.08,
     curve:{ rgb:[[0,16],[56,56],[128,138],[200,214],[255,246]] } },
+
 ];
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TEST PRESET CHANNEL — ТОЛЬКО ДЛЯ РАЗРАБОТКИ. Тестовые луки для проверки фотографом
+// обновляются по сети, без новой сборки. Весь механизм — этот блок и блок «TEST PRESET
+// CHANNEL: экран» ниже по файлу; перед RuStore их удаляют целиком (или TEST_КАНАЛ_ВКЛ = false).
+//
+// Где включён: только в debug-сборке оболочки (Presety.integrity().build === 'debug').
+// В release-сборке и в публичной PWA тестовых луков нет вовсе — ни в ленте, ни в сети.
+// Для проверки в браузере разработчика: localStorage.testPresetsChannel = '1'.
+//
+// Что может прийти по сети: ТОЛЬКО числа и флаги, которые и так понимает LOOKS-движок.
+// Каталог проверяется строго и целиком: неизвестное поле, число вне диапазона, лишний
+// ключ, чужой id — и отвергается ВЕСЬ каталог, остаётся прежний. Кода, разметки и новых
+// операций в каталоге быть не может: из него собираются обычные объекты лука, а имя
+// попадает в интерфейс только через textContent.
+//
+// Каталог: { schemaVersion:1, revision:N, updatedAt:'…', presets:[{ id:'test-…', name:'… TEST', …параметры }] }
+// Встроенная ревизия 0 ниже — то, что работает до первой загрузки и без сети.
+const TEST_КАНАЛ_ВКЛ = true;
+const TEST_КАНАЛ = {
+  url: 'https://raw.githubusercontent.com/wowhak2-ship-it/photo-presets/test-presets/test-presets.json',
+  кэш: 'testPresetsCatalog',        // последний принятый каталог — текстом, целиком
+  сообщено: 'testPresetsNotified',  // о какой ревизии уже сказали (чтобы не повторять каждый запуск)
+  адрес: 'testPresetsUrl',          // переопределение источника — только для стенда разработки
+  флаг: 'testPresetsChannel',       // '1' — включить в браузере разработчика
+  МАКС_БАЙТ: 65536, МАКС_ПРЕСЕТОВ: 12,
+  встроен: false, ревизия: 0, обновлён: '', ожидает: null
+};
+const TEST_ВСТРОЕННЫЕ = { schemaVersion:1, revision:0, updatedAt:'2026-09-28', presets:[
+  // Тёплый: мягкое золото в светах (тонирование светов, а не синяя кривая — она желтила
+  // снег и белые фоны), кожа тёплая, но оранжевый и красный приглушены, зелень чуть в
+  // оливку и глуше, мягкий контраст.
+  { id:'test-warm-v1', name:'Тёплый TEST', temp:5, tint:-1, contrast:0.04, fade:0, shadowsLift:0.06, highlightsRoll:0.12,
+    shSplit:[2,1,-1], hiSplit:[8,5,-4], vibrance:0.03, vibFloor:0.08, saturation:0.97, vignette:0.04, grain:0.02,
+    curve:{ rgb:[[0,8],[60,60],[128,130],[200,204],[255,246]],
+            r:[[0,4],[128,131],[255,252]], b:[[0,10],[128,125],[255,250]] },
+    hsl:{ red:{sat:-6}, orange:{hue:-3,sat:-12,lum:6}, yellow:{hue:-8,sat:-20,lum:2},
+          green:{hue:-10,sat:-28,lum:-4}, aqua:{sat:-22}, blue:{sat:-18} } },
+  // Бежевый: насыщенность ниже, кремовые света (белая точка 246, синий в белом 242),
+  // мягкий приподнятый чёрный с подстройкой под свет кадра, зелень и синие приглушены.
+  { id:'test-beige-v1', name:'Бежевый TEST', temp:3, tint:-1, contrast:0.02, fade:0.01, shadowsLift:0.06, highlightsRoll:0.10,
+    shSplit:[3,2,0], hiSplit:[5,4,-2], vibrance:0.03, vibFloor:0.08, saturation:0.88, vignette:0.03, grain:0.02,
+    adaptDR:true,
+    curve:{ rgb:[[0,10],[64,66],[128,133],[200,206],[255,246]], b:[[0,10],[128,126],[255,242]] },
+    hsl:{ red:{sat:-10}, orange:{hue:-3,sat:-6,lum:8}, yellow:{hue:-6,sat:-22,lum:6},
+          green:{hue:-8,sat:-35,lum:4}, aqua:{sat:-35}, blue:{sat:-35,lum:6} } },
+  // Натуральный: самый слабый — немного тепла, аккуратный контраст, чуть сдержанная насыщенность.
+  { id:'test-natural-v1', name:'Натуральный TEST', temp:3, tint:0, contrast:0.04, fade:0, shadowsLift:0.03, highlightsRoll:0.06,
+    shSplit:[0,0,0], hiSplit:[3,2,-2], vibrance:0.04, vibFloor:0.08, saturation:0.97, vignette:0, grain:0,
+    curve:{ rgb:[[0,4],[64,62],[128,129],[192,196],[255,250]] },
+    hsl:{ orange:{sat:-5,lum:4}, yellow:{sat:-8}, green:{hue:-4,sat:-10}, aqua:{sat:-8}, blue:{sat:-6} } },
+]};
+// Разрешённые параметры и их границы. Ничего сверх этого списка в лук не попадает.
+const TEST_ЧИСЛА = { temp:[-40,40,0], tint:[-40,40,0], contrast:[-0.5,0.5,0], fade:[0,0.3,0],
+  shadowsLift:[0,0.5,0], highlightsRoll:[0,0.5,0], vibrance:[-0.5,0.5,0], vibFloor:[0,0.5,0],
+  saturation:[0,1.5,1], vignette:[0,0.5,0], grain:[0,0.3,0], bloom:[0,0.3,0] };
+const TEST_ТРОЙКИ = ['shSplit', 'hiSplit'];      // [R,G,B], каждое −40…40
+const TEST_ФЛАГИ = ['bloomWarm', 'adaptDR'];
+function testКаналВключён(){
+  if(!TEST_КАНАЛ_ВКЛ) return false;
+  try{ const i = window.Presety && Presety.integrity && Presety.integrity(); if(i && i.build === 'debug') return true; }catch(_){}
+  try{ return localStorage.getItem(TEST_КАНАЛ.флаг) === '1'; }catch(_){ return false; }
+}
+// Строгая проверка каталога. → { ok:true, revision, updatedAt, looks:[…] } | { ok:false, ошибка }.
+// Любое нарушение отвергает каталог ЦЕЛИКОМ: частично принятый каталог хуже прежнего.
+function testПроверитьКаталог(o){
+  const нет = t=> ({ ok:false, ошибка:t });
+  const число = (v, a, b)=> typeof v === 'number' && isFinite(v) && v >= a && v <= b;
+  const целое = (v, a, b)=> число(v, a, b) && Math.round(v) === v;
+  const объект = v=> !!v && typeof v === 'object' && !Array.isArray(v);
+  if(!объект(o)) return нет('каталог — не объект');
+  for(const k of Object.keys(o)) if(['schemaVersion','revision','updatedAt','presets'].indexOf(k) < 0) return нет('лишнее поле каталога: ' + k);
+  if(o.schemaVersion !== 1) return нет('неизвестная schemaVersion');
+  if(!целое(o.revision, 0, 1e9)) return нет('revision — не целое число');
+  if(typeof o.updatedAt !== 'string' || o.updatedAt.length > 40) return нет('updatedAt');
+  if(!Array.isArray(o.presets) || !o.presets.length || o.presets.length > TEST_КАНАЛ.МАКС_ПРЕСЕТОВ) return нет('presets: 1…' + TEST_КАНАЛ.МАКС_ПРЕСЕТОВ);
+  const базовые = LOOKS.filter(l=> !l.testId).map(l=> l.name.toLowerCase());
+  const ids = {}, имена = {}, looks = [];
+  for(const p of o.presets){
+    if(!объект(p)) return нет('пресет — не объект');
+    const разрешено = ['id','name','curve','hsl'].concat(Object.keys(TEST_ЧИСЛА), TEST_ТРОЙКИ, TEST_ФЛАГИ);
+    for(const k of Object.keys(p)) if(разрешено.indexOf(k) < 0) return нет('неизвестный параметр: ' + k);
+    if(typeof p.id !== 'string' || !/^test-[a-z0-9-]{1,40}$/.test(p.id) || ids[p.id]) return нет('id: ' + p.id);
+    if(typeof p.name !== 'string' || /[\u0000-\u001f\u007f<>]/.test(p.name)) return нет('name');
+    const имя = p.name.trim();
+    if(!имя || имя.length > 24 || имя.indexOf('TEST') < 0) return нет('name должно содержать TEST и быть не длиннее 24: ' + p.name);
+    if(имена[имя.toLowerCase()] || базовые.indexOf(имя.toLowerCase()) >= 0) return нет('имя занято: ' + имя);
+    ids[p.id] = имена[имя.toLowerCase()] = true;
+    const look = { name:имя, testId:p.id };
+    for(const k of Object.keys(TEST_ЧИСЛА)){
+      const [a, b, по_умолч] = TEST_ЧИСЛА[k];
+      if(p[k] == null){ look[k] = по_умолч; continue; }
+      if(!число(p[k], a, b)) return нет(p.id + '.' + k + ' вне ' + a + '…' + b);
+      look[k] = p[k];
+    }
+    for(const k of TEST_ТРОЙКИ){
+      if(p[k] == null){ look[k] = [0,0,0]; continue; }
+      if(!Array.isArray(p[k]) || p[k].length !== 3 || !p[k].every(v=> число(v, -40, 40))) return нет(p.id + '.' + k);
+      look[k] = p[k].slice();
+    }
+    for(const k of TEST_ФЛАГИ){
+      if(p[k] == null) continue;
+      if(typeof p[k] !== 'boolean') return нет(p.id + '.' + k + ' — не true/false');
+      if(p[k]) look[k] = true;
+    }
+    if(p.curve != null){
+      if(!объект(p.curve)) return нет(p.id + '.curve');
+      const c = {};
+      for(const k of Object.keys(p.curve)){
+        if(CURVE_KEYS.indexOf(k) < 0) return нет(p.id + '.curve.' + k);
+        const t = p.curve[k];
+        if(!Array.isArray(t) || t.length < 2 || t.length > 12) return нет(p.id + '.curve.' + k + ': 2…12 точек');
+        let px = -1;
+        for(const pt of t){
+          if(!Array.isArray(pt) || pt.length !== 2 || !целое(pt[0], 0, 255) || !целое(pt[1], 0, 255) || pt[0] <= px) return нет(p.id + '.curve.' + k + ': точки');
+          px = pt[0];
+        }
+        c[k] = t.map(pt=> pt.slice());
+      }
+      if(Object.keys(c).length) look.curve = c;
+    }
+    if(look.adaptDR && !(look.curve && look.curve.rgb)) return нет(p.id + ': adaptDR требует curve.rgb');
+    if(p.hsl != null){
+      if(!объект(p.hsl)) return нет(p.id + '.hsl');
+      const h = {};
+      for(const k of Object.keys(p.hsl)){
+        if(!HSL_BANDS.some(b=> b.key === k) || !объект(p.hsl[k])) return нет(p.id + '.hsl.' + k);
+        const v = {};
+        for(const part of Object.keys(p.hsl[k])){
+          if(HSL_PARTS.indexOf(part) < 0 || !целое(p.hsl[k][part], -100, 100)) return нет(p.id + '.hsl.' + k + '.' + part);
+          v[part] = p.hsl[k][part];
+        }
+        h[k] = v;
+      }
+      if(Object.keys(h).length) look.hsl = h;
+    }
+    looks.push(look);
+  }
+  return { ok:true, revision:o.revision, updatedAt:o.updatedAt, looks };
+}
+// Текст → проверенный каталог. Размер режем ДО разбора.
+function testРазобрать(текст){
+  if(typeof текст !== 'string' || !текст || текст.length > TEST_КАНАЛ.МАКС_БАЙТ) return { ok:false, ошибка:'размер каталога' };
+  let o; try{ o = JSON.parse(текст); }catch(_){ return { ok:false, ошибка:'не JSON' }; }
+  return testПроверитьКаталог(o);
+}
+// В LOOKS меняются ТОЛЬКО записи с тем же testId (та же позиция в ленте), новые id
+// дописываются в конец. Базовые луки не трогаются никогда. Объект лука каждый раз новый —
+// поэтому ни старая тональная таблица (_lut), ни подстройка под кадр (adaptDR) не залипают.
+function testВставить(k){
+  for(const look of k.looks){
+    const i = LOOKS.findIndex(l=> l.testId === look.testId);
+    if(i >= 0) LOOKS[i] = look; else LOOKS.push(look);
+  }
+  TEST_КАНАЛ.ревизия = k.revision; TEST_КАНАЛ.обновлён = k.updatedAt;
+}
+// Старт: последний принятый каталог из хранилища, иначе встроенная ревизия 0. Битый кэш
+// не мешает — работают встроенные. Вызывается дважды: сразу и после загрузки страницы
+// (на старых WebView мост приходит позже первого скрипта), второй раз — без повтора.
+function testВстроитьСтарт(){
+  if(TEST_КАНАЛ.встроен || !testКаналВключён()) return false;
+  let k = null;
+  try{ const t = localStorage.getItem(TEST_КАНАЛ.кэш); if(t){ const r = testРазобрать(t); if(r.ok) k = r; } }catch(_){}
+  if(!k) k = testПроверитьКаталог(TEST_ВСТРОЕННЫЕ);
+  if(!k.ok) return false;
+  testВставить(k);
+  TEST_КАНАЛ.встроен = true;
+  return true;
+}
+try{ testВстроитьСтарт(); }catch(_){}
 
 // Заголовок первого экрана считает плёнки сам. Число здесь жило текстом и разошлось
 // с набором, как только луков стало меньше: обещали двенадцать, показывали девять.
@@ -4182,6 +4453,9 @@ let pendingTool = null;
 function goEditor(){ ensureTrap(); document.body.classList.add('editing'); resetSwipeDemo(); fitStage(); render(); }
 function goHome(){
   document.body.classList.remove('editing');
+  // Блок «Пресеты» мог собираться при скрытой главной — под проектную ширину.
+  const hpf = document.getElementById('hpFrame');
+  if(hpf && sourceCanvas && Math.abs(hpf.clientWidth - hpBuiltFor) > 8) paintHomePresets();
   if(compareMode){ compareMode = false; compareBtn.classList.remove('active'); cmpOverlay.classList.remove('on'); render(); }
 }
 // ─── Контактный лист ───
@@ -4205,7 +4479,7 @@ function paintHomeThumb(){
   // Окошко подгоняем под ФОРМУ снимка. Раньше оно было всегда 52×64, и горизонтальный
   // кадр обрезался до неузнаваемости — от пейзажа оставалась вертикальная полоска.
   const ar = sourceCanvas.width / sourceCanvas.height;
-  const bh = 62, bw = Math.round(Math.max(40, Math.min(96, bh * ar)));
+  const bh = 40, bw = Math.round(Math.max(30, Math.min(64, bh * ar)));   // строка кадра — вторичная
   const box = c.parentElement;
   box.style.width = bw + 'px'; box.style.height = bh + 'px';
   const dpr = Math.min(3, window.devicePixelRatio || 1);
@@ -4216,6 +4490,92 @@ function paintHomeThumb(){
   const ctx = c.getContext('2d');
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(sourceCanvas, (w - dw) / 2, (h - dh) / 2, dw, dh);
+  paintHomePresets();
+}
+// ─── Главная: блок «Пресеты» и лента «Попробовать стиль» ───
+// Ваш кадр в настоящих плёнках — тем же движком и в том же порядке, что кадры
+// контактного листа (плёнка → цвета → кривая → свечение). Нового рендера нет.
+const HP_ЛУК = 'Золотой час';
+const HS_ЛУКИ = ['Мягкий свет', 'Золотой час', 'Плёнка', 'Портрет', 'Мамины цветы', 'Ч/Б'];
+var hpBuiltFor = 0;               // var: goHome объявлен выше по файлу
+// Кадр ЦЕЛИКОМ, без обрезки (contain). Рамку заранее подгоняем под форму снимка, так что
+// полей обычно нет; если снимок слишком высокий или длинный для рамки — по краям остаются
+// прозрачные поля, сквозь них видна тёмная подложка. Обрезать фото человека нельзя.
+function hpКадр(w, h){
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d'); x.imageSmoothingQuality = 'high';
+  const s = Math.min(w / sourceCanvas.width, h / sourceCanvas.height);
+  const dw = Math.round(sourceCanvas.width * s), dh = Math.round(sourceCanvas.height * s);
+  x.drawImage(sourceCanvas, Math.round((w - dw) / 2), Math.round((h - dh) / 2), dw, dh);
+  return x.getImageData(0, 0, w, h);
+}
+function hpВЛуке(bd, look, холст){
+  const id = new ImageData(new Uint8ClampedArray(bd.data), bd.width, bd.height);
+  applyLook(id, look); const L = lookLayers(look, 1); applyHsl(id, L.hsl); applyCurve(id, L.curve);
+  холст.width = bd.width; холст.height = bd.height;
+  холст.getContext('2d').putImageData(id, 0, 0);
+  const bl = bloomAmount(look, 1, null);
+  if(bl){
+    applyBloom(холст, bl, bloomIsWarm(look, null));
+    // Свечение размытием выползает за край снимка на прозрачные поля — тогда правая
+    // половина «шире» левой. Оставляем его только там, где есть сам снимок: внутри кадра
+    // пиксели не меняются (там маска непрозрачна), чистятся одни поля.
+    const м = document.createElement('canvas'); м.width = bd.width; м.height = bd.height;
+    м.getContext('2d').putImageData(bd, 0, 0);
+    const x = холст.getContext('2d');
+    x.save(); x.globalCompositeOperation = 'destination-in'; x.drawImage(м, 0, 0); x.restore();
+  }
+}
+function paintHomePresets(){
+  const fr = document.getElementById('hpFrame');
+  if(!fr || !sourceCanvas) return;
+  // Главная могла быть скрыта (мы в редакторе) — тогда размеров нет, берём проектные;
+  // вернёмся на главную — перерисуем по настоящим (см. goHome).
+  const cw = fr.clientWidth || Math.min(innerWidth - 32, 560);
+  hpBuiltFor = fr.clientWidth;
+  // Высота рамки — по форме снимка, чтобы он был виден целиком. Потолок — около половины
+  // экрана: вертикальный кадр в полную высоту увёл бы «Открыть пресеты» за край.
+  const ar = sourceCanvas.width / sourceCanvas.height;
+  const макс = Math.max(300, Math.min(520, Math.round(innerHeight * 0.46)));
+  const chh = Math.max(1, Math.round(Math.min(cw / ar, макс)));
+  fr.style.height = chh + 'px';
+  const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(cw * dpr)), h = Math.max(1, Math.round(chh * dpr));
+  const bd = hpКадр(w, h);
+  const до = document.getElementById('hpBefore');
+  до.width = w; до.height = h; до.getContext('2d').putImageData(bd, 0, 0);
+  const look = LOOKS.find(l=> l.name === HP_ЛУК) || LOOKS[1] || LOOKS[0];
+  hpВЛуке(bd, look, document.getElementById('hpAfter'));
+  document.getElementById('hpMark').textContent = look.name.toUpperCase();
+  paintHomeStyles();
+}
+function paintHomeStyles(){
+  const host = document.getElementById('homeStyles');
+  if(!host || !sourceCanvas) return;
+  host.innerHTML = '';
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  // Мини-кадр той же формы, что снимок (высота 100, ширина по пропорции) — целиком, без обрезки.
+  const тш = Math.max(64, Math.min(150, Math.round(100 * sourceCanvas.width / sourceCanvas.height)));
+  const bd = hpКадр(Math.round(тш * dpr), Math.round(100 * dpr));
+  const frames = frameList();
+  HS_ЛУКИ.forEach(имя=>{
+    const idx = frames.findIndex(e=> !e.mine && e.look.name === имя);
+    if(idx < 0) return;
+    const e = frames[idx];
+    const b = document.createElement('button'); b.className = 'hs-card';
+    const c = document.createElement('canvas'); hpВЛуке(bd, e.look, c);
+    b.style.flexBasis = тш + 'px'; c.style.width = тш + 'px';
+    const n = document.createElement('span'); n.textContent = имя;
+    b.append(c, n);
+    // Тот же путь, что у кадра контактного листа: выбрать вид и открыть редактор.
+    b.onclick = ()=>{ pickFrame(e, idx); buildChips(); goEditor(); setTab('presets'); render(); };
+    host.appendChild(b);
+  });
+  const все = document.createElement('button'); все.className = 'hs-card';
+  const box = document.createElement('span'); box.className = 'hs-all'; box.textContent = 'ВСЕ';
+  const n = document.createElement('span'); n.textContent = 'Все стили';
+  все.append(box, n); все.onclick = openLooks;
+  host.appendChild(все);
 }
 document.getElementById('homeLooksBtn').onclick = openLooks;
 document.getElementById('looksClose').onclick = closeLooks;
@@ -4310,14 +4670,31 @@ function runTool(tool){
 // Кадр к инструменту лежит файлом; пока своего файла нет, берётся один из витринных,
 // чтобы экран не выглядел пустым. Пары «до/после» тоже отдельный файл: когда он
 // появится, карточка сама покажет разделитель.
+// Прототип 2: кадром — только три главных инструмента кожи. Потёртости, Свечение и
+// Боке переехали компактными плитками в группу «Эффекты и стиль» (см. ГРУППЫ).
 const ГЛАВНЫЕ = [
   { go:'ai',      файл:'ai',    зап:'portret' },
   { go:'skin',    файл:'skin',  зап:'portret' },
-  { go:'shadows', файл:'bags',  зап:'portret' },
-  { go:'dust',    файл:'dust',  зап:'kafe'    },
-  { go:'hal',     файл:'halo',  зап:'zakat'   },
-  { go:'bokeh',   файл:'bokeh', зап:'gorod'   }
+  { go:'shadows', файл:'bags',  зап:'portret' }
 ];
+// Инструменты по задачам человека. Кнопки не пересоздаются — переезжают в свою группу
+// вместе с обработчиком. В #homeTools остаётся «Кожа и ретушь» (там и работает
+// перестановка долгим нажатием); «Вся съёмка» и «Наборы» уходят вниз, в #homeNav.
+const ГРУППЫ = {
+  homeToolsFx:   ['dust', 'hal', 'bokeh', 'flare', 'dbl', 'vig'],
+  homeToolsMake: ['crop', 'collage', 'build']
+};
+const КОЖА_ПОРЯДОК = ['retouch', 'paint', 'powder', 'tone', 'teeth', 'spots'];
+function разложитьГруппы(){
+  const кожа = document.getElementById('homeTools');
+  if(!кожа) return;
+  КОЖА_ПОРЯДОК.forEach(go=>{ const б = кожа.querySelector('[data-go="' + go + '"]'); if(б) кожа.appendChild(б); });
+  for(const [id, список] of Object.entries(ГРУППЫ)){
+    const хост = document.getElementById(id);
+    if(!хост) continue;
+    список.forEach(go=>{ const б = document.querySelector('#homeTools [data-go="' + go + '"]'); if(б) хост.appendChild(б); });
+  }
+}
 function собратьГлавные(){
   const герои = document.getElementById('homeHero');
   const низ = document.getElementById('homeNav');
@@ -4581,11 +4958,11 @@ function buildHomeLooks(){
     + (своих ? ' · ' + своих + (своих % 10 === 1 && своих % 100 !== 11 ? ' СВОЙ' : ' СВОИХ') : '');
   if(roll) roll.textContent = счёт;
   const looksN = document.getElementById('looksN'); if(looksN) looksN.textContent = счёт;
-  // подпись на карточке «Пресеты» — сколько видов лежит за ней
+  // подпись блока «Пресеты» — сколько стилей лежит за ним (настоящее число, не константа)
   const hln = document.getElementById('homeLooksN');
-  if(hln) hln.textContent = total + ' ' + (total % 10 === 1 && total % 100 !== 11 ? 'вид'
-    : (total % 10 >= 2 && total % 10 <= 4 && (total % 100 < 10 || total % 100 >= 20) ? 'вида' : 'видов'))
-    + ' на вашем кадре';
+  if(hln) hln.textContent = total + ' ' + (total % 10 === 1 && total % 100 !== 11 ? 'готовый стиль'
+    : (total % 10 >= 2 && total % 10 <= 4 && (total % 100 < 10 || total % 100 >= 20) ? 'готовых стиля' : 'готовых стилей'))
+    + ' для вашего кадра';
   const edgeTxt = document.getElementById('edgeTxt');   // маркировка по краю плёнки — с датой съёмки листа
   if(edgeTxt){
     const d = new Date();
@@ -8278,6 +8655,126 @@ document.getElementById('packsShare').onclick = async ()=>{
 document.getElementById('rowPrivacy').onclick = ()=> window.open('./privacy.html', '_blank', 'noopener');
 document.getElementById('rowLicenses').onclick = ()=> window.open('./licenses.html', '_blank', 'noopener');
 
+// ══════════════════════════════════════════════════════════════════════════════
+// TEST PRESET CHANNEL: экран. Только для разработки — удаляется вместе с блоком
+// «TEST PRESET CHANNEL» у LOOKS. В release-сборке и PWA ничего из этого не появляется.
+function testОбновитьЭкран(){
+  try{ if(sourceCanvas){ if(LOOKS.some(l=> l.testId && l.adaptDR)) looksAdapt(sourceCanvas); buildChips(); render(); } }catch(_){}
+  try{ buildHomeLooks(); }catch(_){}
+  try{ syncOnbTitle(); }catch(_){}
+  testПодписьНастройки();
+}
+// В приложении — нативным HTTP (как запросы к backend: без CORS и смешанного содержимого),
+// в браузере разработчика — обычным fetch. Метка времени в адресе обходит кэш CDN.
+async function testСкачать(){
+  let url = TEST_КАНАЛ.url;
+  try{ const o = localStorage.getItem(TEST_КАНАЛ.адрес); if(o && /^https?:\/\/[^\s]+$/.test(o)) url = o; }catch(_){}
+  url += (url.indexOf('?') < 0 ? '?' : '&') + 't=' + Date.now();
+  const C = window.Capacitor, H = C && C.Plugins && C.Plugins.CapacitorHttp;
+  if(H && secure()){
+    const r = await H.request({ url, method:'GET', responseType:'text', connectTimeout:8000, readTimeout:8000 });
+    if(r.status !== 200) throw new Error('HTTP ' + r.status);
+    return typeof r.data === 'string' ? r.data : JSON.stringify(r.data);
+  }
+  const ctl = new AbortController(), таймер = setTimeout(()=> ctl.abort(), 8000);
+  try{
+    const r = await fetch(url, { cache:'no-store', signal:ctl.signal });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.text();
+  }finally{ clearTimeout(таймер); }
+}
+// Проверка: скачать, проверить целиком, сравнить ревизию. Ничего не меняет в ленте —
+// меняет только «Обновить». Сетевая ошибка и плохой каталог не трогают работающие пресеты.
+async function testПроверить(ручной){
+  if(!testКаналВключён()) return { ok:false, ошибка:'канал выключен' };
+  if(!TEST_КАНАЛ.встроен && testВстроитьСтарт()) testОбновитьЭкран();
+  let текст;
+  try{ текст = await testСкачать(); }
+  catch(e){
+    if(ручной) toast('Нет связи с каталогом — работают тестовые пресеты ревизии ' + TEST_КАНАЛ.ревизия);
+    return { ok:false, ошибка:String((e && e.message) || e) };
+  }
+  const k = testРазобрать(текст);
+  if(!k.ok){ if(ручной) toast('Каталог тестовых пресетов не принят: ' + k.ошибка); return k; }
+  if(k.revision <= TEST_КАНАЛ.ревизия){
+    TEST_КАНАЛ.ожидает = null; testСкрытьПлашку();
+    if(ручной) toast('Тестовые пресеты актуальны · ревизия ' + TEST_КАНАЛ.ревизия);
+    return { ok:true, новое:false, revision:k.revision };
+  }
+  TEST_КАНАЛ.ожидает = { текст, k };
+  // О ревизии говорим один раз: закрыл плашку — при следующем запуске она не вернётся,
+  // обновить можно из настроек. Ручная проверка показывает всегда.
+  let было = null; try{ было = localStorage.getItem(TEST_КАНАЛ.сообщено); }catch(_){}
+  if(ручной || было !== String(k.revision)){
+    testПоказатьПлашку();
+    try{ localStorage.setItem(TEST_КАНАЛ.сообщено, String(k.revision)); }catch(_){}
+  }
+  return { ok:true, новое:true, revision:k.revision };
+}
+// Принять скачанную ревизию АТОМАРНО: сначала записать и перечитать, и только потом
+// менять ленту. Не записалось — остаётся прежний каталог целиком.
+function testПринять(){
+  const ж = TEST_КАНАЛ.ожидает;
+  if(!ж) return false;
+  try{
+    localStorage.setItem(TEST_КАНАЛ.кэш, ж.текст);
+    if(localStorage.getItem(TEST_КАНАЛ.кэш) !== ж.текст) throw 0;
+  }catch(_){ toast('Не удалось сохранить тестовые пресеты — остались прежние'); return false; }
+  testВставить(ж.k);
+  TEST_КАНАЛ.ожидает = null;
+  testСкрытьПлашку();
+  testОбновитьЭкран();
+  toast('Тестовые пресеты обновлены · ревизия ' + ж.k.revision);
+  return true;
+}
+function testПоказатьПлашку(){
+  let el = document.getElementById('testNotice');
+  if(!el){
+    el = document.createElement('div'); el.id = 'testNotice'; el.setAttribute('role', 'status');
+    el.style.cssText = 'position:fixed; left:50%; transform:translateX(-50%); bottom:calc(76px + env(safe-area-inset-bottom));'
+      + ' z-index:95; display:flex; align-items:center; gap:10px; width:max-content; max-width:calc(100vw - 32px); padding:8px 6px 8px 16px;'
+      + ' border-radius:20px; background:var(--glass); border:1px solid var(--glass-line);'
+      + ' -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); color:var(--text); font-size:13px;';
+    const t = document.createElement('span'); t.id = 'testNoticeText';
+    const b = document.createElement('button'); b.id = 'testNoticeGo'; b.textContent = 'Обновить';
+    b.style.cssText = 'border:0; border-radius:14px; padding:8px 14px; min-height:36px; background:var(--gold);'
+      + ' color:var(--gold-ink); font:inherit; font-weight:600;';
+    b.onclick = testПринять;
+    const x = document.createElement('button'); x.textContent = '×'; x.setAttribute('aria-label', 'Скрыть');
+    x.style.cssText = 'border:0; background:none; color:var(--dim); font-size:20px; min-width:36px; min-height:36px;';
+    x.onclick = testСкрытьПлашку;
+    el.append(t, b, x); document.body.appendChild(el);
+  }
+  document.getElementById('testNoticeText').textContent = 'Доступны обновлённые тестовые пресеты';
+  el.style.display = 'flex';
+}
+function testСкрытьПлашку(){ const el = document.getElementById('testNotice'); if(el) el.style.display = 'none'; }
+// Пункт в настройках появляется только там, где канал включён (debug-сборка).
+function testВставитьНастройку(){
+  if(!testКаналВключён() || document.getElementById('rowTestPresets')) return;
+  const после = document.getElementById('rowLicenses');
+  if(!после) return;
+  const b = document.createElement('button'); b.className = 'set-row'; b.id = 'rowTestPresets';
+  const n = document.createElement('span'); n.className = 'set-name'; n.textContent = 'Проверить тестовые пресеты';
+  const v = document.createElement('span'); v.className = 'set-val'; v.id = 'testPresetsRev';
+  b.append(n, v);
+  b.onclick = ()=> testПроверить(true).then(testПодписьНастройки, testПодписьНастройки);
+  после.insertAdjacentElement('afterend', b);
+  testПодписьНастройки();
+}
+function testПодписьНастройки(){
+  const v = document.getElementById('testPresetsRev');
+  if(v) v.textContent = 'ревизия ' + TEST_КАНАЛ.ревизия;
+}
+function testКаналСтарт(){
+  if(!testКаналВключён()) return;
+  if(testВстроитьСтарт()) testОбновитьЭкран();          // мост пришёл позже первого скрипта
+  testВставитьНастройку();
+  setTimeout(()=>{ if(navigator.onLine !== false) testПроверить(false).catch(()=>{}); }, 2500);
+}
+if(document.readyState === 'complete') testКаналСтарт();
+else window.addEventListener('load', testКаналСтарт, { once:true });
+
 document.getElementById('openSettings').onclick = ()=>{
   document.getElementById('settings').classList.add('open');
   // карточку установки показываем, только если браузер реально предложил установку
@@ -10585,8 +11082,8 @@ function rtSetTool(tool){
   document.getElementById('rtTints').style.display = bokeh?'flex':'none';
   document.getElementById('rtShapes').style.display = bokeh?'flex':'none';
   document.getElementById('rtTop').textContent =
-    spots ? 'Точки' : bags ? 'Консилер' : skin ? 'Смуф' : teeth ? 'Зубы' : ai ? 'Ретушь' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка' : vig ? 'Виньетка' : hal ? 'Свечение' : dbl ? 'Двойная' : dust ? 'Потёртости'
-         : tool==='paint' ? 'Замазать' : 'Ретушь';
+    spots ? 'Автоочистка' : bags ? 'Консилер' : skin ? 'Смуф' : teeth ? 'Зубы' : ai ? 'Ретушь' : bokeh ? 'Боке' : powder ? 'Пудра' : tone ? 'Тональный' : flare ? 'Засветка' : vig ? 'Виньетка' : hal ? 'Свечение' : dbl ? 'Двойная' : dust ? 'Потёртости'
+         : tool==='paint' ? 'Коррекция' : 'Ретушь';
   // ряд с «Отменить» — только там, где есть что отменять, то есть у кисти и штампа
   // «Отменить» нужна и в консилере, но только с кистью: в автоматическом режиме отменять
   // нечего — там всё меняет ползунок.
@@ -15269,7 +15766,7 @@ async function spotsEnter(){
     точData = await точКарта(rtCanvas, faces[rtFaceSel]);
     if(!точData){ top.textContent = 'Лицо слишком мелкое'; aiЖду(false); bagsBusy = false; return; }
     точData.orig = rtCanvas.getContext('2d').getImageData(точData.bx, точData.by, точData.bw, точData.bh);
-    top.textContent = 'Точки'; sl.disabled = false; aiЖду(false);
+    top.textContent = 'Автоочистка'; sl.disabled = false; aiЖду(false);
     rtDrawFaces(spotsPickFace);
     rtFacesHint(faces.length, 'у кого убрать точки');
   }catch(e){
@@ -15283,7 +15780,7 @@ async function spotsPickFace(){
   if(точData) rtCanvas.getContext('2d').putImageData(точData.orig, точData.bx, точData.by);
   точData = await точКарта(rtCanvas, rtFaces[rtFaceSel]);
   if(точData) точData.orig = rtCanvas.getContext('2d').getImageData(точData.bx, точData.by, точData.bw, точData.bh);
-  document.getElementById('rtTop').textContent = точData ? 'Точки' : 'Лицо слишком мелкое';
+  document.getElementById('rtTop').textContent = точData ? 'Автоочистка' : 'Лицо слишком мелкое';
   sl.disabled = !точData;
   rtDrawFaces(spotsPickFace);
   if(+sl.value) spotsСлайдер();
@@ -15480,6 +15977,7 @@ document.getElementById('rtApply').onclick = ()=>{
 // Сначала переносим шесть главных карточек наверх, и только потом раскладываем порядок:
 // иначе сохранённый порядок пытался бы расставить кнопки, которых в списке уже нет.
 собратьГлавные();
+разложитьГруппы();      // группы — до сохранённого порядка: он действует внутри «Кожи и ретуши»
 применитьПорядок();
 включитьПеретаскивание();
 
