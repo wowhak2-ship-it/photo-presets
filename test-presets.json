@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 3,
- "updatedAt": "2026-09-29T20:26",
+ "revision": 4,
+ "updatedAt": "2026-09-29T21:09",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -497,6 +497,234 @@
     },
     "magenta": {
      "sat": 6
+    }
+   }
+  },
+  {
+   "id": "test-cold-family-v1",
+   "name": "Cold Family TEST",
+   "temp": -4,
+   "tint": 0,
+   "contrast": 0.08,
+   "fade": 0,
+   "shadowsLift": 0.02,
+   "highlightsRoll": 0.14,
+   "shSplit": [
+    -4,
+    1,
+    5
+   ],
+   "hiSplit": [
+    1,
+    1,
+    0
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.1,
+   "saturation": 0.86,
+   "vignette": 0.08,
+   "grain": 0.03,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      4
+     ],
+     [
+      48,
+      36
+     ],
+     [
+      128,
+      114
+     ],
+     [
+      200,
+      192
+     ],
+     [
+      255,
+      238
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -6
+    },
+    "orange": {
+     "sat": -6,
+     "lum": 4
+    },
+    "yellow": {
+     "hue": -6,
+     "sat": -40,
+     "lum": -4
+    },
+    "green": {
+     "hue": 24,
+     "sat": -35,
+     "lum": -10
+    },
+    "aqua": {
+     "hue": 4,
+     "sat": -6,
+     "lum": -8
+    },
+    "blue": {
+     "sat": -30,
+     "lum": -6
+    },
+    "magenta": {
+     "sat": -10
+    }
+   }
+  },
+  {
+   "id": "test-cold-portrait-v1",
+   "name": "Cold Portrait TEST",
+   "temp": -1,
+   "tint": 0,
+   "contrast": 0.12,
+   "fade": 0,
+   "shadowsLift": 0.02,
+   "highlightsRoll": 0.1,
+   "shSplit": [
+    -2,
+    0,
+    3
+   ],
+   "hiSplit": [
+    2,
+    1,
+    0
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.1,
+   "saturation": 0.86,
+   "vignette": 0.16,
+   "grain": 0.02,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      3
+     ],
+     [
+      56,
+      48
+     ],
+     [
+      128,
+      130
+     ],
+     [
+      200,
+      210
+     ],
+     [
+      255,
+      248
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -8
+    },
+    "orange": {
+     "hue": -2,
+     "sat": -8,
+     "lum": 8
+    },
+    "yellow": {
+     "sat": -45,
+     "lum": -4
+    },
+    "green": {
+     "hue": 15,
+     "sat": -45,
+     "lum": -12
+    },
+    "aqua": {
+     "sat": -25,
+     "lum": -8
+    },
+    "blue": {
+     "sat": -32,
+     "lum": -6
+    }
+   }
+  },
+  {
+   "id": "test-cold-linen-v1",
+   "name": "Cold Linen TEST",
+   "temp": -2,
+   "tint": 0,
+   "contrast": 0.02,
+   "fade": 0.02,
+   "shadowsLift": 0.04,
+   "highlightsRoll": 0.2,
+   "shSplit": [
+    -2,
+    0,
+    3
+   ],
+   "hiSplit": [
+    1,
+    1,
+    0
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.1,
+   "saturation": 0.86,
+   "vignette": 0.03,
+   "grain": 0.03,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      4
+     ],
+     [
+      64,
+      62
+     ],
+     [
+      128,
+      132
+     ],
+     [
+      200,
+      204
+     ],
+     [
+      255,
+      238
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -6
+    },
+    "orange": {
+     "sat": -6,
+     "lum": 6
+    },
+    "yellow": {
+     "sat": -40,
+     "lum": 2
+    },
+    "green": {
+     "hue": 18,
+     "sat": -40
+    },
+    "aqua": {
+     "sat": -15
+    },
+    "blue": {
+     "sat": -24
     }
    }
   }
