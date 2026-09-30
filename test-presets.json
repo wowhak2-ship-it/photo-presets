@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 4,
- "updatedAt": "2026-09-29T21:09",
+ "revision": 5,
+ "updatedAt": "2026-09-30T21:00",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -725,6 +725,351 @@
     },
     "blue": {
      "sat": -24
+    }
+   }
+  },
+  {
+   "id": "test-retro-family-v1",
+   "name": "Retro Family TEST",
+   "temp": 4,
+   "tint": 0,
+   "contrast": 0.08,
+   "fade": 0,
+   "shadowsLift": 0.03,
+   "highlightsRoll": 0.14,
+   "shSplit": [
+    8,
+    3,
+    -7
+   ],
+   "hiSplit": [
+    3,
+    2,
+    -1
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.1,
+   "saturation": 0.93,
+   "vignette": 0.12,
+   "grain": 0.04,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      6
+     ],
+     [
+      48,
+      38
+     ],
+     [
+      128,
+      112
+     ],
+     [
+      200,
+      190
+     ],
+     [
+      255,
+      240
+     ]
+    ],
+    "r": [
+     [
+      0,
+      0
+     ],
+     [
+      128,
+      130
+     ],
+     [
+      255,
+      255
+     ]
+    ],
+    "b": [
+     [
+      0,
+      0
+     ],
+     [
+      96,
+      92
+     ],
+     [
+      200,
+      197
+     ],
+     [
+      255,
+      254
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -8,
+     "lum": -8
+    },
+    "orange": {
+     "hue": -4,
+     "sat": -20,
+     "lum": 4
+    },
+    "yellow": {
+     "hue": -6,
+     "sat": -42,
+     "lum": -8
+    },
+    "green": {
+     "hue": -8,
+     "sat": -65,
+     "lum": -16
+    },
+    "aqua": {
+     "hue": 6,
+     "sat": -60,
+     "lum": -12
+    },
+    "blue": {
+     "hue": -6,
+     "sat": -48,
+     "lum": -8
+    },
+    "magenta": {
+     "sat": -14
+    }
+   }
+  },
+  {
+   "id": "test-deep-soviet-v1",
+   "name": "Deep Soviet TEST",
+   "temp": 5,
+   "tint": 0,
+   "contrast": 0.1,
+   "fade": 0,
+   "shadowsLift": 0.04,
+   "highlightsRoll": 0.18,
+   "shSplit": [
+    10,
+    3,
+    -9
+   ],
+   "hiSplit": [
+    3,
+    2,
+    -1
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.1,
+   "saturation": 0.93,
+   "vignette": 0.2,
+   "grain": 0.05,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      7
+     ],
+     [
+      44,
+      32
+     ],
+     [
+      128,
+      102
+     ],
+     [
+      200,
+      182
+     ],
+     [
+      255,
+      234
+     ]
+    ],
+    "r": [
+     [
+      0,
+      0
+     ],
+     [
+      128,
+      131
+     ],
+     [
+      255,
+      255
+     ]
+    ],
+    "b": [
+     [
+      0,
+      0
+     ],
+     [
+      96,
+      91
+     ],
+     [
+      200,
+      196
+     ],
+     [
+      255,
+      253
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -10,
+     "lum": -14
+    },
+    "orange": {
+     "hue": -4,
+     "sat": -26,
+     "lum": 2
+    },
+    "yellow": {
+     "hue": -8,
+     "sat": -46,
+     "lum": -12
+    },
+    "green": {
+     "hue": -8,
+     "sat": -70,
+     "lum": -20
+    },
+    "aqua": {
+     "hue": 6,
+     "sat": -66,
+     "lum": -14
+    },
+    "blue": {
+     "hue": -6,
+     "sat": -56,
+     "lum": -12
+    },
+    "magenta": {
+     "sat": -16
+    }
+   }
+  },
+  {
+   "id": "test-retro-portrait-v1",
+   "name": "Retro Portrait TEST",
+   "temp": 3,
+   "tint": 0,
+   "contrast": 0.02,
+   "fade": 0.02,
+   "shadowsLift": 0.05,
+   "highlightsRoll": 0.16,
+   "shSplit": [
+    7,
+    3,
+    -5
+   ],
+   "hiSplit": [
+    4,
+    3,
+    -1
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.1,
+   "saturation": 0.9,
+   "vignette": 0.1,
+   "grain": 0.03,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      8
+     ],
+     [
+      56,
+      50
+     ],
+     [
+      128,
+      120
+     ],
+     [
+      200,
+      197
+     ],
+     [
+      255,
+      243
+     ]
+    ],
+    "r": [
+     [
+      0,
+      0
+     ],
+     [
+      128,
+      130
+     ],
+     [
+      255,
+      255
+     ]
+    ],
+    "b": [
+     [
+      0,
+      0
+     ],
+     [
+      96,
+      93
+     ],
+     [
+      200,
+      198
+     ],
+     [
+      255,
+      255
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -8,
+     "lum": -6
+    },
+    "orange": {
+     "hue": -3,
+     "sat": -14,
+     "lum": 6
+    },
+    "yellow": {
+     "hue": -6,
+     "sat": -40,
+     "lum": -6
+    },
+    "green": {
+     "hue": -8,
+     "sat": -62,
+     "lum": -12
+    },
+    "aqua": {
+     "hue": 6,
+     "sat": -58,
+     "lum": -8
+    },
+    "blue": {
+     "hue": -6,
+     "sat": -46,
+     "lum": -6
+    },
+    "magenta": {
+     "sat": -12
     }
    }
   }
