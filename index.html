@@ -3886,7 +3886,7 @@ let loadSeq = 0;
 function claimLoad(){ return ++loadSeq; }
 function loadIsCurrent(n){ return n === loadSeq; }
 
-function setSource(img){
+function setSource(img, демо){
   setTimeout(aiПрогрев, 1200);   // снимок открыт — человек вот-вот пойдёт по инструментам
   // оригинал держим целиком — это то, что уйдёт в файл при сохранении
   const fs = Math.min(1, FULL_MAX/Math.max(img.width, img.height));
@@ -3916,9 +3916,38 @@ function setSource(img){
   // а сборка ленты и контактного листа занимает больше полусекунды: всё это время в
   // редакторе была бы пустота вместо только что открытого снимка. Та же ошибка, что и
   // в renderNow, только растянутая на сборку миниатюр.
-  updateHdrTitle(); renderNow();
-  buildChips(); buildHomeLooks(); paintHomeThumb();
+  // Демо-кадр при запуске виден только в веере стартового экрана: редактор,
+  // лента и главная лежат под ним. Их сборка — больше полусекунды, и всё это время
+  // заставка ждала бы. Поэтому на запуске сначала веер и сигнал «готово», а остальное —
+  // следующим шагом, пока стартовый экран уже на месте. Открытое человеком фото
+  // собирается как раньше, целиком и сразу.
+  const экраны = ()=>{ updateHdrTitle(); renderNow(); buildChips(); buildHomeLooks(); paintHomeThumb(); };
+  if(демо && !стартСообщён && onbEl.classList.contains('open')){
+    paintOnbFan();
+    стартСобран(экраны);
+    return;
+  }
+  экраны();
   paintOnbFan();
+  стартСобран();
+}
+
+// Первый экран собран целиком: веер с этим снимком уже на экране. Говорим об этом ОДИН
+// раз — событием, о котором ядру больше ничего знать не нужно. Оболочка держит заставку
+// до этого сигнала: иначе человек видел чёрный кадр между заставкой и приложением и
+// стартовый экран с пустым веером. Сигнал — после кадра, в котором веер уже нарисован.
+let стартСообщён = false;
+function стартСобран(потом){
+  if(стартСообщён){ if(потом) потом(); return; }
+  стартСообщён = true;
+  requestAnimationFrame(()=> setTimeout(()=>{
+    document.documentElement.dataset.ready = '1';
+    dispatchEvent(new Event('presety:ready'));
+    // Тяжёлую сборку остальных экранов — только после следующего кадра: иначе она занимает
+    // поток раньше, чем кадр с веером дошёл до экрана, и оболочка, дождавшись его вывода,
+    // ждала бы всю сборку (или, не дождавшись, на миг показывала старый кадр).
+    if(потом) requestAnimationFrame(()=> setTimeout(потом, 0));
+  }, 0));
 }
 
 // ─── Первый запуск ───
@@ -10194,7 +10223,7 @@ function makeDemoPhoto(){
   ['#eee','#bbb','#888','#555','#222'].forEach((col,i)=>{ x.fillStyle=col; x.fillRect(720,60+i*26,120,24); });
   const my = claimLoad();
   const img = new Image();
-  img.onload = ()=>{ if(loadIsCurrent(my)) setSource(img); };
+  img.onload = ()=>{ if(loadIsCurrent(my)) setSource(img, true); };
   img.src = c.toDataURL();
 }
 // start on the real demo photo; fall back to the synthetic gradient if it can't load
@@ -10206,7 +10235,7 @@ function loadDemo(force){
   if(sharedPending && !force) return;
   const my = claimLoad();
   const img = new Image();
-  img.onload = ()=>{ if(loadIsCurrent(my)) setSource(img); };
+  img.onload = ()=>{ if(loadIsCurrent(my)) setSource(img, true); };
   img.onerror = ()=>{ if(loadIsCurrent(my)) makeDemoPhoto(); };
   img.src = './demo.jpg';
 }
