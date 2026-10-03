@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 6,
- "updatedAt": "2026-10-03T23:00",
+ "revision": 7,
+ "updatedAt": "2026-10-04T00:30",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -1295,6 +1295,249 @@
     "blue": {
      "sat": -12,
      "lum": 6
+    }
+   }
+  },
+  {
+   "id": "test-soft-retro-winter-v1",
+   "name": "Soft Retro Winter TEST",
+   "temp": 6,
+   "tint": 0,
+   "contrast": -0.06,
+   "fade": 0,
+   "shadowsLift": 0.02,
+   "highlightsRoll": 0.06,
+   "shSplit": [
+    7,
+    3,
+    -6
+   ],
+   "hiSplit": [
+    8,
+    5,
+    -9
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.12,
+   "saturation": 0.92,
+   "vignette": 0.02,
+   "grain": 0.03,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      16
+     ],
+     [
+      64,
+      76
+     ],
+     [
+      128,
+      141
+     ],
+     [
+      192,
+      205
+     ],
+     [
+      255,
+      250
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -10
+    },
+    "orange": {
+     "hue": -5,
+     "sat": 0,
+     "lum": 3
+    },
+    "yellow": {
+     "hue": -4,
+     "sat": -30
+    },
+    "green": {
+     "hue": -10,
+     "sat": -55,
+     "lum": -4
+    },
+    "aqua": {
+     "sat": -70
+    },
+    "blue": {
+     "sat": -72,
+     "lum": 2
+    },
+    "purple": {
+     "sat": -30
+    },
+    "magenta": {
+     "sat": -30
+    }
+   }
+  },
+  {
+   "id": "test-sepia-memory-v1",
+   "name": "Sepia Memory TEST",
+   "temp": 12,
+   "tint": 0,
+   "contrast": -0.02,
+   "fade": 0,
+   "shadowsLift": 0.02,
+   "highlightsRoll": 0.06,
+   "shSplit": [
+    16,
+    7,
+    -12
+   ],
+   "hiSplit": [
+    12,
+    8,
+    -12
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.12,
+   "saturation": 0.8,
+   "vignette": 0.05,
+   "grain": 0.05,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      18
+     ],
+     [
+      64,
+      70
+     ],
+     [
+      128,
+      131
+     ],
+     [
+      192,
+      196
+     ],
+     [
+      255,
+      246
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -10
+    },
+    "orange": {
+     "hue": -8,
+     "sat": -8,
+     "lum": 3
+    },
+    "yellow": {
+     "hue": -4,
+     "sat": -35
+    },
+    "green": {
+     "hue": -12,
+     "sat": -65,
+     "lum": -6
+    },
+    "aqua": {
+     "sat": -70
+    },
+    "blue": {
+     "sat": -72,
+     "lum": 2
+    },
+    "purple": {
+     "sat": -40
+    },
+    "magenta": {
+     "sat": -40
+    }
+   }
+  },
+  {
+   "id": "test-faded-family-v1",
+   "name": "Faded Family TEST",
+   "temp": 9,
+   "tint": 0,
+   "contrast": -0.08,
+   "fade": 0,
+   "shadowsLift": 0.02,
+   "highlightsRoll": 0.06,
+   "shSplit": [
+    11,
+    4,
+    -9
+   ],
+   "hiSplit": [
+    10,
+    6,
+    -10
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.12,
+   "saturation": 0.84,
+   "vignette": 0.03,
+   "grain": 0.04,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      20
+     ],
+     [
+      64,
+      77
+     ],
+     [
+      128,
+      136
+     ],
+     [
+      192,
+      199
+     ],
+     [
+      255,
+      248
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -10
+    },
+    "orange": {
+     "hue": -6,
+     "sat": 0,
+     "lum": 3
+    },
+    "yellow": {
+     "hue": -4,
+     "sat": -32
+    },
+    "green": {
+     "hue": -10,
+     "sat": -58,
+     "lum": -4
+    },
+    "aqua": {
+     "sat": -70
+    },
+    "blue": {
+     "sat": -72,
+     "lum": 2
+    },
+    "purple": {
+     "sat": -35
+    },
+    "magenta": {
+     "sat": -35
     }
    }
   }
