@@ -1,9 +1,23 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" class="старт">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Photo Presets</title>
+<!-- Демо-кадр нужен первому экрану (веер). Без подсказки браузер узнавал о нём только в
+     конце основного скрипта и ещё ~0.4 с ждал файл на слабом телефоне. -->
+<link rel="preload" as="image" href="./demo.jpg" fetchpriority="high">
+<!-- Пока поверх страницы идёт нативная «Сборка веера», стартовый экран не рисуем: первая
+     растеризация в WebView держит общий с анимацией поток отрисовки, и на слабом телефоне
+     веер останавливался посреди сборки. Оболочка сообщает, когда веер собран и стоит. -->
+<script>
+try{
+  if(window.PresetyStart && PresetyStart.сборка && PresetyStart.сборка()){
+    document.documentElement.classList.add('сборка');
+    addEventListener('presety:assembled', function(){ document.documentElement.classList.remove('сборка'); }, {once:true});
+  }
+}catch(_){}
+</script>
 
 <!-- PWA -->
 <link rel="manifest" href="./manifest.webmanifest">
@@ -418,6 +432,14 @@
     flex-direction:column; align-items:center; text-align:center;
     padding:calc(58px + env(safe-area-inset-top)) 30px calc(26px + env(safe-area-inset-bottom));}
   .onb.open{display:flex;}
+  /* Пока открыт стартовый экран, то, что лежит под ним, не рисуем вовсе. Он непрозрачный,
+     но браузер всё равно растрировал главную с картинками и редактор под ним: на слабом
+     телефоне это добавляло GPU-работы на первом кадре, и нативный переход замирал.
+     visibility, а не display: раскладка сохраняется, размеры для сборки экранов те же.
+     Класс снимает closeOnb() — в тот же кадр, когда стартовый экран уходит. */
+  html.старт :is(body > header, #home, #looks, body > main, #dock, #batch,
+    #settings, #packs, #stColl, #stSell, #export){visibility:hidden;}
+  html.сборка body{visibility:hidden;}   /* вместе с зерном и виньеткой; см. скрипт в <head> */
   .onb-brand{display:flex; align-items:center; gap:9px;}
   .onb-brand i{width:9px; height:9px; border-radius:50%; background:var(--china);
     box-shadow:0 0 12px rgba(210,66,46,.6);}
@@ -3886,8 +3908,32 @@ let loadSeq = 0;
 function claimLoad(){ return ++loadSeq; }
 function loadIsCurrent(n){ return n === loadSeq; }
 
+// Демо-кадр при запуске виден только в веере стартового экрана: редактор, лента и главная
+// лежат под ним. До сигнала «готово» делаем ТОЛЬКО веер — на процессоре, из самого снимка.
+// Всё остальное — рабочие холсты редактора (они на GPU, а GPU-поток браузера на запуске
+// занят), подстройка плёнок, лента, главная, прогрев ИИ — собирается после того, как
+// стартовый экран показан, отдельными шагами: между ними успевают пройти касания.
+// Открытое человеком фото собирается как раньше, целиком и сразу.
 function setSource(img, демо){
-  setTimeout(aiПрогрев, 1200);   // снимок открыт — человек вот-вот пойдёт по инструментам
+  if(демо && !стартСообщён && onbEl.classList.contains('open')){
+    const номер = loadSeq;
+    экраныОтложены = true;
+    paintOnbFan(img);
+    // Оболочке: веер посчитан. На устройстве, где первая отрисовка дешёвая, она может
+    // открыть страницу ещё во время сборки нативного веера (см. РежимЗапуска в оболочке).
+    try{ if(window.PresetyStart && PresetyStart.веерГотов) PresetyStart.веерГотов(); }catch(_){}
+    стартСобран(()=> собратьСнимок(img, номер));
+    return;
+  }
+  собратьСнимок(img, 0);
+}
+// номер — только для отложенной сборки на запуске: если человек к этому времени уже
+// открыл своё фото (номер загрузки сменился), демо-кадр больше никуда не ставим.
+function собратьСнимок(img, номер){
+  const отложенно = номер > 0;
+  const свой = ()=> !отложенно || номер === loadSeq;
+  if(!свой()){ экраныОтложены = false; return; }
+  if(!отложенно) setTimeout(aiПрогрев, 1200);   // снимок открыт — человек вот-вот пойдёт по инструментам
   // оригинал держим целиком — это то, что уйдёт в файл при сохранении
   const fs = Math.min(1, FULL_MAX/Math.max(img.width, img.height));
   fullSource = document.createElement('canvas');
@@ -3916,20 +3962,23 @@ function setSource(img, демо){
   // а сборка ленты и контактного листа занимает больше полусекунды: всё это время в
   // редакторе была бы пустота вместо только что открытого снимка. Та же ошибка, что и
   // в renderNow, только растянутая на сборку миниатюр.
-  // Демо-кадр при запуске виден только в веере стартового экрана: редактор,
-  // лента и главная лежат под ним. Их сборка — больше полусекунды, и всё это время
-  // заставка ждала бы. Поэтому на запуске сначала веер и сигнал «готово», а остальное —
-  // следующим шагом, пока стартовый экран уже на месте. Открытое человеком фото
-  // собирается как раньше, целиком и сразу.
-  const экраны = ()=>{ updateHdrTitle(); renderNow(); buildChips(); buildHomeLooks(); paintHomeThumb(); };
-  if(демо && !стартСообщён && onbEl.classList.contains('open')){
+  экраныОтложены = false;
+  if(!отложенно){
+    updateHdrTitle(); renderNow(); buildChips(); buildHomeLooks(); paintHomeThumb();
     paintOnbFan();
-    стартСобран(экраны);
+    стартСобран();
     return;
   }
-  экраны();
-  paintOnbFan();
-  стартСобран();
+  // На запуске — по шагу на задачу. Веер уже нарисован из этого же снимка, перерисовывать
+  // его незачем.
+  const шаги = [updateHdrTitle, renderNow, buildChips, buildHomeLooks, paintHomeThumb,
+                ()=> setTimeout(aiПрогрев, 1200)];
+  const дальше = ()=>{
+    if(!свой() || !шаги.length) return;
+    шаги.shift()();
+    setTimeout(дальше, 0);
+  };
+  дальше();
 }
 
 // Первый экран собран целиком: веер с этим снимком уже на экране. Говорим об этом ОДИН
@@ -3937,24 +3986,64 @@ function setSource(img, демо){
 // до этого сигнала: иначе человек видел чёрный кадр между заставкой и приложением и
 // стартовый экран с пустым веером. Сигнал — после кадра, в котором веер уже нарисован.
 let стартСообщён = false;
+// Пока на запуске ждёт отложенная сборка экранов, лента и плитки главной не строятся по
+// чужим поводам (ответ хранилища покупок, сеть): их соберёт эта сборка, уже с актуальным
+// состоянием. Замерено на Redmi Note 14: ответ хранилища приходит сразу после веера, и
+// лишняя сборка (~1.2 с) вставала перед сигналом готовности.
+// var, а не let: функции ниже могут позвать раньше, чем дойдёт до этой строки.
+var экраныОтложены = false;
 function стартСобран(потом){
   if(стартСообщён){ if(потом) потом(); return; }
   стартСообщён = true;
-  requestAnimationFrame(()=> setTimeout(()=>{
+  // Сигнал — через ДВА кадра: следующий кадр браузер начинает, только когда предыдущий
+  // уже отрисован, так что к сигналу стартовый экран целиком хотя бы раз был на экране.
+  const сигнал = ()=> requestAnimationFrame(()=> requestAnimationFrame(()=> setTimeout(()=>{
     document.documentElement.dataset.ready = '1';
     dispatchEvent(new Event('presety:ready'));
-    // Тяжёлую сборку остальных экранов — только после следующего кадра: иначе она занимает
-    // поток раньше, чем кадр с веером дошёл до экрана, и оболочка, дождавшись его вывода,
-    // ждала бы всю сборку (или, не дождавшись, на миг показывала старый кадр).
-    if(потом) requestAnimationFrame(()=> setTimeout(потом, 0));
-  }, 0));
+    if(потом) послеПоказа(потом);
+  }, 0)));
+  // Пока идёт нативная сборка веера, экран не рисуется (класс «сборка», см. <head>) —
+  // «готово» имеет смысл только после неё. Запас — на случай, если оболочка промолчит.
+  const html = document.documentElement;
+  if(!html.classList.contains('сборка')) return сигнал();
+  let сделано = false;
+  const один = ()=>{ if(сделано) return; сделано = true; html.classList.remove('сборка'); сигнал(); };
+  addEventListener('presety:assembled', один, { once:true });
+  setTimeout(один, 3000);
+}
+// Тяжёлая сборка остальных экранов (~1 с) — только когда стартовый экран уже показан.
+// В оболочке поверх страницы в это время идёт нативный переход, и работа, начатая сразу
+// после сигнала, отнимала у него процессор: на искусственно замедленном телефоне кадры
+// перехода выпадали, и текст с кнопками возникали скачком. Оболочка сообщает о конце
+// перехода событием presety:shown; на случай, если оно не придёт, — запас. В браузере
+// оболочки нет, там — после следующего кадра, как раньше.
+function послеПоказа(дело){
+  if(!window.Presety){ requestAnimationFrame(()=> setTimeout(дело, 0)); return; }
+  if(document.documentElement.dataset.shown === '1'){ setTimeout(дело, 0); return; }
+  let сделано = false;
+  const один = ()=>{ if(сделано) return; сделано = true; setTimeout(дело, 0); };
+  addEventListener('presety:shown', один, { once:true });
+  setTimeout(один, 3000);
 }
 
 // ─── Первый запуск ───
 // Веер из трёх отпечатков — то же фото в трёх плёнках, посчитанное тем же движком.
-function paintOnbFan(){
+// снимок — исходник, из которого собран sourceCanvas (на запуске — демо-кадр). С ним
+// веер считается целиком на процессоре: на запуске GPU-поток браузера ещё секунду с
+// лишним занят своей подготовкой, и чтение пикселей из рабочего холста (он на GPU) ждало
+// очереди — на слабом телефоне 0.4 с из пути к первому экрану. Копия — того же размера и
+// тем же масштабированием, что и sourceCanvas в собратьСнимок(), так что отпечатки те же.
+// Рабочих холстов редактора на запуске к этому моменту ещё нет — они собираются позже.
+function paintOnbFan(снимок){
   const cards = document.querySelectorAll('.onb-fan .ofc canvas');
-  if(!cards.length || !sourceCanvas) return;
+  if(!cards.length || !(снимок || sourceCanvas)) return;
+  let исх = sourceCanvas;
+  if(снимок && снимок.width){
+    const к = Math.min(1, WORK_MAX/Math.max(снимок.width, снимок.height));
+    исх = document.createElement('canvas');
+    исх.width = Math.round(снимок.width*к); исх.height = Math.round(снимок.height*к);
+    исх.getContext('2d', {willReadFrequently:true}).drawImage(снимок, 0, 0, исх.width, исх.height);
+  }
   // Разрешение отпечатка считаем от ЕГО РЕАЛЬНОГО размера на экране, а не жёстко 172 px.
   // На телефоне карточка такой и была, а на компьютере веер вырос до 588 px — прежний
   // холст растягивался втрое, и Артур сразу увидел мыло. Плотность пикселей учитываем
@@ -3963,13 +4052,14 @@ function paintOnbFan(){
   const пл = Math.min(2, devicePixelRatio || 1);
   const w = Math.min(900, Math.max(172, Math.round((бокс ? бокс.clientWidth : 172) * пл)));
   const h = Math.round(w * 228/172);
-  const far = w/h, ar = sourceCanvas.width/sourceCanvas.height;
-  let sw = sourceCanvas.width, sh = sourceCanvas.height, sx = 0, sy = 0;
-  if(ar > far){ sw = Math.round(sh*far); sx = (sourceCanvas.width-sw)>>1; }
-  else { sh = Math.round(sw/far); sy = (sourceCanvas.height-sh)>>1; }
+  const far = w/h, ar = исх.width/исх.height;
+  let sw = исх.width, sh = исх.height, sx = 0, sy = 0;
+  if(ar > far){ sw = Math.round(sh*far); sx = (исх.width-sw)>>1; }
+  else { sh = Math.round(sw/far); sy = (исх.height-sh)>>1; }
   const base = document.createElement('canvas'); base.width = w; base.height = h;
-  base.getContext('2d').drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, w, h);
-  const bd = base.getContext('2d').getImageData(0, 0, w, h);
+  const bx = base.getContext('2d', {willReadFrequently: исх !== sourceCanvas});
+  bx.drawImage(исх, sx, sy, sw, sh, 0, 0, w, h);
+  const bd = bx.getImageData(0, 0, w, h);
   const pick = [7, 3, 2];                       // Ч/Б, Кино, Плёнка — впереди «Плёнка»
   cards.forEach((c, k)=>{
     const look = LOOKS[pick[k]] || LOOKS[0];
@@ -3983,7 +4073,7 @@ function paintOnbFan(){
 // когда снимок действительно загружен — иначе отменённый выбор файла оставил
 // бы пользователя на контактном листе с демо-кадром.
 const onbEl = document.getElementById('onb');
-function closeOnb(){ onbEl.classList.remove('open'); }
+function closeOnb(){ onbEl.classList.remove('open'); document.documentElement.classList.remove('старт'); }
 // Веер меняет размер вместе с окном (на компьютере он вчетверо крупнее телефонного),
 // поэтому перерисовываем его после изменения ширины — иначе холст остаётся от прошлой
 // раскладки и картинка снова становится мягкой.
@@ -4324,6 +4414,7 @@ addEventListener('orientationchange', ()=> setTimeout(fitViewport, 120));
 
 const THUMB_DPR = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
 function buildChips(){
+  if(экраныОтложены) return;                   // соберёт отложенная сборка экранов
   const chips = document.getElementById('chips'); chips.innerHTML = '';
   // Кадр ленты ПОВТОРЯЕТ ФОРМУ СНИМКА, как и в контактном листе. Раньше он был жёстко
   // вертикальным (3:4), и у горизонтального снимка срезались края — в ленте была видна
@@ -4740,7 +4831,6 @@ function собратьГлавные(){
     // на главном экране битая картинка заметнее любого другого дефекта.
     до.onerror = ()=>{ if(до.dataset.зап) { до.src = './store/' + до.dataset.зап + '.webp'; delete до.dataset.зап; } };
     до.dataset.зап = о.зап;
-    до.src = './tools/tool-' + о.файл + '.webp';
     ph.appendChild(до);
     // «После» подключается, только если файл правда есть: разделитель по двум
     // одинаковым половинам обещал бы сравнение, которого нет.
@@ -4753,7 +4843,12 @@ function собратьГлавные(){
       д.appendChild(document.createElement('i'));
       ph.appendChild(д);
     };
-    после.src = './tools/tool-' + о.файл + '-after.webp';
+    // Главная на запуске закрыта стартовым экраном, а шесть кадров (до и после) спорили
+    // с демо-снимком веера за загрузку. Просим их, когда первый экран уже показан.
+    послеПоказа(()=>{
+      до.src = './tools/tool-' + о.файл + '.webp';
+      после.src = './tools/tool-' + о.файл + '-after.webp';
+    });
     const тень = document.createElement('span'); тень.className = 'hti-sh';
     ph.appendChild(тень);
     const тx = document.createElement('span'); тx.className = 'hti-tx';
@@ -4950,6 +5045,7 @@ function sheetColW(){
   return w > 12 ? w/3 : 118;                 // главная скрыта — проектная ширина колонки
 }
 function buildHomeLooks(){
+  if(экраныОтложены) return;                   // соберёт отложенная сборка экранов
   const host = document.getElementById('homeLooks');
   if(!host || !sourceCanvas) return;
   const token = ++hlToken;                    // отменяет недостроенный лист при смене фото
@@ -10364,7 +10460,9 @@ function upgradeAllRanges(){ document.querySelectorAll('input[type=range]').forE
 function placeAllGrips(){
   document.querySelectorAll('input[type=range]').forEach(s=>{ if(s.__place) s.__place(); });
 }
-upgradeAllRanges();
+// На стартовом экране ползунков нет, а разметка каждого просит у браузера раскладку —
+// поэтому площадки ставим, когда первый экран уже показан.
+послеПоказа(upgradeAllRanges);
 window.addEventListener('resize', placeAllGrips);
 
 // re-fit the photo on rotate / viewport change
