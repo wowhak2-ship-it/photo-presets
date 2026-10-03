@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 5,
- "updatedAt": "2026-09-30T21:00",
+ "revision": 6,
+ "updatedAt": "2026-10-03T23:00",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -1070,6 +1070,231 @@
     },
     "magenta": {
      "sat": -12
+    }
+   }
+  },
+  {
+   "id": "test-clean-natural-v1",
+   "name": "Clean Natural TEST",
+   "temp": 0,
+   "tint": 0,
+   "contrast": 0.06,
+   "fade": 0,
+   "shadowsLift": 0.05,
+   "highlightsRoll": 0.1,
+   "shSplit": [
+    1,
+    0,
+    0
+   ],
+   "hiSplit": [
+    0,
+    0,
+    1
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.12,
+   "saturation": 0.98,
+   "vignette": 0,
+   "grain": 0,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      7
+     ],
+     [
+      64,
+      65
+     ],
+     [
+      128,
+      132
+     ],
+     [
+      192,
+      199
+     ],
+     [
+      255,
+      251
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -6
+    },
+    "orange": {
+     "sat": -3,
+     "lum": 4
+    },
+    "yellow": {
+     "hue": -4,
+     "sat": -34,
+     "lum": -2
+    },
+    "green": {
+     "hue": -6,
+     "sat": -36,
+     "lum": -4
+    },
+    "aqua": {
+     "sat": -20
+    },
+    "blue": {
+     "sat": -10,
+     "lum": 4
+    }
+   }
+  },
+  {
+   "id": "test-soft-natural-v1",
+   "name": "Soft Natural TEST",
+   "temp": 1,
+   "tint": 0,
+   "contrast": -0.02,
+   "fade": 0,
+   "shadowsLift": 0.03,
+   "highlightsRoll": 0.08,
+   "shSplit": [
+    1,
+    0,
+    0
+   ],
+   "hiSplit": [
+    0,
+    0,
+    1
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.12,
+   "saturation": 0.98,
+   "vignette": 0,
+   "grain": 0,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      3
+     ],
+     [
+      64,
+      66
+     ],
+     [
+      128,
+      134
+     ],
+     [
+      192,
+      200
+     ],
+     [
+      255,
+      253
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -7
+    },
+    "orange": {
+     "sat": -2,
+     "lum": 6
+    },
+    "yellow": {
+     "hue": -4,
+     "sat": -34,
+     "lum": -2
+    },
+    "green": {
+     "hue": -6,
+     "sat": -38,
+     "lum": -4
+    },
+    "aqua": {
+     "sat": -22
+    },
+    "blue": {
+     "sat": -12,
+     "lum": 4
+    }
+   }
+  },
+  {
+   "id": "test-pure-daylight-v1",
+   "name": "Pure Daylight TEST",
+   "temp": 0,
+   "tint": 0,
+   "contrast": 0.03,
+   "fade": 0,
+   "shadowsLift": 0.05,
+   "highlightsRoll": 0.14,
+   "shSplit": [
+    0,
+    0,
+    0
+   ],
+   "hiSplit": [
+    0,
+    0,
+    0
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.12,
+   "saturation": 1.0,
+   "vignette": 0,
+   "grain": 0,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      5
+     ],
+     [
+      64,
+      72
+     ],
+     [
+      128,
+      143
+     ],
+     [
+      192,
+      208
+     ],
+     [
+      255,
+      253
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -6
+    },
+    "orange": {
+     "sat": 0,
+     "lum": 5
+    },
+    "yellow": {
+     "hue": -4,
+     "sat": -34,
+     "lum": 2
+    },
+    "green": {
+     "hue": -5,
+     "sat": -34,
+     "lum": 0
+    },
+    "aqua": {
+     "sat": -18
+    },
+    "blue": {
+     "sat": -12,
+     "lum": 6
     }
    }
   }
