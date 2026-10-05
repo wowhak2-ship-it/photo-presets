@@ -188,8 +188,8 @@ try{
   .cmp-lab.b{left:16px;} .cmp-lab.a{right:16px;}
   #cmpDiv{position:absolute; top:0; bottom:0; width:2px; background:#fff; transform:translateX(-1px); box-shadow:0 0 8px rgba(0,0,0,.5);}
   #cmpHandle{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-    width:40px; height:40px; border-radius:50%; background:#fff; color:#111; font-size:15px; font-weight:700;
-    display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(0,0,0,.4);}
+    width:40px; height:40px; border-radius:50%; background:#fff; color:#111;
+    box-shadow:0 2px 10px rgba(0,0,0,.4);}
 
   /* шторка сравнения в ретуши — те же метки и тот же разделитель, что в редакторе */
   #rtCmp{position:absolute; inset:0; display:none; pointer-events:none; z-index:3;}
@@ -199,8 +199,19 @@ try{
     transform:translateX(-1px); box-shadow:0 0 8px rgba(0,0,0,.5);}
   #rtCmpHandle{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
     width:40px; height:40px; border-radius:50%; background:#fff; color:#111;
-    font-size:15px; font-weight:700; display:flex; align-items:center; justify-content:center;
     box-shadow:0 2px 10px rgba(0,0,0,.4);}
+
+  /* Стрелки «‹ ›» в кружке сравнения ДО/ПОСЛЕ — ОДИН рисунок для всех экранов: редактор,
+     ретушь, магазин, главная. Раньше это были буквы шрифта, а буква сидит на строке, не
+     в центре круга; letter-spacing добавлял пустоту после второй стрелки, и у каждого
+     экрана был свой шрифт и кегль — пара съезжала по-своему (вниз на 2 px, влево до 1–2 px).
+     Теперь — маска из SVG на весь кружок, стрелки отцентрованы в самом рисунке (40×40):
+     никаких дробных сдвигов вёрстки — симметрично и точно по центру на любом размере.
+     Цвет стрелок — цвет текста самого кружка (currentColor). */
+  #cmpHandle::before, #rtCmpHandle::before, .st-hand i::before, .hti-div i::before{
+    content:''; position:absolute; inset:0; background:currentColor; pointer-events:none;
+    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16.5 15 12 20 16.5 25M23.5 15 28 20 23.5 25'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat;
+            mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16.5 15 12 20 16.5 25M23.5 15 28 20 23.5 25'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat;}
 
   #empty{display:flex; flex-direction:column; align-items:center; gap:12px; color:var(--dim); text-align:center;}
   #empty svg{width:46px; height:46px; opacity:.7;}
@@ -1124,14 +1135,11 @@ try{
      до 46 px — палец попадает, а на глаз метка остаётся аккуратной. */
   .st-hand i{position:absolute; top:50%; left:50%; width:34px; height:34px; margin:-17px 0 0 -17px;
     border-radius:50%; background:rgba(20,16,10,.55); border:1.5px solid rgba(255,255,255,.9);
-    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
-    display:flex; align-items:center; justify-content:center;
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); color:#fff;
     pointer-events:auto; cursor:grab; touch-action:none;}
   .st-hand i::after{content:''; position:absolute; left:-6px; right:-6px; top:-6px; bottom:-6px;
     border-radius:50%;}
   .st-hand i:active{cursor:grabbing;}
-  .st-hand i::before{content:'‹ ›'; font-size:13px; color:#fff; letter-spacing:.06em;
-    line-height:32px; font-family:var(--mono);}
   /* Подписи «до/после» живут ВНИЗУ кадра: наверху их перекрывали значки коллекции
      («БЕСПЛАТНО» ложилось прямо на «ДО» — поймано на первом же прогоне). */
   .st-tag{position:absolute; bottom:12px; font-family:var(--mono); font-size:9px; letter-spacing:.16em;
@@ -1687,9 +1695,11 @@ try{
      просто пустой диск. */
   .hti-div i{position:absolute; top:50%; left:50%; width:30px; height:30px; margin:-15px 0 0 -15px;
     border-radius:50%; border:1.5px solid rgba(255,255,255,.9); background:rgba(20,16,10,.5);
-    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
-    font-family:var(--mono); font-size:11px; color:#fff; line-height:28px; text-align:center;}
-  .hti-div i::before{content:'‹ ›'; letter-spacing:.06em;}
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); color:#fff;}
+  /* Кружок — тоже тег <i>, и правила подписи карточки (.ht.hti i) цепляли его: стрелки
+     становились полупрозрачными кремовыми, а на узком телефоне (≤350 px) пропадал весь
+     кружок вместе с подписью. Этот селектор сильнее любого из них. */
+  .ht.hti .hti-div i{color:#fff; display:block;}
   .hti-sh{position:absolute; left:0; right:0; bottom:0; height:62%; pointer-events:none;
     background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.78) 100%);}
   .hti-tx{position:absolute; left:14px; right:14px; bottom:12px; display:flex;
@@ -1811,7 +1821,7 @@ try{
     .hti-tx{left:9px; right:8px; bottom:9px;}
     .ht.hti b{font-size:13px;}
     .ht.hti i{font-size:10px; line-height:1.25;}
-    .hti-div i{width:24px; height:24px; margin:-12px 0 0 -12px; line-height:22px; font-size:9px;}
+    .hti-div i{width:24px; height:24px; margin:-12px 0 0 -12px;}
     /* Группы — компактной сеткой по три: всё видно разом, без стены карточек.
        76 px — и компактно, и палец попадает (меньше 44 px тут не бывает ничего). */
     .home-tools{grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px;}
@@ -2163,7 +2173,7 @@ try{
     <div id="cmp">
       <span class="cmp-lab b">ДО</span>
       <span class="cmp-lab a">ПОСЛЕ</span>
-      <div id="cmpDiv"><div id="cmpHandle">‹ ›</div></div>
+      <div id="cmpDiv"><div id="cmpHandle"></div></div>
     </div>
   </div>
   <button class="cmp-fab" id="compare">
@@ -2714,7 +2724,7 @@ try{
     <div id="rtCmp">
       <span class="cmp-lab b">ДО</span>
       <span class="cmp-lab a">ПОСЛЕ</span>
-      <div id="rtCmpDiv"><div id="rtCmpHandle">‹ ›</div></div>
+      <div id="rtCmpDiv"><div id="rtCmpHandle"></div></div>
     </div>
     <!-- На групповом кадре обрабатывать всех подряд нельзя: точки над лицами дают
          выбрать нужное. Появляются, только если лиц больше одного. -->
