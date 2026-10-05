@@ -1969,7 +1969,10 @@ try{
 <div class="виньетка"></div>
 
 <header>
-  <button class="icon-btn" id="backBtn" aria-label="Домой">
+  <!-- data-back: «назад» ЭКРАНА. Редактор — не оверлей .open, а режим всей страницы
+       (body.editing), поэтому системный «назад» Android (мост оболочки) находит его
+       стрелку по этой пометке и делает ровно то же, что она. -->
+  <button class="icon-btn" id="backBtn" aria-label="Домой" data-back>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
   </button>
   <div class="hdr-title" id="hdrTitle">Редактор</div>
