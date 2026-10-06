@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 10,
- "updatedAt": "2026-10-04T21:00",
+ "revision": 11,
+ "updatedAt": "2026-10-06T21:00",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -2603,6 +2603,177 @@
     },
     "magenta": {
      "hue": 20
+    }
+   }
+  },
+  {
+   "id": "test-bright-offset-soft-v1",
+   "name": "Bright Offset Soft TEST",
+   "temp": 0,
+   "tint": 0,
+   "contrast": -0.06,
+   "fade": 0,
+   "shadowsLift": 0,
+   "highlightsRoll": 0.0,
+   "shSplit": [
+    0,
+    0,
+    0
+   ],
+   "hiSplit": [
+    0,
+    0,
+    0
+   ],
+   "vibrance": 0.14,
+   "vibFloor": 0.1,
+   "saturation": 1.02,
+   "vignette": 0,
+   "grain": 0.28,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      22
+     ],
+     [
+      60,
+      74
+     ],
+     [
+      128,
+      140
+     ],
+     [
+      196,
+      206
+     ],
+     [
+      255,
+      244
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "hue": -2,
+     "sat": 40
+    },
+    "orange": {
+     "hue": -6,
+     "sat": -2,
+     "lum": 4
+    },
+    "yellow": {
+     "hue": -4,
+     "sat": -34
+    },
+    "green": {
+     "hue": 8,
+     "sat": -62,
+     "lum": -2
+    },
+    "aqua": {
+     "sat": -52
+    },
+    "blue": {
+     "sat": -45,
+     "lum": 6
+    },
+    "purple": {
+     "hue": 8,
+     "sat": -15
+    },
+    "magenta": {
+     "hue": 4,
+     "sat": 46,
+     "lum": 2
+    }
+   }
+  },
+  {
+   "id": "test-bright-offset-rich-v1",
+   "name": "Bright Offset Rich TEST",
+   "temp": 0,
+   "tint": 0,
+   "contrast": 0.0,
+   "fade": 0,
+   "shadowsLift": 0,
+   "highlightsRoll": 0.0,
+   "shSplit": [
+    0,
+    0,
+    0
+   ],
+   "hiSplit": [
+    0,
+    0,
+    0
+   ],
+   "vibrance": 0.06,
+   "vibFloor": 0.1,
+   "saturation": 1.0,
+   "vignette": 0,
+   "grain": 0.28,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      12
+     ],
+     [
+      60,
+      60
+     ],
+     [
+      128,
+      131
+     ],
+     [
+      196,
+      202
+     ],
+     [
+      255,
+      247
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "hue": -2,
+     "sat": 30,
+     "lum": -2
+    },
+    "orange": {
+     "hue": -6,
+     "sat": -6,
+     "lum": 2
+    },
+    "yellow": {
+     "hue": -4,
+     "sat": -32
+    },
+    "green": {
+     "hue": 8,
+     "sat": -58,
+     "lum": -4
+    },
+    "aqua": {
+     "sat": -48
+    },
+    "blue": {
+     "sat": -38,
+     "lum": 2
+    },
+    "purple": {
+     "hue": 8,
+     "sat": -10
+    },
+    "magenta": {
+     "hue": 4,
+     "sat": 46,
+     "lum": -3
     }
    }
   }
