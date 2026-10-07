@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 11,
- "updatedAt": "2026-10-06T21:00",
+ "revision": 12,
+ "updatedAt": "2026-10-07T12:00",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -2611,10 +2611,10 @@
    "name": "Bright Offset Soft TEST",
    "temp": 0,
    "tint": 0,
-   "contrast": -0.06,
+   "contrast": -0.05,
    "fade": 0,
    "shadowsLift": 0,
-   "highlightsRoll": 0.0,
+   "highlightsRoll": 0.3,
    "shSplit": [
     0,
     0,
@@ -2629,28 +2629,28 @@
    "vibFloor": 0.1,
    "saturation": 1.02,
    "vignette": 0,
-   "grain": 0.28,
+   "grain": 0,
    "curve": {
     "rgb": [
      [
       0,
-      22
+      20
      ],
      [
       60,
-      74
+      67
      ],
      [
       128,
-      140
+      133
      ],
      [
       196,
-      206
+      201
      ],
      [
       255,
-      244
+      250
      ]
     ]
    },
@@ -2689,7 +2689,8 @@
      "sat": 46,
      "lum": 2
     }
-   }
+   },
+   "paperTexture": 0.45
   },
   {
    "id": "test-bright-offset-rich-v1",
@@ -2714,7 +2715,7 @@
    "vibFloor": 0.1,
    "saturation": 1.0,
    "vignette": 0,
-   "grain": 0.28,
+   "grain": 0,
    "curve": {
     "rgb": [
      [
@@ -2723,19 +2724,19 @@
      ],
      [
       60,
-      60
+      55
      ],
      [
       128,
-      131
+      125
      ],
      [
       196,
-      202
+      197
      ],
      [
       255,
-      247
+      245
      ]
     ]
    },
@@ -2775,7 +2776,8 @@
      "sat": 46,
      "lum": -3
     }
-   }
+   },
+   "paperTexture": 0.45
   }
  ]
 }
