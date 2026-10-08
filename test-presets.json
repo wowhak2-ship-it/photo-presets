@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 12,
- "updatedAt": "2026-10-07T12:00",
+ "revision": 13,
+ "updatedAt": "2026-10-08T23:00",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -2778,6 +2778,174 @@
     }
    },
    "paperTexture": 0.45
+  },
+  {
+   "id": "test-brutalist-soft-v1",
+   "name": "Brutalist Soft TEST",
+   "temp": 0,
+   "tint": 0,
+   "contrast": 0.0,
+   "fade": 0,
+   "shadowsLift": 0,
+   "highlightsRoll": 0.06,
+   "shSplit": [
+    -2,
+    1,
+    2
+   ],
+   "hiSplit": [
+    2,
+    1,
+    0
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.1,
+   "saturation": 0.98,
+   "vignette": 0.03,
+   "grain": 0,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      9
+     ],
+     [
+      64,
+      67
+     ],
+     [
+      128,
+      129
+     ],
+     [
+      192,
+      191
+     ],
+     [
+      255,
+      243
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "hue": 2,
+     "sat": -8
+    },
+    "orange": {
+     "hue": 0,
+     "sat": -2
+    },
+    "yellow": {
+     "hue": -10,
+     "sat": -28,
+     "lum": -10
+    },
+    "green": {
+     "hue": -28,
+     "sat": -30,
+     "lum": -10
+    },
+    "aqua": {
+     "hue": -10,
+     "sat": -40
+    },
+    "blue": {
+     "hue": -14,
+     "sat": -55,
+     "lum": 4
+    },
+    "purple": {
+     "sat": -35
+    },
+    "magenta": {
+     "sat": -25
+    }
+   }
+  },
+  {
+   "id": "test-brutalist-deep-v1",
+   "name": "Brutalist Deep TEST",
+   "temp": 0,
+   "tint": 0,
+   "contrast": 0.04,
+   "fade": 0,
+   "shadowsLift": 0,
+   "highlightsRoll": 0.06,
+   "shSplit": [
+    -4,
+    1,
+    3
+   ],
+   "hiSplit": [
+    2,
+    1,
+    0
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.1,
+   "saturation": 0.93,
+   "vignette": 0.05,
+   "grain": 0,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      9
+     ],
+     [
+      64,
+      60
+     ],
+     [
+      128,
+      127
+     ],
+     [
+      192,
+      191
+     ],
+     [
+      255,
+      242
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "hue": 2,
+     "sat": -8
+    },
+    "orange": {
+     "hue": 0,
+     "sat": -2
+    },
+    "yellow": {
+     "hue": -10,
+     "sat": -28,
+     "lum": -10
+    },
+    "green": {
+     "hue": -28,
+     "sat": -30,
+     "lum": -10
+    },
+    "aqua": {
+     "hue": -10,
+     "sat": -40
+    },
+    "blue": {
+     "hue": -14,
+     "sat": -55,
+     "lum": 4
+    },
+    "purple": {
+     "sat": -35
+    },
+    "magenta": {
+     "sat": -25
+    }
+   }
   }
  ]
 }
