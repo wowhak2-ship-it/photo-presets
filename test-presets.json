@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 15,
- "updatedAt": "2026-10-09T23:00",
+ "revision": 16,
+ "updatedAt": "2026-10-12T23:00",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -3112,6 +3112,92 @@
     },
     "magenta": {
      "sat": -35
+    }
+   }
+  },
+  {
+   "id": "test-new-year-v1",
+   "name": "New Year TEST",
+   "temp": 3,
+   "tint": 0,
+   "contrast": 0.06,
+   "fade": 0,
+   "shadowsLift": 0,
+   "highlightsRoll": 0.12,
+   "shSplit": [
+    2,
+    1,
+    -1
+   ],
+   "hiSplit": [
+    -1,
+    0,
+    3
+   ],
+   "vibrance": -0.12,
+   "vibFloor": 0.1,
+   "saturation": 1.08,
+   "vignette": 0.06,
+   "grain": 0,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      0
+     ],
+     [
+      64,
+      61
+     ],
+     [
+      128,
+      129
+     ],
+     [
+      192,
+      196
+     ],
+     [
+      255,
+      250
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "hue": 0,
+     "sat": 4,
+     "lum": -8
+    },
+    "orange": {
+     "hue": -10,
+     "sat": -8,
+     "lum": 2
+    },
+    "yellow": {
+     "hue": -28,
+     "sat": 22,
+     "lum": -4
+    },
+    "green": {
+     "hue": 80,
+     "sat": 22,
+     "lum": -20
+    },
+    "aqua": {
+     "hue": 0,
+     "sat": -15
+    },
+    "blue": {
+     "hue": 0,
+     "sat": -8
+    },
+    "purple": {
+     "sat": -10
+    },
+    "magenta": {
+     "hue": 6,
+     "sat": 5
     }
    }
   }
