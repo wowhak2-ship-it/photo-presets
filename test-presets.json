@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 17,
- "updatedAt": "2026-10-13T23:00",
+ "revision": 18,
+ "updatedAt": "2026-10-25T21:00",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -3284,6 +3284,169 @@
      "sat": -15
     }
    }
+  },
+  {
+   "id": "test-autumn-woman-rich-v2",
+   "name": "Autumn Woman Rich TEST",
+   "temp": 4,
+   "tint": 0,
+   "contrast": 0.08,
+   "fade": 0,
+   "shadowsLift": 0.015,
+   "highlightsRoll": 0.12,
+   "shSplit": [
+    2,
+    1,
+    -1
+   ],
+   "hiSplit": [
+    6,
+    3,
+    -5
+   ],
+   "vibrance": 0,
+   "vibFloor": 0.08,
+   "saturation": 1.0,
+   "vignette": 0.07,
+   "grain": 0.02,
+   "bloom": 0.02,
+   "bloomWarm": true,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      3
+     ],
+     [
+      48,
+      44
+     ],
+     [
+      128,
+      130
+     ],
+     [
+      200,
+      204
+     ],
+     [
+      255,
+      238
+     ]
+    ],
+    "r": [
+     [
+      0,
+      2
+     ],
+     [
+      128,
+      129
+     ],
+     [
+      255,
+      255
+     ]
+    ],
+    "b": [
+     [
+      0,
+      0
+     ],
+     [
+      128,
+      126
+     ],
+     [
+      255,
+      245
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "hue": 4,
+     "sat": -8
+    },
+    "orange": {
+     "hue": -25,
+     "sat": -14,
+     "lum": 2
+    },
+    "yellow": {
+     "hue": -6,
+     "sat": -48,
+     "lum": 4
+    },
+    "green": {
+     "hue": -18,
+     "sat": -45,
+     "lum": 10
+    },
+    "aqua": {
+     "sat": -35
+    },
+    "blue": {
+     "sat": -25,
+     "lum": 2
+    },
+    "purple": {
+     "sat": -10
+    },
+    "magenta": {
+     "sat": -10
+    }
+   },
+   "toneZones": {
+    "shadows": {
+     "hue": 50,
+     "amount": 3
+    },
+    "midtones": {
+     "hue": 25,
+     "amount": 5
+    },
+    "highlights": {
+     "hue": 38,
+     "amount": 15
+    }
+   },
+   "hslZones": [
+    {
+     "bands": {
+      "orange": {
+       "hue": 30,
+       "sat": -35,
+       "lum": 8
+      },
+      "yellow": {
+       "hue": 6,
+       "sat": -25,
+       "lum": 6
+      }
+     },
+     "sat": [
+      0.55,
+      1
+     ],
+     "soft": 0.3
+    },
+    {
+     "bands": {
+      "green": {
+       "lum": 22
+      },
+      "yellow": {
+       "lum": 10
+      }
+     },
+     "sat": [
+      0.15,
+      1
+     ],
+     "soft": 0.3
+    }
+   ]
   }
  ]
 }
