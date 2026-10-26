@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 18,
- "updatedAt": "2026-10-25T21:00",
+ "revision": 19,
+ "updatedAt": "2026-10-26T23:00",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -3438,6 +3438,309 @@
       },
       "yellow": {
        "lum": 10
+      }
+     },
+     "sat": [
+      0.15,
+      1
+     ],
+     "soft": 0.3
+    }
+   ]
+  },
+  {
+   "id": "test-preset-12-rich-v1",
+   "name": "Preset 12 Rich TEST",
+   "temp": 0,
+   "tint": 0,
+   "contrast": -0.02,
+   "fade": 0,
+   "shadowsLift": 0.0,
+   "highlightsRoll": 0.12,
+   "shSplit": [
+    0,
+    0,
+    0
+   ],
+   "hiSplit": [
+    0,
+    0,
+    0
+   ],
+   "vibrance": 0,
+   "vibFloor": 0,
+   "saturation": 0.88,
+   "vignette": 0.09,
+   "grain": 0.04,
+   "bloom": 0.05,
+   "bloomWarm": true,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      6
+     ],
+     [
+      48,
+      40
+     ],
+     [
+      96,
+      90
+     ],
+     [
+      128,
+      124
+     ],
+     [
+      192,
+      188
+     ],
+     [
+      255,
+      236
+     ]
+    ],
+    "r": [
+     [
+      0,
+      5
+     ],
+     [
+      64,
+      70
+     ],
+     [
+      128,
+      135
+     ],
+     [
+      192,
+      197
+     ],
+     [
+      255,
+      255
+     ]
+    ],
+    "g": [
+     [
+      0,
+      3
+     ],
+     [
+      64,
+      66
+     ],
+     [
+      128,
+      130
+     ],
+     [
+      192,
+      193
+     ],
+     [
+      255,
+      255
+     ]
+    ],
+    "b": [
+     [
+      0,
+      2
+     ],
+     [
+      64,
+      57
+     ],
+     [
+      128,
+      116
+     ],
+     [
+      192,
+      181
+     ],
+     [
+      255,
+      243
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -18
+    },
+    "orange": {
+     "hue": -45,
+     "sat": -10,
+     "lum": 2
+    },
+    "yellow": {
+     "hue": -4,
+     "sat": -40,
+     "lum": 2
+    },
+    "green": {
+     "hue": -20,
+     "sat": -45,
+     "lum": 2
+    },
+    "aqua": {
+     "sat": -50
+    },
+    "blue": {
+     "sat": -50,
+     "lum": 2
+    },
+    "purple": {
+     "sat": -40
+    },
+    "magenta": {
+     "sat": -40
+    }
+   }
+  },
+  {
+   "id": "test-preset-13-v1",
+   "name": "Preset 13 TEST",
+   "temp": 0,
+   "tint": 0,
+   "contrast": 0.06,
+   "fade": 0,
+   "shadowsLift": 0,
+   "highlightsRoll": 0.1,
+   "shSplit": [
+    0,
+    0,
+    0
+   ],
+   "hiSplit": [
+    0,
+    0,
+    0
+   ],
+   "vibrance": 0,
+   "vibFloor": 0,
+   "saturation": 1.0,
+   "vignette": 0.16,
+   "grain": 0.06,
+   "bloom": 0.05,
+   "bloomWarm": false,
+   "curve": {
+    "rgb": [
+     [
+      0,
+      12
+     ],
+     [
+      40,
+      32
+     ],
+     [
+      96,
+      89
+     ],
+     [
+      160,
+      166
+     ],
+     [
+      220,
+      224
+     ],
+     [
+      255,
+      238
+     ]
+    ],
+    "r": [
+     [
+      0,
+      0
+     ],
+     [
+      128,
+      129
+     ],
+     [
+      255,
+      255
+     ]
+    ],
+    "b": [
+     [
+      0,
+      0
+     ],
+     [
+      64,
+      63
+     ],
+     [
+      128,
+      125
+     ],
+     [
+      200,
+      196
+     ],
+     [
+      255,
+      248
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -100
+    },
+    "orange": {
+     "sat": -100
+    },
+    "yellow": {
+     "sat": -100
+    },
+    "green": {
+     "sat": -100
+    },
+    "aqua": {
+     "sat": -100
+    },
+    "blue": {
+     "sat": -100
+    },
+    "purple": {
+     "sat": -100
+    },
+    "magenta": {
+     "sat": -100
+    }
+   },
+   "hslZones": [
+    {
+     "bands": {
+      "red": {
+       "lum": 10
+      },
+      "orange": {
+       "lum": 22
+      },
+      "yellow": {
+       "lum": 10
+      },
+      "green": {
+       "lum": -5
+      },
+      "aqua": {
+       "lum": -15
+      },
+      "blue": {
+       "lum": -25
+      },
+      "purple": {
+       "lum": -10
       }
      },
      "sat": [
