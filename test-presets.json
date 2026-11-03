@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 21,
- "updatedAt": "2026-11-03T22:00",
+ "revision": 22,
+ "updatedAt": "2026-11-03T23:30",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -4100,6 +4100,123 @@
      }
     }
    ]
+  },
+  {
+   "id": "test-quiet-shore-v1",
+   "name": "Тихий берег TEST",
+   "temp": 0,
+   "tint": 0,
+   "contrast": 0.0,
+   "fade": 0,
+   "shadowsLift": 0,
+   "highlightsRoll": 0.12,
+   "shSplit": [
+    0,
+    0,
+    0
+   ],
+   "hiSplit": [
+    0,
+    0,
+    0
+   ],
+   "vibrance": 0,
+   "vibFloor": 0,
+   "saturation": 0.86,
+   "vignette": 0.04,
+   "grain": 0.02,
+   "bloom": 0.05,
+   "bloomWarm": false,
+   "toneZones": {
+    "shadows": {
+     "hue": 120,
+     "amount": 6
+    },
+    "midtones": {
+     "hue": 130,
+     "amount": 10
+    },
+    "highlights": {
+     "hue": 220,
+     "amount": 22
+    },
+    "balance": 0,
+    "width": 50
+   },
+   "curve": {
+    "rgb": [
+     [
+      0,
+      14
+     ],
+     [
+      64,
+      68
+     ],
+     [
+      128,
+      131
+     ],
+     [
+      192,
+      194
+     ],
+     [
+      255,
+      242
+     ]
+    ],
+    "b": [
+     [
+      0,
+      0
+     ],
+     [
+      200,
+      201
+     ],
+     [
+      245,
+      249
+     ],
+     [
+      255,
+      255
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -10
+    },
+    "orange": {
+     "hue": -8,
+     "sat": 4,
+     "lum": 2
+    },
+    "yellow": {
+     "hue": -10,
+     "sat": -30
+    },
+    "green": {
+     "hue": -25,
+     "sat": -40,
+     "lum": -4
+    },
+    "aqua": {
+     "sat": -35
+    },
+    "blue": {
+     "sat": -30,
+     "lum": 4
+    },
+    "purple": {
+     "sat": -30
+    },
+    "magenta": {
+     "sat": -25
+    }
+   }
   }
  ]
 }
