@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 22,
- "updatedAt": "2026-11-03T23:30",
+ "revision": 23,
+ "updatedAt": "2026-11-04T20:00",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -4106,10 +4106,10 @@
    "name": "Тихий берег TEST",
    "temp": 0,
    "tint": 0,
-   "contrast": 0.0,
-   "fade": 0,
-   "shadowsLift": 0,
-   "highlightsRoll": 0.12,
+   "contrast": 0.03,
+   "fade": 0.0,
+   "shadowsLift": 0.06,
+   "highlightsRoll": 0.14,
    "shSplit": [
     0,
     0,
@@ -4120,50 +4120,68 @@
     0,
     0
    ],
-   "vibrance": 0,
+   "vibrance": 0.1,
    "vibFloor": 0,
-   "saturation": 0.86,
-   "vignette": 0.04,
+   "saturation": 0.88,
+   "vignette": 0.06,
    "grain": 0.02,
-   "bloom": 0.05,
+   "bloom": 0.04,
    "bloomWarm": false,
    "toneZones": {
     "shadows": {
-     "hue": 120,
-     "amount": 6
-    },
-    "midtones": {
-     "hue": 130,
+     "hue": 25,
      "amount": 10
     },
-    "highlights": {
-     "hue": 220,
-     "amount": 22
+    "midtones": {
+     "hue": 30,
+     "amount": 6
     },
-    "balance": 0,
+    "highlights": {
+     "hue": 225,
+     "amount": 16
+    },
+    "balance": 10,
     "width": 50
    },
    "curve": {
     "rgb": [
      [
       0,
-      14
+      8
      ],
      [
-      64,
-      68
+      48,
+      52
      ],
      [
       128,
-      131
+      142
      ],
      [
-      192,
-      194
+      200,
+      210
      ],
      [
       255,
       242
+     ]
+    ],
+    "r": [
+     [
+      0,
+      0
+     ],
+     [
+      205,
+      205
+     ],
+     [
+      240,
+      237
+     ],
+     [
+      255,
+      252
      ]
     ],
     "b": [
@@ -4172,12 +4190,12 @@
       0
      ],
      [
-      200,
-      201
+      205,
+      205
      ],
      [
-      245,
-      249
+      240,
+      245
      ],
      [
       255,
@@ -4187,36 +4205,80 @@
    },
    "hsl": {
     "red": {
-     "sat": -10
-    },
-    "orange": {
-     "hue": -8,
-     "sat": 4,
+     "sat": -10,
      "lum": 2
     },
+    "orange": {
+     "hue": -4,
+     "sat": 0,
+     "lum": 5
+    },
     "yellow": {
-     "hue": -10,
-     "sat": -30
+     "hue": -6,
+     "sat": -30,
+     "lum": 0
     },
     "green": {
-     "hue": -25,
-     "sat": -40,
-     "lum": -4
+     "hue": -10,
+     "sat": -38,
+     "lum": -6
     },
     "aqua": {
-     "sat": -35
+     "sat": -30,
+     "lum": -4
     },
     "blue": {
-     "sat": -30,
-     "lum": 4
+     "sat": -22,
+     "lum": 0
     },
     "purple": {
-     "sat": -30
+     "sat": -20
     },
     "magenta": {
-     "sat": -25
+     "sat": -10,
+     "lum": 2
     }
-   }
+   },
+   "hslZones": [
+    {
+     "bands": {
+      "orange": {
+       "sat": -30
+      },
+      "yellow": {
+       "sat": -25
+      }
+     },
+     "lum": [
+      0,
+      0.36
+     ],
+     "sat": [
+      0.38,
+      1
+     ],
+     "soft": 0.25
+    },
+    {
+     "bands": {
+      "orange": {
+       "sat": 18
+      },
+      "red": {
+       "sat": 8
+      }
+     },
+     "lum": [
+      0.45,
+      1
+     ],
+     "sat": [
+      0.08,
+      0.42
+     ],
+     "soft": 0.3
+    }
+   ]
   }
  ]
 }
