@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 20,
- "updatedAt": "2026-10-27T00:30",
+ "revision": 21,
+ "updatedAt": "2026-11-03T22:00",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -3784,6 +3784,320 @@
       1
      ],
      "soft": 0.3
+    }
+   ]
+  },
+  {
+   "id": "test-urban-rich-v1",
+   "name": "Urban Rich TEST",
+   "temp": 0,
+   "tint": 0,
+   "contrast": 0.06,
+   "fade": 0,
+   "shadowsLift": 0,
+   "highlightsRoll": 0.1,
+   "shSplit": [
+    0,
+    0,
+    0
+   ],
+   "hiSplit": [
+    0,
+    0,
+    0
+   ],
+   "vibrance": 0,
+   "vibFloor": 0,
+   "saturation": 0.8,
+   "vignette": 0.1,
+   "grain": 0.03,
+   "toneZones": {
+    "shadows": {
+     "hue": 192,
+     "amount": 100
+    },
+    "midtones": {
+     "hue": 175,
+     "amount": 28
+    },
+    "highlights": {
+     "hue": 43,
+     "amount": 42
+    },
+    "balance": 0,
+    "width": 45
+   },
+   "curve": {
+    "rgb": [
+     [
+      0,
+      6
+     ],
+     [
+      64,
+      61
+     ],
+     [
+      128,
+      127
+     ],
+     [
+      192,
+      193
+     ],
+     [
+      255,
+      248
+     ]
+    ],
+    "r": [
+     [
+      0,
+      0
+     ],
+     [
+      200,
+      200
+     ],
+     [
+      240,
+      238
+     ],
+     [
+      255,
+      253
+     ]
+    ],
+    "b": [
+     [
+      0,
+      0
+     ],
+     [
+      200,
+      201
+     ],
+     [
+      240,
+      245
+     ],
+     [
+      255,
+      255
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -14,
+     "lum": -4
+    },
+    "orange": {
+     "hue": -25,
+     "sat": -18,
+     "lum": 2
+    },
+    "yellow": {
+     "hue": -30,
+     "sat": -26,
+     "lum": -4
+    },
+    "green": {
+     "hue": 30,
+     "sat": -45,
+     "lum": -10
+    },
+    "aqua": {
+     "hue": 6,
+     "sat": -25,
+     "lum": -8
+    },
+    "blue": {
+     "hue": -30,
+     "sat": -45,
+     "lum": -4
+    },
+    "purple": {
+     "sat": -40
+    },
+    "magenta": {
+     "sat": -35
+    }
+   },
+   "hslZones": [
+    {
+     "sat": [
+      0.12,
+      0.45
+     ],
+     "lum": [
+      0.45,
+      1
+     ],
+     "soft": 0.3,
+     "bands": {
+      "orange": {
+       "hue": -10
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "test-interior-soft-v1",
+   "name": "Interior Soft TEST",
+   "temp": 0,
+   "tint": 0,
+   "contrast": -0.08,
+   "fade": 0,
+   "shadowsLift": 0,
+   "highlightsRoll": 0.18,
+   "shSplit": [
+    0,
+    0,
+    0
+   ],
+   "hiSplit": [
+    0,
+    0,
+    0
+   ],
+   "vibrance": 0,
+   "vibFloor": 0,
+   "saturation": 0.8,
+   "vignette": 0.12,
+   "grain": 0.04,
+   "bloom": 0.1,
+   "bloomWarm": false,
+   "toneZones": {
+    "shadows": {
+     "hue": 140,
+     "amount": 40
+    },
+    "midtones": {
+     "hue": 72,
+     "amount": 55
+    },
+    "highlights": {
+     "hue": 60,
+     "amount": 30
+    },
+    "balance": 0,
+    "width": 55
+   },
+   "curve": {
+    "rgb": [
+     [
+      0,
+      14
+     ],
+     [
+      48,
+      47
+     ],
+     [
+      128,
+      124
+     ],
+     [
+      200,
+      196
+     ],
+     [
+      255,
+      236
+     ]
+    ],
+    "r": [
+     [
+      0,
+      0
+     ],
+     [
+      210,
+      210
+     ],
+     [
+      245,
+      243
+     ],
+     [
+      255,
+      252
+     ]
+    ],
+    "b": [
+     [
+      0,
+      0
+     ],
+     [
+      210,
+      211
+     ],
+     [
+      245,
+      249
+     ],
+     [
+      255,
+      255
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": -16
+    },
+    "orange": {
+     "hue": -30,
+     "sat": -12,
+     "lum": 3
+    },
+    "yellow": {
+     "hue": -15,
+     "sat": -30,
+     "lum": -2
+    },
+    "green": {
+     "hue": -12,
+     "sat": -40,
+     "lum": -6
+    },
+    "aqua": {
+     "sat": -40,
+     "lum": -6
+    },
+    "blue": {
+     "sat": -50,
+     "lum": -4
+    },
+    "purple": {
+     "sat": -45
+    },
+    "magenta": {
+     "sat": -40
+    }
+   },
+   "hslZones": [
+    {
+     "sat": [
+      0.12,
+      0.45
+     ],
+     "lum": [
+      0.45,
+      1
+     ],
+     "soft": 0.3,
+     "bands": {
+      "orange": {
+       "hue": -18
+      },
+      "yellow": {
+       "hue": -15
+      }
+     }
     }
    ]
   }
