@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "revision": 23,
- "updatedAt": "2026-11-04T20:00",
+ "revision": 24,
+ "updatedAt": "2026-11-04T14:25+05:00",
  "presets": [
   {
    "id": "test-warm-v1",
@@ -4275,6 +4275,178 @@
      "sat": [
       0.08,
       0.42
+     ],
+     "soft": 0.3
+    }
+   ]
+  },
+  {
+   "id": "test-pink-quarter-v1",
+   "name": "Розовый квартал TEST",
+   "temp": 0,
+   "tint": 0,
+   "contrast": 0.07,
+   "fade": 0.02,
+   "shadowsLift": 0.03,
+   "highlightsRoll": 0.12,
+   "shSplit": [
+    0,
+    0,
+    0
+   ],
+   "hiSplit": [
+    0,
+    0,
+    0
+   ],
+   "vibrance": 0.05,
+   "vibFloor": 0,
+   "saturation": 0.94,
+   "vignette": 0.06,
+   "grain": 0.02,
+   "bloom": 0.03,
+   "bloomWarm": false,
+   "toneZones": {
+    "shadows": {
+     "hue": 210,
+     "amount": 22
+    },
+    "midtones": {
+     "hue": 290,
+     "amount": 14
+    },
+    "highlights": {
+     "hue": 322,
+     "amount": 22
+    },
+    "balance": 0,
+    "width": 50
+   },
+   "curve": {
+    "rgb": [
+     [
+      0,
+      12
+     ],
+     [
+      56,
+      52
+     ],
+     [
+      128,
+      140
+     ],
+     [
+      200,
+      212
+     ],
+     [
+      255,
+      248
+     ]
+    ]
+   },
+   "hsl": {
+    "red": {
+     "sat": 6
+    },
+    "orange": {
+     "hue": 12,
+     "sat": -6,
+     "lum": 4
+    },
+    "yellow": {
+     "hue": -8,
+     "sat": -26,
+     "lum": 2
+    },
+    "green": {
+     "hue": 30,
+     "sat": -30,
+     "lum": -6
+    },
+    "aqua": {
+     "hue": 10,
+     "sat": 20,
+     "lum": -4
+    },
+    "blue": {
+     "hue": -25,
+     "sat": 20,
+     "lum": -6
+    },
+    "purple": {
+     "hue": 15,
+     "sat": 10,
+     "lum": -12
+    },
+    "magenta": {
+     "sat": 30,
+     "lum": -10
+    }
+   },
+   "hslZones": [
+    {
+     "bands": {
+      "red": {
+       "hue": 28
+      },
+      "orange": {
+       "hue": 20
+      }
+     },
+     "sat": [
+      0.08,
+      0.5
+     ],
+     "lum": [
+      0.4,
+      1
+     ],
+     "soft": 0.3
+    },
+    {
+     "bands": {
+      "red": {
+       "sat": 24,
+       "lum": -12
+      },
+      "magenta": {
+       "lum": -4
+      }
+     },
+     "sat": [
+      0.55,
+      1
+     ],
+     "lum": [
+      0,
+      1
+     ],
+     "soft": 0.3
+    },
+    {
+     "bands": {
+      "magenta": {
+       "sat": 25
+      },
+      "purple": {
+       "sat": 25
+      },
+      "blue": {
+       "sat": 12
+      },
+      "aqua": {
+       "sat": 12
+      }
+     },
+     "sat": [
+      0.25,
+      0.72
+     ],
+     "lum": [
+      0,
+      1
      ],
      "soft": 0.3
     }
